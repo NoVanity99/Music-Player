@@ -90,45 +90,46 @@ class DesktopApp {
     /** Discord Rich Presence; the client ID is baked in at build time (see gradle.properties). */
     val presence = System.getProperty("discord.clientId")?.takeIf { it.isNotBlank() }?.let { DiscordPresence(it) }
 
-    init {
-        presence?.let(::showPresence)
-    }
-
     private val coverArt = CoverArtLookup()
 
     /** Album covers found so far ("artist|album" to URL, or null when there's none). */
     private val covers = MutableStateFlow<Map<String, String?>>(emptyMap())
 
+    private val coverRequests = mutableSetOf<String>()
+
     private fun showPresence(presence: DiscordPresence) = scope.launch {
         var shown: PresenceActivity? = null
-        combine(graph.settings.discordPresence, player.state, player.positionMs, player.speed, covers) { enabled, s, pos, speed, found ->
-            val entry = s.current
-            if (!enabled || entry == null || !s.isPlaying) return@combine null // cleared while paused or stopped
-            val rate = speed.coerceAtLeast(0.1f)
-            val start = System.currentTimeMillis() - (pos / rate).toLong()
-            val album = entry.songId?.let { graph.musicRepository.songsById[it]?.album }.orEmpty()
-            val coverKey = "${entry.artist}|$album"
-            if (coverKey !in found) lookUpCover(coverKey, entry.artist, album)
-            PresenceActivity(
-                title = entry.title,
-                artist = entry.artist,
-                album = album,
-                startMs = start,
-                endMs = if (s.durationMs > 0) start + (s.durationMs / rate).toLong() else null,
-                coverUrl = found[coverKey],
-            )
-        }.collect { next ->
-            // The position ticks constantly; only resend for a new song, play/pause, or a real seek.
-            val same = next != null && shown != null && next.copy(startMs = 0, endMs = null) == shown!!.copy(startMs = 0, endMs = null) &&
-                abs(next.startMs - shown!!.startMs) < 2_000
-            if (!same) {
-                shown = next
-                presence.update(next)
+        try {
+            combine(graph.settings.discordPresence, player.state, player.positionMs, player.speed, covers) { enabled, s, pos, speed, found ->
+                val entry = s.current
+                if (!enabled || entry == null || !s.isPlaying) return@combine null // cleared while paused or stopped
+                val rate = speed.coerceAtLeast(0.1f)
+                val start = System.currentTimeMillis() - (pos / rate).toLong()
+                val album = entry.songId?.let { graph.musicRepository.songsById[it]?.album }.orEmpty()
+                val coverKey = "${entry.artist}|$album"
+                if (coverKey !in found) lookUpCover(coverKey, entry.artist, album)
+                PresenceActivity(
+                    title = entry.title,
+                    artist = entry.artist,
+                    album = album,
+                    startMs = start,
+                    endMs = if (s.durationMs > 0) start + (s.durationMs / rate).toLong() else null,
+                    coverUrl = found[coverKey],
+                )
+            }.collect { next ->
+                // The position ticks constantly; only resend for a new song, play/pause, or a real seek.
+                val same = next != null && shown != null && next.copy(startMs = 0, endMs = null) == shown!!.copy(startMs = 0, endMs = null) &&
+                    abs(next.startMs - shown!!.startMs) < 2_000
+                if (!same) {
+                    shown = next
+                    presence.update(next)
+                }
             }
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            DiscordLog.write("Presence updates stopped: $e") // never fail silently again
         }
     }
-
-    private val coverRequests = mutableSetOf<String>()
 
     /** Looks the cover up once per album in the background; the presence updates when it's found. */
     private fun lookUpCover(key: String, artist: String, album: String) {
@@ -137,6 +138,12 @@ class DesktopApp {
             val url = withContext(Dispatchers.IO) { coverArt.find(artist, album) }
             covers.update { it + (key to url) }
         }
+    }
+
+    // Start last: launching on Main.immediate runs this right away, so everything it uses
+    // (covers, coverArt, coverRequests) must already be initialised above.
+    init {
+        presence?.let(::showPresence)
     }
 
     /** Stops playback and clears the Discord status; called before the app exits. */
