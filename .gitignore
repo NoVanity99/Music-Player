@@ -13,6 +13,7 @@ build/
 keystore.properties
 *.jks
 *.keystore
+/keystore/
 
 # Built APKs copied to the root
 *.apk
