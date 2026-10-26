@@ -5,6 +5,7 @@ import androidx.compose.ui.graphics.toComposeImageBitmap
 import com.novanity.musicplayer.data.Song
 import com.novanity.musicplayer.platform.ArtworkProvider
 import org.jaudiotagger.audio.AudioFileIO
+import org.jetbrains.skia.EncodedImageFormat
 import org.jetbrains.skia.FilterMipmap
 import org.jetbrains.skia.FilterMode
 import org.jetbrains.skia.Image
@@ -22,6 +23,13 @@ class DesktopArtworkProvider : ArtworkProvider {
         val bytes = embedded(song.filePath) ?: folderImage(song.folderPath) ?: return null
         val image = runCatching { Image.makeFromEncoded(bytes) }.getOrNull() ?: return null
         return scale(image, sizePx).toComposeImageBitmap()
+    }
+
+    /** The song's cover as a square JPEG of at most [px] pixels (for Discord), or null if it has none. */
+    fun coverJpeg(song: Song, px: Int = 512): ByteArray? {
+        val bytes = embedded(song.filePath) ?: folderImage(song.folderPath) ?: return null
+        val image = runCatching { Image.makeFromEncoded(bytes) }.getOrNull() ?: return null
+        return scale(image, px).encodeToData(EncodedImageFormat.JPEG, 88)?.bytes
     }
 
     private fun embedded(path: String): ByteArray? = runCatching {

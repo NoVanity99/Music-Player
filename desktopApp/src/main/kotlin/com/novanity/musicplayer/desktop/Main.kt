@@ -1,5 +1,9 @@
 package com.novanity.musicplayer.desktop
 
+import com.novanity.musicplayer.data.Song
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.withContext
 import androidx.compose.ui.graphics.Color
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
@@ -72,13 +76,14 @@ class DesktopApp {
     val library = LibraryViewModel(graph.musicRepository, graph.playlistRepository, graph.historyRepository, graph.favoritesRepository, graph.settings)
     val player = PlayerViewModel(FfmpegPlayerController(graph, scope) { message -> library.notify(message) }, graph.settings)
     val rootUi = RootUiState()
+    private val artwork = DesktopArtworkProvider()
 
     /** Set by main(): closes the window so the updater can replace the app's files. */
     var exitApp: () -> Unit = {}
     val updates = UpdateManager(DesktopUpdatePlatform { exitApp() }, graph.settings, scope)
 
     init {
-        ArtworkLoader.provider = DesktopArtworkProvider()
+        ArtworkLoader.provider = artwork
         LyricsLoader.provider = DesktopLyricsProvider()
         PathLabels.roots = desktopStorageRoots()
         updates.checkOnLaunch()
@@ -87,21 +92,30 @@ class DesktopApp {
     /** Discord Rich Presence; the client ID is baked in at build time (see gradle.properties). */
     val presence = System.getProperty("discord.clientId")?.takeIf { it.isNotBlank() }?.let { DiscordPresence(it) }
 
+    private val coverUploader = CoverUploader()
+
+    /** Discord cover links by song id (null: the song has no cover, or the upload failed). */
+    private val covers = MutableStateFlow<Map<Long, String?>>(emptyMap())
+    private val coverRequests = mutableSetOf<Long>()
+
     private fun showPresence(presence: DiscordPresence) = scope.launch {
         var shown: PresenceActivity? = null
         try {
-            combine(graph.settings.discordPresence, player.state, player.positionMs, player.speed) { enabled, s, pos, speed ->
+            combine(graph.settings.discordPresence, player.state, player.positionMs, player.speed, covers) { enabled, s, pos, speed, found ->
                 val entry = s.current
                 if (!enabled || entry == null || !s.isPlaying) return@combine null // cleared while paused or stopped
                 val rate = speed.coerceAtLeast(0.1f)
                 val start = System.currentTimeMillis() - (pos / rate).toLong()
-                val album = entry.songId?.let { graph.musicRepository.songsById[it]?.album }.orEmpty()
+                val song = entry.songId?.let { graph.musicRepository.songsById[it] }
+                val album = song?.album.orEmpty()
+                if (song != null && song.id !in found) uploadCover(song)
                 PresenceActivity(
                     title = entry.title,
                     artist = entry.artist,
                     album = album,
                     startMs = start,
                     endMs = if (s.durationMs > 0) start + (s.durationMs / rate).toLong() else null,
+                    coverUrl = song?.let { found[it.id] },
                 )
             }.collect { next ->
                 // The position ticks constantly; only resend for a new song, play/pause, or a real seek.
@@ -115,6 +129,15 @@ class DesktopApp {
         } catch (e: Exception) {
             if (e is kotlinx.coroutines.CancellationException) throw e
             DiscordLog.write("Presence updates stopped: $e") // never fail silently again
+        }
+    }
+
+    /** Reads the song's own cover and uploads it in the background; the presence updates when done. */
+    private fun uploadCover(song: Song) {
+        if (!coverRequests.add(song.id)) return
+        scope.launch {
+            val url = withContext(Dispatchers.IO) { artwork.coverJpeg(song)?.let(coverUploader::urlFor) }
+            covers.update { it + (song.id to url) }
         }
     }
 
