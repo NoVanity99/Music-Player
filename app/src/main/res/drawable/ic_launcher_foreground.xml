@@ -1,18 +1,37 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 108dp adaptive-icon canvas; the note sits inside the 66dp safe zone. -->
+<!-- Generated from branding/icon-foreground.svg (108dp adaptive canvas, art inside the 66dp safe zone). -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <group
-        android:translateX="30"
-        android:translateY="30">
-        <!-- Material "music_note" glyph scaled to 48x48 -->
-        <group android:scaleX="2" android:scaleY="2">
-            <path
-                android:fillColor="#FFFFB0C8"
-                android:pathData="M12,3v10.55c-0.59,-0.34 -1.27,-0.55 -2,-0.55 -2.21,0 -4,1.79 -4,4s1.79,4 4,4 4,-1.79 4,-4V7h4V3h-6z" />
+    <!-- Playback ring -->
+    <path
+        android:pathData="M54,25 a29,29 0 1,1 0,58 a29,29 0 1,1 0,-58"
+        android:strokeColor="#FFFFFF"
+        android:strokeAlpha="0.22"
+        android:strokeWidth="3.2" />
+    <path
+        android:pathData="M54,25 A29,29 0 0,1 82.6,49.2"
+        android:strokeColor="#FFFFFF"
+        android:strokeLineCap="round"
+        android:strokeWidth="3.2" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M79.2,49.2 a3.4,3.4 0 1,0 6.8,0 a3.4,3.4 0 1,0 -6.8,0" />
+    <!-- Beamed double note -->
+    <group android:translateX="-1.2">
+        <path
+            android:fillColor="#FFFFFF"
+            android:strokeColor="#FFFFFF"
+            android:strokeLineJoin="round"
+            android:strokeWidth="0.9"
+            android:pathData="M48.6,38 L73.6,32.4 L73.6,40 L48.6,45.6 Z M48.6,38 L51.4,38 L51.4,65.6 L48.6,65.6 Z M70.8,33 L73.6,33 L73.6,60.8 L70.8,60.8 Z" />
+        <group android:pivotX="44.2" android:pivotY="66.4" android:rotation="-22">
+            <path android:fillColor="#FFFFFF" android:pathData="M36.8,66.4 a7.4,5.7 0 1,0 14.8,0 a7.4,5.7 0 1,0 -14.8,0" />
+        </group>
+        <group android:pivotX="66.4" android:pivotY="61.6" android:rotation="-22">
+            <path android:fillColor="#FFFFFF" android:pathData="M59,61.6 a7.4,5.7 0 1,0 14.8,0 a7.4,5.7 0 1,0 -14.8,0" />
         </group>
     </group>
 </vector>
