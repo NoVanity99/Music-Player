@@ -100,7 +100,11 @@ import com.novanity.musicplayer.ui.SongActions
 import com.novanity.musicplayer.ui.components.AlbumArt
 import com.novanity.musicplayer.ui.components.MenuAction
 import com.novanity.musicplayer.ui.components.OverflowMenu
+import com.novanity.musicplayer.ui.components.dismissDrag
 import com.novanity.musicplayer.ui.components.formatDuration
+import com.novanity.musicplayer.ui.components.rememberDismissDragState
+import com.novanity.musicplayer.ui.components.rememberTrackSwipeState
+import com.novanity.musicplayer.ui.components.trackSwipe
 import com.novanity.musicplayer.ui.components.rememberArtColor
 import kotlinx.coroutines.launch
 import sh.calvin.reorderable.ReorderableItem
@@ -125,7 +129,7 @@ fun MiniPlayer(
     val position by player.positionMs.collectAsStateWithLifecycle()
     val current = state.current ?: return
     val tint by rememberArtColor(song, DefaultTint)
-    var swipe by remember { mutableFloatStateOf(0f) }
+    val swipe = rememberTrackSwipeState(current.key)
 
     Surface(
         shape = RoundedCornerShape(12.dp),
@@ -137,19 +141,8 @@ fun MiniPlayer(
             .fillMaxWidth()
             .height(62.dp)
             .clickable(onClick = onExpand)
-            .pointerInput(Unit) {
-                // Swipe sideways to skip, swipe up to open the player.
-                detectHorizontalDragGestures(
-                    onDragEnd = {
-                        when {
-                            swipe < -120f -> player.next()
-                            swipe > 120f -> player.previous()
-                        }
-                        swipe = 0f
-                    },
-                    onHorizontalDrag = { _, dx -> swipe += dx },
-                )
-            }
+            // Swipe sideways to change track, swipe up to open the player.
+            .trackSwipe(swipe, state.hasNext, state.hasPrevious, player::nextTrack, player::previousTrack)
             .draggable(
                 orientation = Orientation.Vertical,
                 state = rememberDraggableState { dy -> if (dy < -8f) onExpand() },
@@ -162,9 +155,9 @@ fun MiniPlayer(
                     .padding(start = 8.dp, end = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                AlbumArt(song, Modifier.size(44.dp), shape = RoundedCornerShape(6.dp))
+                AlbumArt(song, Modifier.size(44.dp).graphicsLayer { translationX = swipe.offset }, shape = RoundedCornerShape(6.dp))
                 Spacer(Modifier.width(10.dp))
-                Column(Modifier.weight(1f).graphicsLayer { translationX = swipe * 0.3f }) {
+                Column(Modifier.weight(1f).graphicsLayer { translationX = swipe.offset }) {
                     Text(current.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleSmall, color = Color.White)
                     Text(current.artist, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall, color = Muted)
                 }
@@ -221,27 +214,17 @@ fun NowPlayingScreen(
     val tint by rememberArtColor(song, DefaultTint)
     var showQueue by rememberSaveable { mutableStateOf(false) }
 
-    // Drag the whole sheet down to dismiss.
-    val scope = rememberCoroutineScope()
-    val dismissOffset = remember { Animatable(0f) }
+    // Drag the whole sheet down to dismiss (distance or flick), else spring back.
+    val dismiss = rememberDismissDragState()
 
     CompositionLocalProvider(LocalContentColor provides Color.White) {
         Box(
             Modifier
                 .fillMaxSize()
-                .graphicsLayer { translationY = dismissOffset.value }
-                .clip(RoundedCornerShape(if (dismissOffset.value > 0f) 24.dp else 0.dp))
+                .graphicsLayer { translationY = dismiss.offset }
+                .clip(RoundedCornerShape((dismiss.progress * 160f).coerceAtMost(28f).dp))
                 .background(Color.Black)
-                .draggable(
-                    orientation = Orientation.Vertical,
-                    state = rememberDraggableState { dy ->
-                        scope.launch { dismissOffset.snapTo((dismissOffset.value + dy).coerceAtLeast(0f)) }
-                    },
-                    onDragStopped = { velocity ->
-                        if (dismissOffset.value > 320f || velocity > 2500f) onCollapse()
-                        else dismissOffset.animateTo(0f, spring(dampingRatio = Spring.DampingRatioMediumBouncy))
-                    },
-                ),
+                .dismissDrag(dismiss, onCollapse),
         ) {
             // Backdrop: blurred artwork (Android 12+) under a wash of the art's color.
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -315,12 +298,13 @@ fun NowPlayingScreen(
                     spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
                     label = "artScale",
                 )
-                val artShift = remember { Animatable(0f) }
+                val artSwipe = rememberTrackSwipeState(current.key)
                 Box(
                     Modifier
                         .weight(1f)
                         .fillMaxWidth()
-                        .padding(vertical = 20.dp),
+                        .padding(vertical = 20.dp)
+                        .trackSwipe(artSwipe, state.hasNext, state.hasPrevious, player::nextTrack, player::previousTrack),
                     contentAlignment = Alignment.Center,
                 ) {
                     AlbumArt(
@@ -330,27 +314,10 @@ fun NowPlayingScreen(
                             .graphicsLayer {
                                 scaleX = artScale
                                 scaleY = artScale
-                                translationX = artShift.value
-                                alpha = 1f - (abs(artShift.value) / 900f).coerceIn(0f, 0.6f)
+                                translationX = artSwipe.offset
+                                alpha = 1f - (abs(artSwipe.offset) / size.width.coerceAtLeast(1f)).coerceIn(0f, 0.7f)
                             }
-                            .shadow(30.dp, RoundedCornerShape(14.dp), ambientColor = Color.Black, spotColor = Color.Black)
-                            .pointerInput(Unit) {
-                                detectHorizontalDragGestures(
-                                    onDragEnd = {
-                                        scope.launch {
-                                            when {
-                                                artShift.value < -160f -> player.next()
-                                                artShift.value > 160f -> player.previous()
-                                            }
-                                            artShift.animateTo(0f, spring(stiffness = Spring.StiffnessMediumLow))
-                                        }
-                                    },
-                                    onHorizontalDrag = { change, dx ->
-                                        change.consume()
-                                        scope.launch { artShift.snapTo(artShift.value + dx) }
-                                    },
-                                )
-                            },
+                            .shadow(30.dp, RoundedCornerShape(14.dp), ambientColor = Color.Black, spotColor = Color.Black),
                         shape = RoundedCornerShape(14.dp),
                         large = true,
                     )

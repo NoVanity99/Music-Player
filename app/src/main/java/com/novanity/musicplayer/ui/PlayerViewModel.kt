@@ -42,6 +42,8 @@ data class PlayerUiState(
     val durationMs: Long = 0L,
     val shuffle: Boolean = false,
     val repeatMode: Int = Player.REPEAT_MODE_OFF,
+    val hasNext: Boolean = false,
+    val hasPrevious: Boolean = false,
 ) {
     val hasMedia: Boolean get() = current != null
 }
@@ -128,6 +130,8 @@ class PlayerViewModel(
             durationMs = c.duration.takeIf { it != C.TIME_UNSET && it > 0 } ?: songDuration,
             shuffle = c.shuffleModeEnabled,
             repeatMode = c.repeatMode,
+            hasNext = c.hasNextMediaItem(),
+            hasPrevious = c.hasPreviousMediaItem(),
         )
         _positionMs.value = c.currentPosition.coerceAtLeast(0L)
     }
@@ -210,6 +214,15 @@ class PlayerViewModel(
 
     fun previous() {
         controller?.seekToPrevious()
+    }
+
+    /** Always moves to the previous track (unlike [previous], which restarts after 3 s). */
+    fun previousTrack() {
+        controller?.seekToPreviousMediaItem()
+    }
+
+    fun nextTrack() {
+        controller?.seekToNextMediaItem()
     }
 
     fun seekTo(positionMs: Long) {
