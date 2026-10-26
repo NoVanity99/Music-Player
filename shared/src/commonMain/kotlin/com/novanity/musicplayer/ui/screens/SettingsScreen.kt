@@ -284,7 +284,7 @@ fun SettingsScreen(actions: SongActions, contentPadding: PaddingValues) {
                     SettingRow(
                         icon = Icons.Rounded.Gamepad,
                         title = "Discord Rich Presence",
-                        subtitle = "Show what you're listening to on your Discord profile. Album covers are looked up online by artist and album name." +
+                        subtitle = "Show what you're listening to on your Discord profile" +
                             if (discord && discordStatus != null) "\n$discordStatus" else "",
                         onClick = { vm.setDiscordPresence(!discord) },
                         trailing = { Switch(checked = discord, onCheckedChange = vm::setDiscordPresence) },

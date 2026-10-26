@@ -3,8 +3,7 @@
 A local music player for **Android** and **Windows**, built from one Kotlin Multiplatform codebase:
 Compose Multiplatform (Material 3) UI, Room database, Media3 playback on Android, FFmpeg (via
 JavaCV) playback on desktop. No ads and no analytics. The only network access is checking GitHub
-for updates and, with Discord Rich Presence on, looking up album covers on the iTunes and Deezer
-catalogues (Discord can only show images from the web).
+for updates.
 
 ## Features
 
@@ -20,7 +19,7 @@ catalogues (Discord can only show images from the web).
 - Equalizer on Android (system effect with presets)
 - Desktop: keyboard shortcuts (press `?` or F1 to list them), media keys that work even when the window
   isn't focused, right-click menus, hover states and scroll wheel support
-- Discord Rich Presence on desktop ("Listening to" with song, artist, album cover and time left),
+- Discord Rich Presence on desktop ("Listening to" with song, artist and time left),
   with a toggle in Settings
 - Self-updating from GitHub Releases, with signed and checksummed downloads (see [RELEASING.md](RELEASING.md))
 
