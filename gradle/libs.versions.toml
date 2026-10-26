@@ -29,6 +29,7 @@ jaudiotagger = "3.0.1"
 jnativehook = "2.2.2"
 jna = "5.19.1"
 eddsa = "0.3.0"
+apksig = "9.4.1"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -75,6 +76,7 @@ javacpp = { group = "org.bytedeco", name = "javacpp", version.ref = "javacv" }
 jaudiotagger = { group = "net.jthink", name = "jaudiotagger", version.ref = "jaudiotagger" }
 jnativehook = { group = "com.github.kwhat", name = "jnativehook", version.ref = "jnativehook" }
 eddsa = { group = "net.i2p.crypto", name = "eddsa", version.ref = "eddsa" }
+apksig = { group = "com.android.tools.build", name = "apksig", version.ref = "apksig" }
 jna-platform = { group = "net.java.dev.jna", name = "jna-platform", version.ref = "jna" }
 reorderable = { group = "sh.calvin.reorderable", name = "reorderable", version.ref = "reorderable" }
 

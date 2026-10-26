@@ -3,11 +3,11 @@ package com.novanity.musicplayer.platform
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageInfo
-import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import androidx.core.content.FileProvider
+import com.android.apksig.ApkVerifier
 import com.novanity.musicplayer.update.InstallOutcome
 import com.novanity.musicplayer.update.UpdateAsset
 import com.novanity.musicplayer.update.UpdateConfig
@@ -68,22 +68,29 @@ class AndroidUpdatePlatform(private val context: Context) : UpdatePlatform {
     /** The APK must be this app, newer than what's installed, and signed with the same certificate. */
     @Suppress("DEPRECATION")
     private fun checkApk(path: String, info: UpdateInfo) {
-        val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) PackageManager.GET_SIGNING_CERTIFICATES else PackageManager.GET_SIGNATURES
-        val apk = pm.getPackageArchiveInfo(path, flags) ?: error("The downloaded file isn't a valid app package")
+        val apk = pm.getPackageArchiveInfo(path, 0) ?: error("The downloaded file isn't a valid app package")
         require(apk.packageName == context.packageName) { "The download is a different app" }
         val apkCode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) apk.longVersionCode.toInt() else apk.versionCode
         require(apkCode > currentVersionCode && apkCode == info.versionCode) { "The download isn't the expected newer version" }
-        val installed = pm.getPackageInfo(context.packageName, flags)
-        require(signers(apk) == signers(installed) && signers(apk).isNotEmpty()) {
+        // Read both certificates the same way. (PackageManager often reports no signers at all for a
+        // downloaded APK, which made every update look like it had the wrong key.)
+        val installed = ApkCertificates.of(File(context.applicationInfo.sourceDir))
+        val update = ApkCertificates.of(File(path))
+        require(update.isNotEmpty() && update == installed) {
             "The update isn't signed with this app's key, so Android couldn't install it over this version"
         }
     }
+}
 
-    @Suppress("DEPRECATION")
-    private fun signers(p: PackageInfo): Set<String> {
-        val sigs = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            p.signingInfo?.let { if (it.hasMultipleSigners()) it.apkContentsSigners else it.signingCertificateHistory }
-        } else p.signatures
-        return sigs.orEmpty().map { s -> MessageDigest.getInstance("SHA-256").digest(s.toByteArray()).joinToString("") { "%02x".format(it) } }.toSet()
+/** SHA-256 fingerprints of an APK's signing certificates, after checking its signature is valid. */
+object ApkCertificates {
+    fun of(apk: File): Set<String> {
+        val result = runCatching {
+            ApkVerifier.Builder(apk).setMinCheckedPlatformVersion(Build.VERSION_CODES.O).build().verify()
+        }.getOrNull()
+        if (result == null || !result.isVerified) return emptySet()
+        return result.signerCertificates.map { cert ->
+            MessageDigest.getInstance("SHA-256").digest(cert.encoded).joinToString("") { "%02x".format(it) }
+        }.toSet()
     }
 }

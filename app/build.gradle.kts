@@ -78,6 +78,7 @@ android {
 dependencies {
     implementation(project(":shared"))
     implementation(project(":updatecore"))
+    implementation(libs.apksig) // reads update APK signatures the same way on every Android version
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
