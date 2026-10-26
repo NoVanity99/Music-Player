@@ -14,7 +14,10 @@ import javax.swing.SwingUtilities
 import javax.swing.UIManager
 import javax.swing.filechooser.FileSystemView
 
-class DesktopPlatformUi(private val parent: java.awt.Component?) : PlatformUi {
+class DesktopPlatformUi(
+    private val parent: java.awt.Component?,
+    override val discordStatus: kotlinx.coroutines.flow.StateFlow<String>? = null,
+) : PlatformUi {
     override val isDesktop = true
     override val supportsDynamicColor = false
     override val supportsBlur = true

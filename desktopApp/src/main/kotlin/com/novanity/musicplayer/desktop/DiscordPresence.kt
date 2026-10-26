@@ -2,6 +2,11 @@ package com.novanity.musicplayer.desktop
 
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -34,11 +39,13 @@ data class PresenceActivity(
 /**
  * Discord Rich Presence over Discord's local IPC (a named pipe on Windows, a Unix socket
  * elsewhere). Everything runs on one background thread; when Discord isn't running it quietly
- * retries every so often and never reports an error.
+ * retries every so often. [status] says what's going on (shown in Settings), and every step is
+ * written to [log] so problems can be diagnosed.
  */
 class DiscordPresence(
     private val clientId: String,
     private val socketPaths: () -> List<String> = IpcPipe::candidates,
+    private val log: (String) -> Unit = DiscordLog::write,
 ) {
 
     private val lock = ReentrantLock()
@@ -50,8 +57,15 @@ class DiscordPresence(
     private var sent: PresenceActivity? = null
     private var lastSendAt = 0L
     private var lastConnectAttempt = 0L
-    /** Older Discord builds may reject status_display_type; we drop it after the first error. */
-    private var useStatusDisplay = true
+
+    /**
+     * How much to leave out after Discord rejects an activity: 0 sends everything, 1 drops
+     * status_display_type (newer Discord only), 2 also uses the logo instead of a cover URL.
+     */
+    private var fallback = 0
+
+    private val _status = MutableStateFlow("Connects when music plays")
+    val status: StateFlow<String> = _status.asStateFlow()
 
     private val thread = Thread(::run, "discord-presence").apply { isDaemon = true; start() }
 
@@ -73,6 +87,7 @@ class DiscordPresence(
     }
 
     private fun run() {
+        log("Started (client ${clientId.take(4)}…, ${System.getProperty("os.name")})")
         while (true) {
             val target = lock.withLock {
                 // Wake on a change, or periodically to retry a missing Discord.
@@ -81,7 +96,9 @@ class DiscordPresence(
             }
             try {
                 step(target)
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                log("Connection lost: ${e.describe()}")
+                _status.value = "Lost the connection to Discord, retrying…"
                 disconnect() // Discord quit or restarted: reconnect on the next round.
             }
         }
@@ -99,9 +116,9 @@ class DiscordPresence(
         // Discord allows about 5 updates per 20 s; space them out and send only the latest.
         val wait = MIN_GAP_MS - (System.currentTimeMillis() - lastSendAt)
         if (wait > 0) return pause(wait)
+        lastSendAt = System.currentTimeMillis()
         sendActivity(pipe!!, target)
         sent = target
-        lastSendAt = System.currentTimeMillis()
     }
 
     /** Sleeps, but wakes early for a new activity or close(). */
@@ -111,41 +128,81 @@ class DiscordPresence(
     private fun shutdown() {
         pipe?.let { p -> runCatching { if (sent != null) sendActivity(p, null) } }
         disconnect()
+        log("Stopped")
     }
 
     private fun connect(): IpcPipe? {
-        for (candidate in socketPaths()) {
-            val p = runCatching { IpcPipe.open(candidate) }.getOrNull() ?: continue
+        val candidates = socketPaths()
+        if (candidates.isEmpty()) log("No Discord IPC socket found")
+        for (candidate in candidates) {
+            val p = try {
+                IpcPipe.open(candidate)
+            } catch (e: Exception) {
+                log("Can't open $candidate: ${e.describe()}")
+                continue
+            }
             try {
                 p.send(OP_HANDSHAKE, buildJsonObject { put("v", 1); put("client_id", clientId) })
                 val (op, reply) = p.receive()
-                if (op == OP_FRAME && reply["evt"]?.jsonPrimitive?.content == "READY") return p
-            } catch (_: Exception) {
+                if (op == OP_FRAME && reply.str("evt") == "READY") {
+                    val user = reply["data"]?.jsonObjectOrNull()?.get("user")?.jsonObjectOrNull()
+                    val name = user?.str("global_name") ?: user?.str("username")
+                    log("Connected via $candidate${name?.let { " as $it" }.orEmpty()}")
+                    _status.value = if (name != null) "Connected to Discord as $name" else "Connected to Discord"
+                    return p
+                }
+                // Op 2 here usually means Discord doesn't know the application ID.
+                val message = reply.str("message") ?: reply["data"]?.jsonObjectOrNull()?.str("message") ?: reply.toString()
+                log("Handshake on $candidate refused (op $op): $message")
+                _status.value = "Discord refused the connection: $message"
+            } catch (e: Exception) {
+                log("Handshake on $candidate failed: ${e.describe()}")
             }
             p.close()
+        }
+        if (candidates.isEmpty() || !_status.value.startsWith("Discord refused")) {
+            _status.value = "Discord isn't running (retrying every 15 s)"
         }
         return null
     }
 
     private fun sendActivity(p: IpcPipe, activity: PresenceActivity?) {
         val nonce = UUID.randomUUID().toString()
-        p.send(OP_FRAME, buildJsonObject {
+        val payload = buildJsonObject {
             put("cmd", "SET_ACTIVITY")
             put("nonce", nonce)
             putJsonObject("args") {
                 put("pid", ProcessHandle.current().pid())
                 if (activity != null) put("activity", activityJson(activity))
             }
-        })
+        }
+        log("SET_ACTIVITY ${if (activity == null) "(clear)" else payload["args"]?.jsonObjectOrNull()?.get("activity")}")
+        p.send(OP_FRAME, payload)
         while (true) {
             val (op, reply) = p.receive()
             when (op) {
                 OP_PING -> p.send(OP_PONG, reply)
-                OP_CLOSE -> throw IOException("Discord closed the connection")
-                OP_FRAME -> if (reply["nonce"]?.jsonPrimitive?.content == nonce) {
-                    if (reply["evt"]?.jsonPrimitive?.content == "ERROR" && useStatusDisplay && activity != null) {
-                        useStatusDisplay = false
-                        sendActivity(p, activity)
+                OP_CLOSE -> {
+                    // Some Discord builds hang up instead of answering with an error: send less next time.
+                    log("Discord closed the connection after SET_ACTIVITY: $reply")
+                    if (activity != null && fallback < MAX_FALLBACK) {
+                        fallback++
+                        lastConnectAttempt = 0L // reconnect straight away with the simpler activity
+                    }
+                    throw IOException("closed by Discord")
+                }
+                OP_FRAME -> if (reply.str("nonce") == nonce) {
+                    if (reply.str("evt") == "ERROR") {
+                        val message = reply["data"]?.jsonObjectOrNull()?.str("message") ?: reply.toString()
+                        log("Discord rejected the activity: $message")
+                        if (activity != null && fallback < MAX_FALLBACK) {
+                            fallback++
+                            return sendActivity(p, activity)
+                        }
+                        _status.value = "Discord error: $message"
+                    } else if (activity != null) {
+                        val name = _status.value.substringAfter(" as ", "").takeIf { it.isNotEmpty() }
+                        _status.value = "Showing on Discord" + (name?.let { " as $it" }.orEmpty())
                     }
                     return
                 }
@@ -155,7 +212,7 @@ class DiscordPresence(
 
     private fun activityJson(a: PresenceActivity): JsonObject = buildJsonObject {
         put("type", 2) // "Listening to"
-        if (useStatusDisplay) put("status_display_type", 2) // member list shows the song, not the app name
+        if (fallback < 1) put("status_display_type", 2) // member list shows the song, not the app name
         put("details", field(a.title))
         put("state", field(a.artist))
         putJsonObject("timestamps") {
@@ -163,7 +220,7 @@ class DiscordPresence(
             a.endMs?.let { put("end", it) }
         }
         putJsonObject("assets") {
-            val cover = a.coverUrl?.takeIf { it.startsWith("https://") && it.length <= 256 } // Discord's limits
+            val cover = a.coverUrl?.takeIf { fallback < 2 && it.startsWith("https://") && it.length <= 256 } // Discord's limits
             if (cover != null) {
                 // Album cover from the web, with the app logo as the small badge.
                 put("large_image", cover)
@@ -190,11 +247,30 @@ class DiscordPresence(
         private const val OP_PONG = 4
         private const val RETRY_MS = 15_000L
         private const val MIN_GAP_MS = 4_000L
+        private const val MAX_FALLBACK = 2
 
         /** Discord wants 2–128 characters per text field. */
         internal fun field(text: String): String {
             val t = text.trim().ifEmpty { "Unknown" }
             return if (t.length < 2) t + "\u200B" else if (t.length > 128) t.take(127) + "…" else t
+        }
+
+        private fun JsonObject.str(name: String): String? = (this[name] as? JsonPrimitive)?.contentOrNull
+        private fun kotlinx.serialization.json.JsonElement.jsonObjectOrNull(): JsonObject? = this as? JsonObject
+        private fun Exception.describe() = "${javaClass.simpleName}: ${message.orEmpty()}"
+    }
+}
+
+/** discord.log in the app's data folder: the last session's Discord connection steps. */
+object DiscordLog {
+    private val file by lazy { File(DesktopPaths.dataDir, "discord.log").apply { runCatching { writeText("") } } }
+    private val time = java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss")
+
+    @Synchronized
+    fun write(line: String) {
+        runCatching {
+            if (file.length() > 512 * 1024) file.writeText("") // keep it small
+            file.appendText("${java.time.LocalTime.now().format(time)} $line\n")
         }
     }
 }

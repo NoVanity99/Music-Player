@@ -88,7 +88,7 @@ class DesktopApp {
     }
 
     /** Discord Rich Presence; the client ID is baked in at build time (see gradle.properties). */
-    private val presence = System.getProperty("discord.clientId")?.takeIf { it.isNotBlank() }?.let(::DiscordPresence)
+    val presence = System.getProperty("discord.clientId")?.takeIf { it.isNotBlank() }?.let { DiscordPresence(it) }
 
     init {
         presence?.let(::showPresence)
@@ -213,7 +213,7 @@ fun main() {
         ) {
             window.minimumSize = Dimension(400, 640)
             val frame = remember { WindowFrame(window) }
-            val platform = remember { DesktopPlatformUi(window) }
+            val platform = remember { DesktopPlatformUi(window, app.presence?.status) }
             val themeMode by app.graph.settings.themeMode.collectAsStateWithLifecycle()
             val dark = when (themeMode) {
                 ThemeMode.DARK -> true

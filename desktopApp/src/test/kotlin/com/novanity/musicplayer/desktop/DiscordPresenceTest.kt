@@ -61,7 +61,8 @@ class DiscordPresenceTest {
         val dir = Files.createTempDirectory("ipc")
         val path = dir.resolve("discord-ipc-0")
         val server = ServerSocketChannel.open(StandardProtocolFamily.UNIX).apply { bind(UnixDomainSocketAddress.of(path)) }
-        val presence = DiscordPresence("1234", socketPaths = { listOf(dir.resolve("missing").toString(), path.toString()) })
+        val logLines = java.util.Collections.synchronizedList(mutableListOf<String>())
+        val presence = DiscordPresence("1234", socketPaths = { listOf(dir.resolve("missing").toString(), path.toString()) }, log = { logLines += it })
         try {
             presence.update(PresenceActivity("A", "Some Artist", "Album", startMs = 1_000, endMs = 181_000))
             val discord = FakeDiscord(server.accept())
@@ -69,7 +70,10 @@ class DiscordPresenceTest {
             val (op, hello) = discord.read()
             assertEquals(0, op)
             assertEquals("1234", hello["client_id"]!!.jsonPrimitive.content)
-            discord.write(1, buildJsonObject { put("cmd", "DISPATCH"); put("evt", "READY") })
+            discord.write(1, buildJsonObject {
+                put("cmd", "DISPATCH"); put("evt", "READY")
+                put("data", buildJsonObject { put("user", buildJsonObject { put("username", "jordan") }) })
+            })
 
             // First try includes status_display_type; pretend this Discord is too old for it.
             val first = discord.setActivity(error = true)["activity"]!!.jsonObject
@@ -81,6 +85,8 @@ class DiscordPresenceTest {
             assertEquals("Some Artist", activity["state"]!!.jsonPrimitive.content)
             assertEquals(181_000, activity["timestamps"]!!.jsonObject["end"]!!.jsonPrimitive.long)
             assertEquals("logo", activity["assets"]!!.jsonObject["large_image"]!!.jsonPrimitive.content)
+            waitFor { presence.status.value == "Showing on Discord as jordan" }
+            assertTrue(logLines.any { "rejected the activity" in it }, "the error is logged")
 
             // A song with a cover found online shows it, with the logo as a badge.
             presence.update(PresenceActivity("Song", "Artist", "Album", 0, null, coverUrl = "https://img.example/cover.jpg"))
@@ -100,12 +106,54 @@ class DiscordPresenceTest {
         }
     }
 
+    /** Some Discord builds hang up on fields they don't like: reconnect and send a simpler activity. */
+    @Test
+    fun hangUpFallsBackToSimplerActivity() {
+        val dir = Files.createTempDirectory("ipc")
+        val path = dir.resolve("discord-ipc-0")
+        val server = ServerSocketChannel.open(StandardProtocolFamily.UNIX).apply { bind(UnixDomainSocketAddress.of(path)) }
+        val presence = DiscordPresence("1234", socketPaths = { listOf(path.toString()) }, log = {})
+        fun handshake(): FakeDiscord = FakeDiscord(server.accept()).also {
+            assertEquals(0, it.read().first)
+            it.write(1, buildJsonObject { put("cmd", "DISPATCH"); put("evt", "READY") })
+        }
+        try {
+            presence.update(PresenceActivity("Song", "Artist", "Album", 0, null, coverUrl = "https://img.example/c.jpg"))
+            for (expectStatusDisplay in listOf(true, false)) {
+                val discord = handshake()
+                val (op, msg) = discord.read()
+                assertEquals(1, op)
+                val activity = msg["args"]!!.jsonObject["activity"]!!.jsonObject
+                assertEquals(expectStatusDisplay, "status_display_type" in activity)
+                discord.write(2, buildJsonObject { put("code", 4000); put("message", "bad activity") })
+                discord.channel.close()
+            }
+            // Third connection: no status_display_type and the logo instead of the cover URL.
+            val discord = handshake()
+            val last = discord.setActivity()["activity"]!!.jsonObject
+            assertEquals("logo", last["assets"]!!.jsonObject["large_image"]!!.jsonPrimitive.content)
+            waitFor { presence.status.value.startsWith("Showing on Discord") }
+        } finally {
+            presence.close()
+            server.close()
+            Files.deleteIfExists(path)
+        }
+    }
+
     @Test
     fun noDiscordIsSilent() {
-        val presence = DiscordPresence("1234", socketPaths = { emptyList() })
+        val presence = DiscordPresence("1234", socketPaths = { emptyList() }, log = {})
         presence.update(PresenceActivity("Song", "Artist", "", 0, null))
-        Thread.sleep(200)
+        waitFor { presence.status.value.startsWith("Discord isn't running") }
         presence.close() // no exceptions, returns promptly
+    }
+
+    private fun waitFor(condition: () -> Boolean) {
+        val until = System.currentTimeMillis() + 10_000
+        while (!condition()) {
+            check(System.currentTimeMillis() < until) { "timed out" }
+            Thread.sleep(20)
+        }
     }
 
     @Test

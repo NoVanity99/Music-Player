@@ -63,6 +63,9 @@ interface PlatformUi {
     val supportsDiscordPresence: Boolean
     val supportsEqualizer: Boolean
 
+    /** What Discord Rich Presence is doing right now, for Settings; null where it isn't supported. */
+    val discordStatus: kotlinx.coroutines.flow.StateFlow<String>? get() = null
+
     /** Height of the app-drawn window title bar (desktop); content starts below it. */
     val titleBarHeight: Dp get() = 0.dp
 
