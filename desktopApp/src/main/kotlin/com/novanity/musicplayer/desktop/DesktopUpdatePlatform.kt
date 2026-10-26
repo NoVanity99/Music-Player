@@ -53,8 +53,13 @@ class DesktopUpdatePlatform(private val exitApp: () -> Unit) : UpdatePlatform {
                 // Wait for this process to exit so its files can be replaced.
                 appendLine(":wait")
                 appendLine("tasklist /FI \"PID eq $pid\" 2>nul | find \"$pid\" >nul && (timeout /t 1 /nobreak >nul & goto wait)")
-                appendLine("msiexec /i \"${msi.absolutePath}\" /passive /norestart")
-                if (app != null) appendLine("if exist \"$app\" start \"\" \"$app\"")
+                // Upgrades in place: same folder, so shortcuts, pins and settings stay as they are.
+                appendLine("start \"\" /wait msiexec /i \"${msi.absolutePath}\" /passive /norestart")
+                // Relaunch the updated app; never pop up an error if it has moved.
+                val fallback = "%LOCALAPPDATA%\\VanityPlayer\\VanityPlayer.exe"
+                // (No parenthesised blocks: a ")" in the user's folder name would break them.)
+                if (app != null) appendLine("if exist \"$app\" start \"\" \"$app\" & goto :eof")
+                appendLine("if exist \"$fallback\" start \"\" \"$fallback\"")
             }
         )
         ProcessBuilder("cmd.exe", "/c", "start", "\"\"", "/min", script.absolutePath)
