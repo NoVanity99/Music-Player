@@ -27,6 +27,18 @@ import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.foundation.LocalIndication
+import androidx.compose.foundation.hoverable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.isSecondaryPressed
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -126,11 +138,16 @@ fun SongRow(
 ) {
     val nowPlaying = LocalNowPlaying.current
     val isCurrent = nowPlaying.songId == song.id
+    val interaction = remember { MutableInteractionSource() }
+    val hovered by interaction.collectIsHoveredAsState()
+    RightClickMenu(menu) { rightClick ->
     Row(
         modifier = modifier
             .fillMaxWidth()
             .background(if (highlight) MaterialTheme.colorScheme.surfaceContainerHigh else Color.Transparent)
-            .clickable(onClick = onClick)
+            .then(rightClick)
+            .hoverable(interaction)
+            .clickable(interactionSource = interaction, indication = LocalIndication.current, onClick = onClick)
             .padding(start = 16.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -138,6 +155,8 @@ fun SongRow(
             Box(Modifier.size(width = 32.dp, height = 44.dp), contentAlignment = Alignment.CenterStart) {
                 if (isCurrent) {
                     EqualizerBars(nowPlaying.isPlaying)
+                } else if (hovered) {
+                    Icon(Icons.Rounded.PlayArrow, contentDescription = "Play", modifier = Modifier.size(20.dp))
                 } else {
                     Text(
                         if (trackNumber > 0) trackNumber.toString() else "–",
@@ -149,9 +168,13 @@ fun SongRow(
         } else {
             Box(contentAlignment = Alignment.Center) {
                 AlbumArt(song, Modifier.size(48.dp), shape = RoundedCornerShape(6.dp))
-                if (isCurrent) {
+                if (isCurrent || hovered) {
                     Box(Modifier.size(48.dp).clip(RoundedCornerShape(6.dp)).background(Color.Black.copy(alpha = 0.45f)))
+                }
+                if (isCurrent) {
                     EqualizerBars(nowPlaying.isPlaying, color = Color.White)
+                } else if (hovered) {
+                    Icon(Icons.Rounded.PlayArrow, contentDescription = "Play", tint = Color.White)
                 }
             }
             Spacer(Modifier.width(14.dp))
@@ -187,6 +210,7 @@ fun SongRow(
         OverflowMenu(menu)
         trailing?.invoke()
     }
+    }
 }
 
 @Composable
@@ -199,23 +223,63 @@ fun OverflowMenu(
     var open by remember { mutableStateOf(false) }
     Box {
         IconButton(onClick = { open = true }) { Icon(icon, contentDescription = "More options", tint = tint) }
-        DropdownMenu(
-            expanded = open,
-            onDismissRequest = { open = false },
-            shape = RoundedCornerShape(14.dp),
-            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-        ) {
-            actions.forEach { action ->
-                DropdownMenuItem(
-                    text = { Text(action.label) },
-                    leadingIcon = action.icon?.let { { Icon(it, contentDescription = null) } },
-                    onClick = {
-                        open = false
-                        action.onClick()
-                    },
-                )
+        ContextMenu(actions, open, DpOffset.Zero) { open = false }
+    }
+}
+
+/** The app's dropdown menu, used for overflow buttons and right-click menus. */
+@Composable
+fun ContextMenu(actions: List<MenuAction>, open: Boolean, offset: DpOffset, onDismiss: () -> Unit) {
+    DropdownMenu(
+        expanded = open,
+        onDismissRequest = onDismiss,
+        offset = offset,
+        shape = RoundedCornerShape(14.dp),
+        containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+    ) {
+        actions.forEach { action ->
+            DropdownMenuItem(
+                text = { Text(action.label) },
+                leadingIcon = action.icon?.let { { Icon(it, contentDescription = null) } },
+                onClick = {
+                    onDismiss()
+                    action.onClick()
+                },
+            )
+        }
+    }
+}
+
+/** Calls [onClick] with the pointer position when the secondary (right) mouse button is pressed. */
+fun Modifier.onSecondaryClick(onClick: (Offset) -> Unit): Modifier = pointerInput(Unit) {
+    awaitPointerEventScope {
+        while (true) {
+            val event = awaitPointerEvent()
+            if (event.type == PointerEventType.Press && event.buttons.isSecondaryPressed) {
+                event.changes.forEach { it.consume() }
+                onClick(event.changes.first().position)
             }
         }
+    }
+}
+
+/**
+ * Wraps [content] so a right-click opens [actions] at the pointer. [content] gets the modifier to
+ * apply to the clickable element.
+ */
+@Composable
+fun RightClickMenu(actions: List<MenuAction>, content: @Composable (Modifier) -> Unit) {
+    if (actions.isEmpty()) return content(Modifier)
+    val density = LocalDensity.current
+    var at by remember { mutableStateOf<DpOffset?>(null) }
+    var height by remember { mutableStateOf(0) }
+    Box(Modifier.onSizeChanged { height = it.height }) {
+        content(
+            Modifier.onSecondaryClick { p ->
+                at = with(density) { DpOffset(p.x.toDp(), (p.y - height).toDp()) }
+            }
+        )
+        ContextMenu(actions, at != null, at ?: DpOffset.Zero) { at = null }
     }
 }
 

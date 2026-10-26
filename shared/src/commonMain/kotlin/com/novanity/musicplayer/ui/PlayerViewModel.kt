@@ -3,6 +3,7 @@ package com.novanity.musicplayer.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.novanity.musicplayer.data.Song
+import com.novanity.musicplayer.data.SettingsRepository
 import com.novanity.musicplayer.playback.PlayerController
 import com.novanity.musicplayer.playback.PlayerUiState
 import com.novanity.musicplayer.playback.QueueEntry
@@ -14,7 +15,10 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 /** UI-facing playback state and commands, backed by the platform [PlayerController]. */
-class PlayerViewModel(private val controller: PlayerController) : ViewModel() {
+class PlayerViewModel(
+    private val controller: PlayerController,
+    private val settings: SettingsRepository? = null,
+) : ViewModel() {
 
     val state: StateFlow<PlayerUiState> = controller.state
     val upNext: StateFlow<List<QueueEntry>> = controller.upNext
@@ -29,7 +33,16 @@ class PlayerViewModel(private val controller: PlayerController) : ViewModel() {
     /** Test/preview hook: overrides the reported position. */
     var positionOverride: Long? = null
 
+    private val _volume = MutableStateFlow(settings?.volume?.value ?: 1f)
+    val volume: StateFlow<Float> = _volume.asStateFlow()
+    private var volumeBeforeMute = 1f
+
     init {
+        settings?.let { s ->
+            controller.setVolume(s.volume.value)
+            viewModelScope.launch { s.speed.collect { controller.setSpeed(it) } }
+            viewModelScope.launch { s.crossfadeSeconds.collect { controller.setCrossfadeMs(it * 1000) } }
+        }
         viewModelScope.launch {
             while (isActive) {
                 _positionMs.value = positionOverride ?: controller.currentPositionMs().coerceAtLeast(0L)
@@ -40,6 +53,27 @@ class PlayerViewModel(private val controller: PlayerController) : ViewModel() {
 
     override fun onCleared() {
         controller.release()
+    }
+
+    /** For platforms that don't use a ViewModelStore (desktop): stop playback and free the engine. */
+    fun shutdown() = controller.release()
+
+    fun setVolume(value: Float) {
+        val v = value.coerceIn(0f, 1f)
+        _volume.value = v
+        controller.setVolume(v)
+        settings?.setVolume(v)
+    }
+
+    fun changeVolume(delta: Float) = setVolume(_volume.value + delta)
+
+    fun toggleMute() {
+        if (_volume.value > 0f) {
+            volumeBeforeMute = _volume.value
+            setVolume(0f)
+        } else {
+            setVolume(volumeBeforeMute.takeIf { it > 0f } ?: 0.7f)
+        }
     }
 
     fun playSongs(songs: List<Song>, startIndex: Int = 0, shuffle: Boolean = false, source: String? = null) {

@@ -44,6 +44,8 @@ import com.novanity.musicplayer.ui.SongActions
 import com.novanity.musicplayer.ui.components.AlbumArt
 import com.novanity.musicplayer.ui.components.AlbumCard
 import com.novanity.musicplayer.ui.components.ArtistCard
+import com.novanity.musicplayer.ui.components.CardRow
+import com.novanity.musicplayer.ui.components.CardWidth
 import com.novanity.musicplayer.ui.components.EmptyState
 import com.novanity.musicplayer.ui.components.GradientArt
 import com.novanity.musicplayer.ui.components.LikedArt
@@ -114,40 +116,34 @@ fun HomeScreen(actions: SongActions, contentPadding: PaddingValues) {
                 if (home.recentlyPlayed.isNotEmpty()) {
                     item { SectionHeader("Recently played", action = "See all") { vm.open(Destination.RecentlyPlayed) } }
                     item {
-                        LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                            itemsIndexed(home.recentlyPlayed, key = { _, s -> s.id }) { i, song ->
-                                SongCard(song, onClick = { actions.play(home.recentlyPlayed, i, "Recently played") })
-                            }
+                        CardRow(home.recentlyPlayed, key = { it.id }) { song, m ->
+                            SongCard(song, onClick = { actions.play(home.recentlyPlayed, home.recentlyPlayed.indexOf(song), "Recently played") }, modifier = m)
                         }
                     }
                 }
                 if (home.recentlyAdded.isNotEmpty()) {
                     item { SectionHeader("Recently added", action = "See all") { vm.showLibrary(LibraryFilter.ALBUMS) } }
                     item {
-                        LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                            items(home.recentlyAdded, key = { it.id }) { album ->
-                                AlbumCard(album, onClick = { vm.open(Destination.AlbumDetail(album.id)) })
-                            }
+                        CardRow(home.recentlyAdded, key = { it.id }) { album, m ->
+                            AlbumCard(album, onClick = { vm.open(Destination.AlbumDetail(album.id)) }, modifier = m,
+                                onPlay = { actions.play(album.songs, 0, album.title) })
                         }
                     }
                 }
                 if (home.topArtists.isNotEmpty()) {
                     item { SectionHeader("Your artists", action = "See all") { vm.showLibrary(LibraryFilter.ARTISTS) } }
                     item {
-                        LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                            items(home.topArtists, key = { it.name }) { artist ->
-                                ArtistCard(artist, onClick = { vm.open(Destination.ArtistDetail(artist.name)) })
-                            }
+                        CardRow(home.topArtists, key = { it.name }, minCardWidth = CardWidth - 16.dp) { artist, m ->
+                            ArtistCard(artist, onClick = { vm.open(Destination.ArtistDetail(artist.name)) }, modifier = m,
+                                onPlay = { actions.shuffle(artist.songs, artist.name) })
                         }
                     }
                 }
                 if (home.playlists.isNotEmpty()) {
                     item { SectionHeader("Your playlists", action = "See all") { vm.showLibrary(LibraryFilter.PLAYLISTS) } }
                     item {
-                        LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                            items(home.playlists, key = { it.id }) { playlist ->
-                                PlaylistTile(playlist, onClick = { vm.open(Destination.PlaylistDetail(playlist.id)) })
-                            }
+                        CardRow(home.playlists, key = { it.id }) { playlist, m ->
+                            PlaylistTile(playlist, onClick = { vm.open(Destination.PlaylistDetail(playlist.id)) }, modifier = m)
                         }
                     }
                 }
@@ -198,8 +194,10 @@ private fun SyncingBanner() {
 
 @Composable
 private fun QuickPicksGrid(picks: List<QuickPick>, onPick: (QuickPick) -> Unit) {
-    Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        picks.chunked(2).forEach { row ->
+    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.padding(horizontal = 16.dp)) {
+    val columns = if (maxWidth >= 900.dp) 3 else 2
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        picks.chunked(columns).forEach { row ->
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 row.forEach { pick ->
                     val title = when (pick) {
@@ -222,8 +220,9 @@ private fun QuickPicksGrid(picks: List<QuickPick>, onPick: (QuickPick) -> Unit) 
                         },
                     )
                 }
-                if (row.size == 1) Spacer(Modifier.weight(1f))
+                repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
             }
         }
+    }
     }
 }

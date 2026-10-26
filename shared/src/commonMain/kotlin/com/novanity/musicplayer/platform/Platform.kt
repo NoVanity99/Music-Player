@@ -71,6 +71,13 @@ interface PlatformUi {
     /** Returns a launcher for the OS's own folder picker; the callback gets an absolute path. */
     @Composable
     fun rememberSystemFolderPicker(onPicked: (String) -> Unit): () -> Unit
+
+    /**
+     * Android: asks the user to approve a folder so .lrc files can be read (scoped storage).
+     * Returns null where no extra access is needed.
+     */
+    @Composable
+    fun rememberLyricsAccessRequest(onGranted: () -> Unit): ((folder: String) -> Unit)? = null
 }
 
 val LocalPlatform = staticCompositionLocalOf<PlatformUi> { error("No PlatformUi provided") }

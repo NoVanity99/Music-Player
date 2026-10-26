@@ -76,6 +76,8 @@ interface PlayerController {
     /** 0..1 */
     fun setVolume(volume: Float) {}
     fun setSpeed(speed: Float) {}
+    /** Overlap between songs; 0 disables crossfade. */
+    fun setCrossfadeMs(ms: Int) {}
 
     fun release()
 }

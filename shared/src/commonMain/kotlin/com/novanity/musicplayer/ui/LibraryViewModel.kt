@@ -320,6 +320,14 @@ class LibraryViewModel(
 
     // ---- Favorites ----
 
+    /** Keyboard shortcut: like/unlike whatever is playing. */
+    fun currentLikeToggle(player: PlayerViewModel) {
+        val song = player.state.value.current?.songId?.let(music.songsById::get) ?: return
+        val liked = song.id in likedIds.value
+        setLiked(song, !liked)
+        notify(if (liked) "Removed from Liked Songs" else "Added to Liked Songs")
+    }
+
     fun setLiked(song: Song, liked: Boolean) {
         viewModelScope.launch { favorites.setLiked(song.id, liked) }
     }

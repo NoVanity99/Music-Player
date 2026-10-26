@@ -49,7 +49,7 @@ class MainActivity : ComponentActivity() {
         viewModelFactory {
             initializer {
                 val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
-                PlayerViewModel(Media3PlayerController(applicationContext, appContainer.musicRepository, scope))
+                PlayerViewModel(Media3PlayerController(applicationContext, appContainer.musicRepository, scope), appContainer.settings)
             }
         }
     }

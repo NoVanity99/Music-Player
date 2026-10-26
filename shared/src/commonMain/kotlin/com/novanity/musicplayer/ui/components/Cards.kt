@@ -1,6 +1,15 @@
 package com.novanity.musicplayer.ui.components
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
+import androidx.compose.foundation.hoverable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -148,37 +157,72 @@ private fun CardText(title: String, subtitle: String?, center: Boolean = false) 
     }
 }
 
+/**
+ * Square-art card. On hover (mouse) it lifts slightly and shows a round play button, Spotify-style.
+ */
 @Composable
-fun AlbumCard(album: Album, onClick: () -> Unit, modifier: Modifier = Modifier.width(CardWidth)) {
-    Column(modifier.clip(RoundedCornerShape(8.dp)).clickable(onClick = onClick)) {
-        AlbumArt(album.songs.first(), Modifier.fillMaxWidth().aspectRatio(1f), shape = RoundedCornerShape(8.dp))
-        CardText(album.title, album.artist)
+private fun HoverCard(
+    onClick: () -> Unit,
+    onPlay: (() -> Unit)?,
+    modifier: Modifier,
+    center: Boolean = false,
+    menu: List<MenuAction> = emptyList(),
+    art: @Composable (Modifier) -> Unit,
+    title: String,
+    subtitle: String?,
+) {
+    val interaction = remember { MutableInteractionSource() }
+    val hovered by interaction.collectIsHoveredAsState()
+    val lift by animateFloatAsState(if (hovered) 1f else 0f, label = "lift")
+    RightClickMenu(menu) { rightClick ->
+        Column(
+            modifier
+                .clip(RoundedCornerShape(10.dp))
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.6f * lift))
+                .then(rightClick)
+                .hoverable(interaction)
+                .clickable(interactionSource = interaction, indication = LocalIndication.current, onClick = onClick)
+                .padding((6 * lift).dp),
+            horizontalAlignment = if (center) Alignment.CenterHorizontally else Alignment.Start,
+        ) {
+            Box {
+                art(Modifier.fillMaxWidth().aspectRatio(1f))
+                if (onPlay != null && lift > 0f) {
+                    PlayCircleButton(
+                        playing = false,
+                        onClick = onPlay,
+                        size = 44.dp,
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(8.dp)
+                            .graphicsLayer {
+                                alpha = lift
+                                translationY = (1f - lift) * 12.dp.toPx()
+                            }
+                            .shadow(8.dp, CircleShape),
+                    )
+                }
+            }
+            CardText(title, subtitle, center)
+        }
     }
 }
 
 @Composable
-fun SongCard(song: Song, onClick: () -> Unit, modifier: Modifier = Modifier.width(CardWidth)) {
-    Column(modifier.clip(RoundedCornerShape(8.dp)).clickable(onClick = onClick)) {
-        AlbumArt(song, Modifier.fillMaxWidth().aspectRatio(1f), shape = RoundedCornerShape(8.dp))
-        CardText(song.title, song.artist)
-    }
-}
+fun AlbumCard(album: Album, onClick: () -> Unit, modifier: Modifier = Modifier.width(CardWidth), onPlay: (() -> Unit)? = null) =
+    HoverCard(onClick, onPlay, modifier, art = { m -> AlbumArt(album.songs.first(), m, shape = RoundedCornerShape(8.dp)) }, title = album.title, subtitle = album.artist)
 
 @Composable
-fun ArtistCard(artist: Artist, onClick: () -> Unit, modifier: Modifier = Modifier.width(CardWidth - 16.dp)) {
-    Column(modifier.clip(RoundedCornerShape(8.dp)).clickable(onClick = onClick), horizontalAlignment = Alignment.CenterHorizontally) {
-        AlbumArt(artist.songs.first(), Modifier.fillMaxWidth().aspectRatio(1f), shape = CircleShape)
-        CardText(artist.name, "Artist", center = true)
-    }
-}
+fun SongCard(song: Song, onClick: () -> Unit, modifier: Modifier = Modifier.width(CardWidth)) =
+    HoverCard(onClick, onClick, modifier, art = { m -> AlbumArt(song, m, shape = RoundedCornerShape(8.dp)) }, title = song.title, subtitle = song.artist)
 
 @Composable
-fun PlaylistTile(playlist: PlaylistCard, onClick: () -> Unit, modifier: Modifier = Modifier.width(CardWidth)) {
-    Column(modifier.clip(RoundedCornerShape(8.dp)).clickable(onClick = onClick)) {
-        PlaylistArt(playlist.covers, Modifier.fillMaxWidth().aspectRatio(1f), shape = RoundedCornerShape(8.dp))
-        CardText(playlist.name, "Playlist • ${songCount(playlist.songCount)}")
-    }
-}
+fun ArtistCard(artist: Artist, onClick: () -> Unit, modifier: Modifier = Modifier.width(CardWidth - 16.dp), onPlay: (() -> Unit)? = null) =
+    HoverCard(onClick, onPlay, modifier, center = true, art = { m -> AlbumArt(artist.songs.first(), m, shape = CircleShape) }, title = artist.name, subtitle = "Artist")
+
+@Composable
+fun PlaylistTile(playlist: PlaylistCard, onClick: () -> Unit, modifier: Modifier = Modifier.width(CardWidth), onPlay: (() -> Unit)? = null) =
+    HoverCard(onClick, onPlay, modifier, art = { m -> PlaylistArt(playlist.covers, m, shape = RoundedCornerShape(8.dp)) }, title = playlist.name, subtitle = "Playlist \u2022 ${songCount(playlist.songCount)}")
 
 /** Compact "quick pick" tile used in the Home grid (art on the left, title on the right). */
 @Composable
@@ -212,9 +256,11 @@ fun CollectionRow(
     onClick: () -> Unit,
     menu: List<MenuAction> = emptyList(),
 ) {
+    RightClickMenu(menu) { rightClick ->
     Row(
         Modifier
             .fillMaxWidth()
+            .then(rightClick)
             .clickable(onClick = onClick)
             .padding(start = 16.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -232,5 +278,6 @@ fun CollectionRow(
             )
         }
         OverflowMenu(menu)
+    }
     }
 }

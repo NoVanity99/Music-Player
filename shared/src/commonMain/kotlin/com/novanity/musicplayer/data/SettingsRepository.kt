@@ -28,6 +28,33 @@ class SettingsRepository(private val prefs: KeyValueStore) {
     private val _excludedFolders = MutableStateFlow(prefs.getStringSet(KEY_EXCLUDED).orEmpty().toSet())
     val excludedFolders: StateFlow<Set<String>> = _excludedFolders.asStateFlow()
 
+    // ---- Playback ----
+
+    private val _volume = MutableStateFlow(prefs.getFloat(KEY_VOLUME, 1f))
+    val volume: StateFlow<Float> = _volume.asStateFlow()
+
+    private val _speed = MutableStateFlow(prefs.getFloat(KEY_SPEED, 1f))
+    val speed: StateFlow<Float> = _speed.asStateFlow()
+
+    /** Crossfade between songs in seconds (0 = off). */
+    private val _crossfadeSeconds = MutableStateFlow(prefs.getInt(KEY_CROSSFADE, 0))
+    val crossfadeSeconds: StateFlow<Int> = _crossfadeSeconds.asStateFlow()
+
+    fun setVolume(value: Float) {
+        _volume.value = value.coerceIn(0f, 1f)
+        prefs.putFloat(KEY_VOLUME, _volume.value)
+    }
+
+    fun setSpeed(value: Float) {
+        _speed.value = value.coerceIn(0.5f, 2f)
+        prefs.putFloat(KEY_SPEED, _speed.value)
+    }
+
+    fun setCrossfadeSeconds(value: Int) {
+        _crossfadeSeconds.value = value.coerceIn(0, 12)
+        prefs.putInt(KEY_CROSSFADE, _crossfadeSeconds.value)
+    }
+
     fun setThemeMode(mode: ThemeMode) {
         _themeMode.value = mode
         prefs.putString(KEY_THEME, mode.name)
@@ -66,5 +93,8 @@ class SettingsRepository(private val prefs: KeyValueStore) {
         const val KEY_SORT = "sort_order"
         const val KEY_FOLDERS = "included_folders"
         const val KEY_EXCLUDED = "excluded_folders"
+        const val KEY_VOLUME = "volume"
+        const val KEY_SPEED = "speed"
+        const val KEY_CROSSFADE = "crossfade_seconds"
     }
 }

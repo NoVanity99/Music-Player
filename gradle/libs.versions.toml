@@ -28,6 +28,7 @@ ffmpeg = "8.1.2-1.5.14"
 jaudiotagger = "3.0.1"
 jnativehook = "2.2.2"
 jna = "5.19.1"
+eddsa = "0.3.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -73,6 +74,7 @@ ffmpeg = { group = "org.bytedeco", name = "ffmpeg", version.ref = "ffmpeg" }
 javacpp = { group = "org.bytedeco", name = "javacpp", version.ref = "javacv" }
 jaudiotagger = { group = "net.jthink", name = "jaudiotagger", version.ref = "jaudiotagger" }
 jnativehook = { group = "com.github.kwhat", name = "jnativehook", version.ref = "jnativehook" }
+eddsa = { group = "net.i2p.crypto", name = "eddsa", version.ref = "eddsa" }
 jna-platform = { group = "net.java.dev.jna", name = "jna-platform", version.ref = "jna" }
 reorderable = { group = "sh.calvin.reorderable", name = "reorderable", version.ref = "reorderable" }
 

@@ -16,6 +16,7 @@ import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -40,6 +41,7 @@ import androidx.compose.material.icons.rounded.DragHandle
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
+import androidx.compose.material.icons.rounded.Lyrics
 import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
@@ -213,6 +215,7 @@ fun NowPlayingScreen(
     val liked = song != null && song.id in likedIds
     val tint by rememberArtColor(song, DefaultTint)
     var showQueue by rememberSaveable { mutableStateOf(false) }
+    var showLyrics by rememberSaveable { mutableStateOf(false) }
 
     // Drag the whole sheet down to dismiss (distance or flick), else spring back.
     val dismiss = rememberDismissDragState()
@@ -248,50 +251,10 @@ fun NowPlayingScreen(
                     )
             )
 
-            Column(
-                Modifier
-                    .fillMaxSize()
-                    .systemBarsPadding()
-                    .padding(horizontal = 24.dp),
-            ) {
-                // Grabber + header
-                Box(Modifier.fillMaxWidth().padding(top = 6.dp), contentAlignment = Alignment.Center) {
-                    Box(Modifier.size(width = 36.dp, height = 5.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.35f)))
-                }
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = onCollapse) {
-                        Icon(Icons.Rounded.KeyboardArrowDown, contentDescription = "Collapse", modifier = Modifier.size(30.dp))
-                    }
-                    Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("PLAYING FROM", style = MaterialTheme.typography.labelSmall, color = Muted)
-                        Text(
-                            playingFrom ?: song?.album ?: "Your library",
-                            style = MaterialTheme.typography.titleSmall,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                    if (song != null) {
-                        OverflowMenu(
-                            listOf(
-                                MenuAction("Add to playlist") { actions.library.requestAddToPlaylist(listOf(song)) },
-                                MenuAction("Go to album") {
-                                    onCollapse()
-                                    actions.library.open(Destination.AlbumDetail(song.albumId))
-                                },
-                                MenuAction("Go to artist") {
-                                    onCollapse()
-                                    actions.library.open(Destination.ArtistDetail(song.artist))
-                                },
-                            ),
-                            icon = Icons.Rounded.MoreHoriz,
-                            tint = Color.White,
-                        )
-                    } else {
-                        Spacer(Modifier.size(48.dp))
-                    }
-                }
-
+            BoxWithConstraints(Modifier.fillMaxSize().systemBarsPadding()) {
+                // Wide windows: artwork on the left, lyrics + controls on the right.
+                val wide = maxWidth >= 900.dp && maxHeight >= 520.dp
+                val artwork: @Composable (Modifier) -> Unit = { artModifier ->
                 // Artwork: shrinks when paused, swipe sideways to change track.
                 val artScale by animateFloatAsState(
                     if (state.isPlaying) 1f else 0.84f,
@@ -300,9 +263,7 @@ fun NowPlayingScreen(
                 )
                 val artSwipe = rememberTrackSwipeState(current.key)
                 Box(
-                    Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
+                    artModifier
                         .padding(vertical = 20.dp)
                         .trackSwipe(artSwipe, state.hasNext, state.hasPrevious, player::nextTrack, player::previousTrack),
                     contentAlignment = Alignment.Center,
@@ -323,6 +284,8 @@ fun NowPlayingScreen(
                     )
                 }
 
+                }
+                val details: @Composable () -> Unit = {
                 // Title + like
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
@@ -362,11 +325,81 @@ fun NowPlayingScreen(
                 Spacer(Modifier.height(12.dp))
                 Controls(state, player)
                 Spacer(Modifier.height(12.dp))
-                Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), horizontalArrangement = Arrangement.Center) {
-                    TextButton(onClick = { showQueue = true }) {
-                        Icon(Icons.AutoMirrored.Rounded.QueueMusic, contentDescription = null, tint = Color.White)
-                        Spacer(Modifier.width(8.dp))
-                        Text("Up next", color = Color.White, style = MaterialTheme.typography.labelLarge)
+                }
+                val bottomButtons: @Composable () -> Unit = {
+                    Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), horizontalArrangement = Arrangement.Center) {
+                        TextButton(onClick = { showQueue = true }) {
+                            Icon(Icons.AutoMirrored.Rounded.QueueMusic, contentDescription = null, tint = Color.White)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Up next", color = Color.White, style = MaterialTheme.typography.labelLarge)
+                        }
+                        if (!wide) {
+                            Spacer(Modifier.width(12.dp))
+                            TextButton(onClick = { showLyrics = !showLyrics }) {
+                                Icon(Icons.Rounded.Lyrics, contentDescription = null, tint = if (showLyrics) MaterialTheme.colorScheme.primary else Color.White)
+                                Spacer(Modifier.width(8.dp))
+                                Text("Lyrics", color = Color.White, style = MaterialTheme.typography.labelLarge)
+                            }
+                        }
+                    }
+                }
+                Column(Modifier.fillMaxSize().padding(horizontal = if (wide) 48.dp else 24.dp)) {
+                // Grabber + header
+                Box(Modifier.fillMaxWidth().padding(top = 6.dp), contentAlignment = Alignment.Center) {
+                    Box(Modifier.size(width = 36.dp, height = 5.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.35f)))
+                }
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = onCollapse) {
+                        Icon(Icons.Rounded.KeyboardArrowDown, contentDescription = "Collapse", modifier = Modifier.size(30.dp))
+                    }
+                    Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("PLAYING FROM", style = MaterialTheme.typography.labelSmall, color = Muted)
+                        Text(
+                            playingFrom ?: song?.album ?: "Your library",
+                            style = MaterialTheme.typography.titleSmall,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    if (song != null) {
+                        OverflowMenu(
+                            listOf(
+                                MenuAction("Add to playlist") { actions.library.requestAddToPlaylist(listOf(song)) },
+                                MenuAction("Go to album") {
+                                    onCollapse()
+                                    actions.library.open(Destination.AlbumDetail(song.albumId))
+                                },
+                                MenuAction("Go to artist") {
+                                    onCollapse()
+                                    actions.library.open(Destination.ArtistDetail(song.artist))
+                                },
+                            ),
+                            icon = Icons.Rounded.MoreHoriz,
+                            tint = Color.White,
+                        )
+                    } else {
+                        Spacer(Modifier.size(48.dp))
+                    }
+                }
+
+                    if (wide) {
+                        Row(Modifier.weight(1f).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            artwork(Modifier.weight(1f).fillMaxHeight())
+                            Spacer(Modifier.width(56.dp))
+                            Column(Modifier.weight(1f).fillMaxHeight().padding(vertical = 20.dp)) {
+                                LyricsView(song, player, Modifier.weight(1f).fillMaxWidth(), Color.White, Muted)
+                                details()
+                            }
+                        }
+                        bottomButtons()
+                    } else {
+                        if (showLyrics) {
+                            LyricsView(song, player, Modifier.weight(1f).fillMaxWidth().padding(vertical = 12.dp), Color.White, Muted)
+                        } else {
+                            artwork(Modifier.weight(1f).fillMaxWidth())
+                        }
+                        details()
+                        bottomButtons()
                     }
                 }
             }
@@ -386,13 +419,20 @@ fun NowPlayingScreen(
 
 /** Thin Apple-style scrubber that thickens while you drag it. */
 @Composable
-private fun SeekBar(durationMs: Long, player: PlayerViewModel) {
+internal fun SeekBar(
+    durationMs: Long,
+    player: PlayerViewModel,
+    activeColor: Color = Color.White,
+    trackColor: Color = Color.White.copy(alpha = 0.25f),
+    labelColor: Color = Muted,
+    compact: Boolean = false,
+) {
     val position by player.positionMs.collectAsStateWithLifecycle()
     var dragging by remember { mutableStateOf(false) }
     var dragFraction by remember { mutableFloatStateOf(0f) }
     val duration = durationMs.coerceAtLeast(1L)
     val fraction = if (dragging) dragFraction else (position.toFloat() / duration).coerceIn(0f, 1f)
-    val barHeight by animateDpAsState(if (dragging) 10.dp else 5.dp, label = "bar")
+    val barHeight by animateDpAsState(if (dragging) 10.dp else if (compact) 4.dp else 5.dp, label = "bar")
 
     Column(Modifier.fillMaxWidth()) {
         Canvas(
@@ -425,13 +465,15 @@ private fun SeekBar(durationMs: Long, player: PlayerViewModel) {
             val h = barHeight.toPx()
             val top = (size.height - h) / 2
             val radius = CornerRadius(h / 2, h / 2)
-            drawRoundRect(Color.White.copy(alpha = 0.25f), Offset(0f, top), Size(size.width, h), radius)
-            drawRoundRect(Color.White.copy(alpha = if (dragging) 1f else 0.9f), Offset(0f, top), Size(size.width * fraction, h), radius)
+            drawRoundRect(trackColor, Offset(0f, top), Size(size.width, h), radius)
+            drawRoundRect(activeColor.copy(alpha = if (dragging) 1f else 0.9f), Offset(0f, top), Size(size.width * fraction, h), radius)
         }
-        Row(Modifier.fillMaxWidth()) {
-            Text(formatDuration((fraction * duration).toLong()), style = MaterialTheme.typography.labelMedium, color = Muted)
-            Spacer(Modifier.weight(1f))
-            Text("-" + formatDuration(((1f - fraction) * duration).toLong()), style = MaterialTheme.typography.labelMedium, color = Muted)
+        if (!compact) {
+            Row(Modifier.fillMaxWidth()) {
+                Text(formatDuration((fraction * duration).toLong()), style = MaterialTheme.typography.labelMedium, color = labelColor)
+                Spacer(Modifier.weight(1f))
+                Text("-" + formatDuration(((1f - fraction) * duration).toLong()), style = MaterialTheme.typography.labelMedium, color = labelColor)
+            }
         }
     }
 }
@@ -486,7 +528,13 @@ private fun Controls(state: PlayerUiState, player: PlayerViewModel) {
 // ======================= Up Next =======================
 
 @Composable
-private fun QueueSheetContent(state: PlayerUiState, song: Song?, songsById: Map<Long, Song>, player: PlayerViewModel) {
+internal fun QueueSheetContent(
+    state: PlayerUiState,
+    song: Song?,
+    songsById: Map<Long, Song>,
+    player: PlayerViewModel,
+    background: Color = MaterialTheme.colorScheme.surfaceContainerLow,
+) {
     val upNext by player.upNext.collectAsStateWithLifecycle()
 
     // Local copy for smooth dragging; resynced from the player when idle.
@@ -547,6 +595,7 @@ private fun QueueSheetContent(state: PlayerUiState, song: Song?, songsById: Map<
                         canReorder = canReorder,
                         onClick = { player.playQueueIndex(entry.index) },
                         onRemove = { player.removeQueueIndex(entry.index) },
+                        background = background,
                         handle = Modifier.draggableHandle(
                             enabled = canReorder,
                             onDragStarted = {
@@ -581,6 +630,7 @@ private fun QueueRow(
     onClick: () -> Unit,
     onRemove: () -> Unit,
     handle: Modifier,
+    background: Color,
 ) {
     SwipeToDismissBox(
         state = rememberSwipeToDismissBoxState(),
@@ -590,7 +640,7 @@ private fun QueueRow(
         Row(
             Modifier
                 .fillMaxWidth()
-                .background(if (isDragging) MaterialTheme.colorScheme.surfaceContainerHighest else MaterialTheme.colorScheme.surfaceContainerLow)
+                .background(if (isDragging) MaterialTheme.colorScheme.surfaceContainerHighest else background)
                 .clickable(onClick = onClick)
                 .padding(start = 20.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
             verticalAlignment = Alignment.CenterVertically,

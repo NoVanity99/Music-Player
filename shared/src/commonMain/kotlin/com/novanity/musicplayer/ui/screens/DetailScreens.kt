@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -72,6 +73,7 @@ import com.novanity.musicplayer.ui.PlaylistTrack
 import com.novanity.musicplayer.ui.SongActions
 import com.novanity.musicplayer.ui.components.AlbumArt
 import com.novanity.musicplayer.ui.components.AlbumCard
+import com.novanity.musicplayer.ui.components.CardRow
 import com.novanity.musicplayer.ui.components.ConfirmDialog
 import com.novanity.musicplayer.ui.components.FolderGradient
 import com.novanity.musicplayer.ui.components.GradientArt
@@ -163,7 +165,10 @@ private fun CollectionScaffold(
     }
 }
 
-/** Centered artwork + title block with a vertical wash of the art's color, Apple Music style. */
+/**
+ * Artwork + title block with a vertical wash of the art's color: centered on phones (Apple Music
+ * style), side by side on wide windows (desktop style).
+ */
 @Composable
 private fun Hero(
     tint: Color,
@@ -174,71 +179,104 @@ private fun Hero(
     onSubtitleClick: (() -> Unit)? = null,
 ) {
     val background = MaterialTheme.colorScheme.background
-    Column(
+    androidx.compose.foundation.layout.BoxWithConstraints(
         Modifier
             .fillMaxWidth()
-            .background(Brush.verticalGradient(listOf(tint.copy(alpha = 0.85f), tint.copy(alpha = 0.35f), background)))
-            .statusBarsPadding()
-            .padding(top = 64.dp, start = 24.dp, end = 24.dp, bottom = 8.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
+            .background(Brush.verticalGradient(listOf(tint.copy(alpha = 0.85f), tint.copy(alpha = 0.35f), background))),
     ) {
-        art(
-            Modifier
-                .size(240.dp)
-                .shadow(24.dp, RoundedCornerShape(10.dp), ambientColor = Color.Black, spotColor = Color.Black)
-        )
-        Spacer(Modifier.height(20.dp))
-        Text(title, style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis)
-        if (subtitle != null) {
-            Text(
-                subtitle,
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.primary,
-                textAlign = TextAlign.Center,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = if (onSubtitleClick != null) Modifier.clickable(onClick = onSubtitleClick) else Modifier,
-            )
+        val wide = maxWidth >= 600.dp
+        val subtitleText: @Composable (TextAlign) -> Unit = { align ->
+            if (subtitle != null) {
+                Text(
+                    subtitle,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    textAlign = align,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = if (onSubtitleClick != null) Modifier.clickable(onClick = onSubtitleClick) else Modifier,
+                )
+            }
         }
-        Spacer(Modifier.height(4.dp))
-        Text(meta, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
+        if (wide) {
+            Row(
+                Modifier
+                    .statusBarsPadding()
+                    .padding(top = 72.dp, start = 32.dp, end = 32.dp, bottom = 8.dp),
+                verticalAlignment = Alignment.Bottom,
+            ) {
+                art(Modifier.size(220.dp).shadow(24.dp, RoundedCornerShape(10.dp), ambientColor = Color.Black, spotColor = Color.Black))
+                Spacer(Modifier.width(28.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(meta.substringBefore(" \u2022").uppercase(), style = MaterialTheme.typography.labelMedium)
+                    Spacer(Modifier.height(6.dp))
+                    Text(title, style = MaterialTheme.typography.displaySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Spacer(Modifier.height(10.dp))
+                    subtitleText(TextAlign.Start)
+                    Text(meta, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        } else {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .padding(top = 64.dp, start = 24.dp, end = 24.dp, bottom = 8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                art(
+                    Modifier
+                        .size(240.dp)
+                        .shadow(24.dp, RoundedCornerShape(10.dp), ambientColor = Color.Black, spotColor = Color.Black)
+                )
+                Spacer(Modifier.height(20.dp))
+                Text(title, style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                subtitleText(TextAlign.Center)
+                Spacer(Modifier.height(4.dp))
+                Text(meta, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
+            }
+        }
     }
 }
 
-/** Apple-style pair of pill buttons. */
+/** Play + Shuffle: full-width pills on phones, compact buttons on wide windows. */
 @Composable
 private fun PlayShuffleRow(songs: List<Song>, actions: SongActions, source: String) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 24.dp, vertical = 16.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Button(
-            onClick = { actions.play(songs, 0, source) },
-            enabled = songs.isNotEmpty(),
-            shape = RoundedCornerShape(12.dp),
-            contentPadding = PaddingValues(vertical = 14.dp),
-            modifier = Modifier.weight(1f),
+    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val wide = maxWidth >= 600.dp
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = if (wide) 32.dp else 24.dp, vertical = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Icon(Icons.Rounded.PlayArrow, contentDescription = null)
-            Spacer(Modifier.width(6.dp))
-            Text("Play", style = MaterialTheme.typography.titleSmall)
-        }
-        FilledTonalButton(
-            onClick = { actions.shuffle(songs, source) },
-            enabled = songs.isNotEmpty(),
-            shape = RoundedCornerShape(12.dp),
-            contentPadding = PaddingValues(vertical = 14.dp),
-            colors = ButtonDefaults.filledTonalButtonColors(
-                containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                contentColor = MaterialTheme.colorScheme.primary,
-            ),
-            modifier = Modifier.weight(1f),
-        ) {
-            Icon(Icons.Rounded.Shuffle, contentDescription = null)
-            Spacer(Modifier.width(6.dp))
-            Text("Shuffle", style = MaterialTheme.typography.titleSmall)
+            val buttonModifier = if (wide) Modifier.width(150.dp) else Modifier.weight(1f)
+            Button(
+                onClick = { actions.play(songs, 0, source) },
+                enabled = songs.isNotEmpty(),
+                shape = RoundedCornerShape(12.dp),
+                contentPadding = PaddingValues(vertical = 14.dp),
+                modifier = buttonModifier,
+            ) {
+                Icon(Icons.Rounded.PlayArrow, contentDescription = null)
+                Spacer(Modifier.width(6.dp))
+                Text("Play", style = MaterialTheme.typography.titleSmall)
+            }
+            FilledTonalButton(
+                onClick = { actions.shuffle(songs, source) },
+                enabled = songs.isNotEmpty(),
+                shape = RoundedCornerShape(12.dp),
+                contentPadding = PaddingValues(vertical = 14.dp),
+                colors = ButtonDefaults.filledTonalButtonColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                    contentColor = MaterialTheme.colorScheme.primary,
+                ),
+                modifier = buttonModifier,
+            ) {
+                Icon(Icons.Rounded.Shuffle, contentDescription = null)
+                Spacer(Modifier.width(6.dp))
+                Text("Shuffle", style = MaterialTheme.typography.titleSmall)
+            }
         }
     }
 }
@@ -323,7 +361,9 @@ private fun ArtistScreen(name: String, actions: SongActions, contentPadding: Pad
     CollectionScaffold(artist.name, tint, { vm.back() }, actions.collectionMenu(artist.songs), contentPadding) {
         item {
             // Full-bleed image with the name over a fade, YouTube Music style.
-            Box(Modifier.fillMaxWidth().aspectRatio(1.05f)) {
+            // Square-ish on phones; a 360 dp banner on wide windows so it doesn't fill the screen.
+            androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth()) {
+            Box(if (maxWidth >= 600.dp) Modifier.fillMaxWidth().height(360.dp) else Modifier.fillMaxWidth().aspectRatio(1.05f)) {
                 AlbumArt(artist.songs.first(), Modifier.fillMaxSize(), shape = RoundedCornerShape(0.dp), large = true)
                 Box(
                     Modifier
@@ -339,6 +379,7 @@ private fun ArtistScreen(name: String, actions: SongActions, contentPadding: Pad
                     )
                 }
             }
+            }
         }
         item { PlayShuffleRow(artist.songs, actions, artist.name) }
         item { SectionHeader("Songs", action = if (artist.songs.size > 5) (if (expanded) "Show less" else "See all") else null) { expanded = !expanded } }
@@ -346,8 +387,9 @@ private fun ArtistScreen(name: String, actions: SongActions, contentPadding: Pad
         if (albums.isNotEmpty()) {
             item { SectionHeader("Albums") }
             item {
-                LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                    items(albums, key = { it.id }) { AlbumCard(it, onClick = { vm.open(Destination.AlbumDetail(it.id)) }) }
+                CardRow(albums, key = { it.id }) { album, m ->
+                    AlbumCard(album, onClick = { vm.open(Destination.AlbumDetail(album.id)) }, modifier = m,
+                        onPlay = { actions.play(album.songs, 0, album.title) })
                 }
             }
         }

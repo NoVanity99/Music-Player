@@ -60,6 +60,7 @@ import com.novanity.musicplayer.ui.SongActions
 import com.novanity.musicplayer.ui.components.AlbumArt
 import com.novanity.musicplayer.ui.components.AlbumCard
 import com.novanity.musicplayer.ui.components.ArtistCard
+import com.novanity.musicplayer.ui.components.CardRow
 import com.novanity.musicplayer.ui.components.CollectionRow
 import com.novanity.musicplayer.ui.components.EmptyState
 import com.novanity.musicplayer.ui.components.FolderGradient
@@ -177,16 +178,16 @@ fun SearchScreen(actions: SongActions, contentPadding: PaddingValues) {
         if (results.artists.isNotEmpty()) {
             item { SectionHeader("Artists") }
             item {
-                LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                    items(results.artists, key = { it.name }) { ArtistCard(it, onClick = { vm.open(Destination.ArtistDetail(it.name)) }) }
+                CardRow(results.artists, key = { it.name }, minCardWidth = com.novanity.musicplayer.ui.components.CardWidth - 16.dp) { a, m ->
+                    ArtistCard(a, onClick = { vm.open(Destination.ArtistDetail(a.name)) }, modifier = m)
                 }
             }
         }
         if (results.albums.isNotEmpty()) {
             item { SectionHeader("Albums") }
             item {
-                LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                    items(results.albums, key = { it.id }) { AlbumCard(it, onClick = { vm.open(Destination.AlbumDetail(it.id)) }) }
+                CardRow(results.albums, key = { it.id }) { a, m ->
+                    AlbumCard(a, onClick = { vm.open(Destination.AlbumDetail(a.id)) }, modifier = m, onPlay = { actions.play(a.songs, 0, a.title) })
                 }
             }
         }

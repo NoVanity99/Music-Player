@@ -14,6 +14,10 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -82,58 +86,73 @@ fun MusicPlayerRoot(library: LibraryViewModel, player: PlayerViewModel, uiState:
 
     AppBackHandler(enabled = library.backStack.isNotEmpty() || library.tab != Tab.HOME) { library.back() }
 
-    CompositionLocalProvider(LocalNowPlaying provides NowPlayingInfo(state.current?.songId, state.isPlaying)) {
-        Box(Modifier.fillMaxSize()) {
-            Scaffold(
-                snackbarHost = { SnackbarHost(snackbars) },
-                contentWindowInsets = WindowInsets(0),
-                containerColor = MaterialTheme.colorScheme.background,
-                bottomBar = {
-                    val bg = MaterialTheme.colorScheme.background
-                    Column(
-                        Modifier.background(
-                            // Fade in behind the mini player, then fully opaque behind the tabs.
-                            Brush.verticalGradient(0f to Color.Transparent, 0.3f to bg.copy(alpha = 0.85f), 0.45f to bg, 1f to bg)
-                        )
-                    ) {
-                        if (state.hasMedia) {
-                            MiniPlayer(
-                                state = state,
-                                song = currentSong,
-                                actions = actions,
-                                liked = currentSong != null && currentSong.id in likedIds,
-                                onExpand = { uiState.nowPlayingOpen = true },
-                            )
-                        }
-                        BottomNav(library.tab, library::selectTab)
-                    }
-                },
-            ) { padding ->
-                val destination = library.backStack.lastOrNull()
-                AnimatedContent(
-                    targetState = Triple(library.tab, library.backStack.size, destination),
-                    transitionSpec = {
-                        val forward = targetState.first == initialState.first && targetState.second > initialState.second
-                        if (forward) {
-                            (slideInHorizontally(tween(260)) { it / 6 } + fadeIn(tween(260))) togetherWith fadeOut(tween(160))
-                        } else {
-                            fadeIn(tween(220)) togetherWith fadeOut(tween(160))
-                        }
-                    },
-                    label = "screen",
-                ) { (tab, depth, dest) ->
-                    // Keep each screen's scroll position when navigating away and back.
-                    stateHolder.SaveableStateProvider("$tab/$depth/$dest") {
-                        Box(Modifier.fillMaxSize()) {
-                            when {
-                                dest != null -> DetailScreen(dest, actions, padding)
-                                tab == Tab.HOME -> HomeScreen(actions, padding)
-                                tab == Tab.SEARCH -> SearchScreen(actions, padding)
-                                else -> LibraryScreen(actions, padding)
-                            }
-                        }
+    val screens: @Composable (PaddingValues) -> Unit = { padding ->
+        val destination = library.backStack.lastOrNull()
+        AnimatedContent(
+            targetState = Triple(library.tab, library.backStack.size, destination),
+            transitionSpec = {
+                val forward = targetState.first == initialState.first && targetState.second > initialState.second
+                if (forward) {
+                    (slideInHorizontally(tween(260)) { it / 6 } + fadeIn(tween(260))) togetherWith fadeOut(tween(160))
+                } else {
+                    fadeIn(tween(220)) togetherWith fadeOut(tween(160))
+                }
+            },
+            label = "screen",
+        ) { (tab, depth, dest) ->
+            // Keep each screen's scroll position when navigating away and back.
+            stateHolder.SaveableStateProvider("$tab/$depth/$dest") {
+                Box(Modifier.fillMaxSize()) {
+                    when {
+                        dest != null -> DetailScreen(dest, actions, padding)
+                        tab == Tab.HOME -> HomeScreen(actions, padding)
+                        tab == Tab.SEARCH -> SearchScreen(actions, padding)
+                        else -> LibraryScreen(actions, padding)
                     }
                 }
+            }
+        }
+    }
+
+    CompositionLocalProvider(LocalNowPlaying provides NowPlayingInfo(state.current?.songId, state.isPlaying)) {
+        BoxWithConstraints(Modifier.fillMaxSize()) {
+            val wide = maxWidth >= WideLayoutMinWidth
+            if (wide) {
+                // Desktop / large windows: sidebar, content panel, side panel and a player bar.
+                Scaffold(
+                    snackbarHost = { SnackbarHost(snackbars, Modifier.padding(bottom = 100.dp)) },
+                    contentWindowInsets = WindowInsets(0),
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
+                ) { _ ->
+                    WideLayout(library, player, actions, uiState, maxWidth, screens)
+                }
+            } else {
+                Scaffold(
+                    snackbarHost = { SnackbarHost(snackbars) },
+                    contentWindowInsets = WindowInsets(0),
+                    containerColor = MaterialTheme.colorScheme.background,
+                    bottomBar = {
+                        val bg = MaterialTheme.colorScheme.background
+                        Column(
+                            Modifier.background(
+                                // Fade in behind the mini player, then fully opaque behind the tabs.
+                                Brush.verticalGradient(0f to Color.Transparent, 0.3f to bg.copy(alpha = 0.85f), 0.45f to bg, 1f to bg)
+                            )
+                        ) {
+                            if (state.hasMedia) {
+                                MiniPlayer(
+                                    state = state,
+                                    song = currentSong,
+                                    actions = actions,
+                                    liked = currentSong != null && currentSong.id in likedIds,
+                                    onExpand = { uiState.nowPlayingOpen = true },
+                                )
+                            }
+                            BottomNav(library.tab, library::selectTab)
+                        }
+                    },
+                ) { padding -> screens(padding) }
+                if (uiState.showShortcuts) ShortcutsDialog { uiState.showShortcuts = false }
             }
 
             AnimatedVisibility(

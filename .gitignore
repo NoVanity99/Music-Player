@@ -18,3 +18,4 @@ keystore.properties
 # Built APKs copied to the root
 *.apk
 /app/screenshots/
+/desktopApp/screenshots/
