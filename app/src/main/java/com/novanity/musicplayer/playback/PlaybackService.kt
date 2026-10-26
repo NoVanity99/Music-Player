@@ -231,7 +231,7 @@ class PlaybackService : MediaSessionService() {
                     item
                 } else {
                     val song = item.songId?.let(byId::get) ?: return@mapNotNullTo null
-                    item.buildUpon().setUri(song.uri).build()
+                    item.buildUpon().setUri(android.net.Uri.parse(song.uri)).build()
                 }
             }
             return Futures.immediateFuture<MutableList<MediaItem>>(resolved)

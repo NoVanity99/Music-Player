@@ -1,8 +1,10 @@
 package com.novanity.musicplayer.playback
 
+import android.net.Uri
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import com.novanity.musicplayer.data.Song
+import com.novanity.musicplayer.platform.albumArtUri
 import java.util.concurrent.atomic.AtomicLong
 
 private val queueEntryCounter = AtomicLong(0)
@@ -13,7 +15,7 @@ private val queueEntryCounter = AtomicLong(0)
  */
 fun Song.toMediaItem(): MediaItem = MediaItem.Builder()
     .setMediaId("$id/${queueEntryCounter.incrementAndGet()}")
-    .setUri(uri)
+    .setUri(Uri.parse(uri))
     .setMediaMetadata(
         MediaMetadata.Builder()
             .setTitle(title)

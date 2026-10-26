@@ -9,8 +9,8 @@ import android.graphics.Shader
 import android.net.Uri
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
-import androidx.lifecycle.ViewModelProvider
-import androidx.media3.common.Player
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.github.takahirom.roborazzi.ExperimentalRoborazziApi
@@ -22,9 +22,12 @@ import com.novanity.musicplayer.ui.Destination
 import com.novanity.musicplayer.ui.LibraryFilter
 import com.novanity.musicplayer.ui.LibraryViewModel
 import com.novanity.musicplayer.ui.MusicPlayerRoot
-import com.novanity.musicplayer.ui.PlayerUiState
+import com.novanity.musicplayer.platform.AndroidPlatformUi
+import com.novanity.musicplayer.platform.LocalPlatform
+import com.novanity.musicplayer.playback.PlayerUiState
+import com.novanity.musicplayer.playback.QueueEntry
+import com.novanity.musicplayer.playback.RepeatMode
 import com.novanity.musicplayer.ui.PlayerViewModel
-import com.novanity.musicplayer.ui.QueueEntry
 import com.novanity.musicplayer.ui.RootUiState
 import com.novanity.musicplayer.ui.Tab
 import com.novanity.musicplayer.ui.components.ArtworkLoader
@@ -33,7 +36,6 @@ import kotlinx.coroutines.runBlocking
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.robolectric.Shadows
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
@@ -72,7 +74,7 @@ class ScreenshotTest {
                 val songId = id++
                 Song(
                     id = songId,
-                    uri = Uri.parse("content://media/external/audio/media/$songId"),
+                    uri = "content://media/external/audio/media/$songId",
                     title = title,
                     artist = album.artist,
                     album = album.title,
@@ -102,15 +104,12 @@ class ScreenshotTest {
     }
 
     private fun seed() {
-        // No real playback service under Robolectric; the player state is injected below.
-        Shadows.shadowOf(ApplicationProvider.getApplicationContext<MusicApp>())
-            .declareActionUnbindable("androidx.media3.session.MediaSessionService")
-        albums.forEachIndexed { a, album -> ArtworkLoader.putForTest(100L + a, art(album.colors)) }
+        albums.forEachIndexed { a, album -> ArtworkLoader.putForTest(100L + a, art(album.colors).asImageBitmap()) }
         container.musicRepository.scanOverride = { songs }
         container.settings.setThemeMode(ThemeMode.DARK)
         container.settings.setIncludedFolders(setOf("/storage/emulated/0/Music", "/storage/emulated/0/Download"))
+        // The library itself is scanned by LibraryViewModel on start (never block the main thread on it).
         runBlocking {
-            container.musicRepository.refresh()
             listOf(1L, 6L, 12L, 18L, 22L).forEach { container.favoritesRepository.setLiked(it, true) }
             listOf(3L, 9L, 14L, 20L, 1L, 25L, 17L).forEach { container.historyRepository.record(it) }
             val road = container.playlistRepository.create("Road Trip")
@@ -120,8 +119,9 @@ class ScreenshotTest {
         }
     }
 
-    private val library get() = ViewModelProvider(compose.activity)[LibraryViewModel::class.java]
-    private val player get() = ViewModelProvider(compose.activity)[PlayerViewModel::class.java]
+    private lateinit var library: LibraryViewModel
+    private val fakePlayer = FakePlayerController()
+    private lateinit var player: PlayerViewModel
     private val rootUi = RootUiState()
 
     private fun settle() {
@@ -140,21 +140,20 @@ class ScreenshotTest {
 
     private fun showPlaying() {
         val song = songs[5]
-        val upNext = songs.drop(6).take(6).mapIndexed { i, s -> QueueEntry(6 + i, "${s.id}/q", s.id, s.title, s.artist) }
         compose.runOnUiThread {
-            player.showForTest(
-                PlayerUiState(
-                    connected = true,
-                    current = QueueEntry(5, "${song.id}/q", song.id, song.title, song.artist),
-                    isPlaying = true,
-                    durationMs = song.durationMs,
-                    shuffle = false,
-                    repeatMode = Player.REPEAT_MODE_ALL,
-                ),
-                upNext,
-                positionMs = song.durationMs / 3,
-                playingFrom = song.album,
+            fakePlayer.upNext.value = songs.drop(6).take(6).mapIndexed { i, s -> QueueEntry(6 + i, "${s.id}/q", s.id, s.title, s.artist) }
+            fakePlayer.state.value = PlayerUiState(
+                connected = true,
+                current = QueueEntry(5, "${song.id}/q", song.id, song.title, song.artist),
+                isPlaying = true,
+                durationMs = song.durationMs,
+                shuffle = false,
+                repeatMode = RepeatMode.ALL,
+                hasNext = true,
+                hasPrevious = true,
             )
+            player.positionOverride = song.durationMs / 3
+            player.setPlayingFrom(song.album)
         }
     }
 
@@ -162,10 +161,16 @@ class ScreenshotTest {
         seed()
         if (!dark) container.settings.setThemeMode(ThemeMode.LIGHT)
         compose.mainClock.autoAdvance = false
+        val g = container
+        library = LibraryViewModel(g.musicRepository, g.playlistRepository, g.historyRepository, g.favoritesRepository, g.settings)
+        player = PlayerViewModel(fakePlayer)
+        val platform = AndroidPlatformUi(ApplicationProvider.getApplicationContext())
         compose.setContent {
-            MusicPlayerTheme(darkTheme = dark, dynamicColor = false) {
-                androidx.compose.material3.Surface(color = androidx.compose.material3.MaterialTheme.colorScheme.background) {
-                    MusicPlayerRoot(container, rootUi)
+            CompositionLocalProvider(LocalPlatform provides platform) {
+                MusicPlayerTheme(darkTheme = dark, dynamicColor = false) {
+                    androidx.compose.material3.Surface(color = androidx.compose.material3.MaterialTheme.colorScheme.background) {
+                        MusicPlayerRoot(library, player, rootUi)
+                    }
                 }
             }
         }

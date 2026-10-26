@@ -1,9 +1,8 @@
 package com.novanity.musicplayer
 
-import android.net.Uri
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import com.novanity.musicplayer.data.FolderSync
+import com.novanity.musicplayer.platform.FolderSync
 import com.novanity.musicplayer.data.Song
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -19,13 +18,19 @@ class FolderFilterTest {
     private val app get() = ApplicationProvider.getApplicationContext<MusicApp>()
 
     private fun song(id: Long, folder: String) = Song(
-        id = id, uri = Uri.EMPTY, title = "t$id", artist = "a", album = "b", albumId = 1, durationMs = 60_000,
+        id = id, uri = "", title = "t$id", artist = "a", album = "b", albumId = 1, durationMs = 60_000,
         track = 1, disc = 0, dateAdded = 0, folderPath = folder,
     )
 
     @Test
     fun libraryIsEmptyUntilAFolderIsChosen_thenHonorsIgnoredFolders() = runBlocking {
-        val c = app.container
+        // Own graph on a background scope so nothing here waits on the (blocked) main thread.
+        val c = AppGraph(
+            databaseFactory = { error("unused") },
+            storeFactory = { name -> com.novanity.musicplayer.platform.SharedPrefsStore(app, "test-$name") },
+            librarySource = com.novanity.musicplayer.platform.AndroidLibrarySource(app),
+            appScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default),
+        )
         c.musicRepository.scanOverride = {
             listOf(
                 song(1, "/sd/Music"),

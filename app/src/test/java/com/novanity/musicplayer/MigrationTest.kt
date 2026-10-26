@@ -23,7 +23,7 @@ class MigrationTest {
         val dbFile = context.getDatabasePath("music.db").apply { parentFile?.mkdirs(); delete() }
 
         // Recreate exactly what version 1.0 shipped, from its exported schema.
-        val schema = JSONObject(File("schemas/com.novanity.musicplayer.data.db.AppDatabase/1.json").readText())
+        val schema = JSONObject(File("../shared/schemas/com.novanity.musicplayer.data.db.AppDatabase/1.json").readText())
             .getJSONObject("database")
         SQLiteDatabase.openOrCreateDatabase(dbFile, null).use { db ->
             val entities = schema.getJSONArray("entities")
@@ -42,7 +42,9 @@ class MigrationTest {
             db.version = 1
         }
 
-        val room = AppDatabase.build(context)
+        val room = androidx.room.Room.databaseBuilder<AppDatabase>(context, dbFile.absolutePath)
+            .addMigrations(AppDatabase.MIGRATION_1_2)
+            .build()
         assertEquals(listOf("Old mix"), room.playlistDao().observePlaylists().first().map { it.name })
         room.favoritesDao().insert(com.novanity.musicplayer.data.db.FavoriteEntity(42))
         assertEquals(listOf(42L), room.favoritesDao().observeSongIds().first())

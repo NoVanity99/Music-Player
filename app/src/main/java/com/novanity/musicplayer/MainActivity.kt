@@ -18,7 +18,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.novanity.musicplayer.data.ThemeMode
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
+import com.novanity.musicplayer.platform.AndroidPlatformUi
+import com.novanity.musicplayer.platform.LocalPlatform
+import com.novanity.musicplayer.playback.Media3PlayerController
+import com.novanity.musicplayer.ui.LibraryViewModel
 import com.novanity.musicplayer.ui.MusicPlayerRoot
+import com.novanity.musicplayer.ui.PlayerViewModel
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import com.novanity.musicplayer.ui.RootUiState
 import com.novanity.musicplayer.ui.screens.PermissionGate
 import com.novanity.musicplayer.ui.theme.MusicPlayerTheme
@@ -26,6 +37,23 @@ import com.novanity.musicplayer.ui.theme.MusicPlayerTheme
 class MainActivity : ComponentActivity() {
 
     private val rootUiState: RootUiState by viewModels()
+    private val libraryViewModel: LibraryViewModel by viewModels {
+        viewModelFactory {
+            initializer {
+                val g = appContainer
+                LibraryViewModel(g.musicRepository, g.playlistRepository, g.historyRepository, g.favoritesRepository, g.settings)
+            }
+        }
+    }
+    private val playerViewModel: PlayerViewModel by viewModels {
+        viewModelFactory {
+            initializer {
+                val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+                PlayerViewModel(Media3PlayerController(applicationContext, appContainer.musicRepository, scope))
+            }
+        }
+    }
+    private val platform by lazy { AndroidPlatformUi(applicationContext) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -50,10 +78,12 @@ class MainActivity : ComponentActivity() {
                 }
                 enableEdgeToEdge(statusBarStyle = style, navigationBarStyle = style)
             }
-            MusicPlayerTheme(darkTheme = dark, dynamicColor = dynamicColor) {
-                Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                    PermissionGate {
-                        MusicPlayerRoot(container, rootUiState)
+            CompositionLocalProvider(LocalPlatform provides platform) {
+                MusicPlayerTheme(darkTheme = dark, dynamicColor = dynamicColor) {
+                    Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                        PermissionGate {
+                            MusicPlayerRoot(libraryViewModel, playerViewModel, rootUiState)
+                        }
                     }
                 }
             }
