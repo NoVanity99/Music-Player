@@ -261,7 +261,7 @@ fun NowPlayingScreen(
             )
 
             BoxWithConstraints(Modifier.fillMaxSize().systemBarsPadding()) {
-                // Wide windows: artwork on the left, lyrics + controls on the right.
+                // Wide windows: artwork on the left, controls (and lyrics, when turned on) on the right.
                 val wide = maxWidth >= 900.dp && maxHeight >= 520.dp
                 val artwork: @Composable (Modifier) -> Unit = { artModifier ->
                 // Artwork: shrinks when paused, swipe sideways to change track.
@@ -342,13 +342,11 @@ fun NowPlayingScreen(
                             Spacer(Modifier.width(8.dp))
                             Text("Up next", color = Color.White, style = MaterialTheme.typography.labelLarge)
                         }
-                        if (!wide) {
-                            Spacer(Modifier.width(12.dp))
-                            TextButton(onClick = { showLyrics = !showLyrics }) {
-                                Icon(Icons.Rounded.Lyrics, contentDescription = null, tint = if (showLyrics) MaterialTheme.colorScheme.primary else Color.White)
-                                Spacer(Modifier.width(8.dp))
-                                Text("Lyrics", color = Color.White, style = MaterialTheme.typography.labelLarge)
-                            }
+                        Spacer(Modifier.width(12.dp))
+                        TextButton(onClick = { showLyrics = !showLyrics }) {
+                            Icon(Icons.Rounded.Lyrics, contentDescription = null, tint = if (showLyrics) MaterialTheme.colorScheme.primary else Color.White)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Lyrics", color = Color.White, style = MaterialTheme.typography.labelLarge)
                         }
                     }
                 }
@@ -408,8 +406,11 @@ fun NowPlayingScreen(
                         Row(Modifier.weight(1f).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                             artwork(Modifier.weight(1f).fillMaxHeight())
                             Spacer(Modifier.width(56.dp))
-                            Column(Modifier.weight(1f).fillMaxHeight().padding(vertical = 20.dp)) {
-                                LyricsView(song, player, Modifier.weight(1f).fillMaxWidth(), Color.White, Muted)
+                            Column(
+                                Modifier.weight(1f).fillMaxHeight().padding(vertical = 20.dp),
+                                verticalArrangement = Arrangement.Center,
+                            ) {
+                                if (showLyrics) LyricsView(song, player, Modifier.weight(1f).fillMaxWidth(), Color.White, Muted)
                                 details()
                             }
                         }
