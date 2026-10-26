@@ -17,10 +17,13 @@ jobs:
     outputs:
       version: ${{ steps.v.outputs.version }}
       code: ${{ steps.v.outputs.code }}
+      android: ${{ steps.v.outputs.android }}
     steps:
       - uses: actions/checkout@v4
       - id: v
         name: Check tag matches gradle.properties
+        env:
+          HAS_KEYSTORE: ${{ secrets.KEYSTORE_BASE64 != '' }}
         run: |
           version=$(grep '^app.versionName=' gradle.properties | cut -d= -f2)
           code=$(grep '^app.versionCode=' gradle.properties | cut -d= -f2)
@@ -32,9 +35,14 @@ jobs:
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "code=$code" >> "$GITHUB_OUTPUT"
+          # Without the keystore, publish the Windows installers only (an APK with another
+          # key couldn't update existing installs anyway).
+          if [ "$HAS_KEYSTORE" != "true" ]; then echo "::warning::KEYSTORE_BASE64 is not set; skipping the Android APK"; fi
+          echo "android=$HAS_KEYSTORE" >> "$GITHUB_OUTPUT"
 
   android:
     needs: prepare
+    if: needs.prepare.outputs.android == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -87,6 +95,7 @@ jobs:
 
   publish:
     needs: [prepare, android, windows]
+    if: ${{ !cancelled() && needs.windows.result == 'success' && needs.android.result != 'failure' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -98,10 +107,16 @@ jobs:
           VERSION: ${{ needs.prepare.outputs.version }}
           CODE: ${{ needs.prepare.outputs.code }}
         run: |
-          if [ -z "$UPDATE_SIGNING_KEY" ]; then echo "::error::UPDATE_SIGNING_KEY secret is not set"; exit 1; fi
           cd dist
+          if [ -z "$UPDATE_SIGNING_KEY" ]; then
+            # No manifest: installed apps simply won't see this release as an update.
+            echo "::warning::UPDATE_SIGNING_KEY is not set; publishing without latest.json (no in-app update)"
+            sha256sum MusicPlayer-* > SHA256SUMS.txt
+            exit 0
+          fi
           base="https://github.com/$GITHUB_REPOSITORY/releases/download/v$VERSION"
-          asset() { # file -> JSON object
+          asset() { # file -> JSON object, or null when that file wasn't built
+            [ -f "$1" ] || { echo null; return; }
             jq -n --arg f "$1" --arg u "$base/$1" --arg s "$(sha256sum "$1" | cut -d' ' -f1)" \
               --argjson n "$(stat -c%s "$1")" '{file:$f, url:$u, sha256:$s, size:$n}'
           }
