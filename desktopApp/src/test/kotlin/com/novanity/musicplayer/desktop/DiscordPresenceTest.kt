@@ -82,6 +82,12 @@ class DiscordPresenceTest {
             assertEquals(181_000, activity["timestamps"]!!.jsonObject["end"]!!.jsonPrimitive.long)
             assertEquals("logo", activity["assets"]!!.jsonObject["large_image"]!!.jsonPrimitive.content)
 
+            // A song with a cover found online shows it, with the logo as a badge.
+            presence.update(PresenceActivity("Song", "Artist", "Album", 0, null, coverUrl = "https://img.example/cover.jpg"))
+            val assets = discord.setActivity()["activity"]!!.jsonObject["assets"]!!.jsonObject
+            assertEquals("https://img.example/cover.jpg", assets["large_image"]!!.jsonPrimitive.content)
+            assertEquals("logo", assets["small_image"]!!.jsonPrimitive.content)
+
             // Pausing clears it (after the rate-limit gap).
             presence.update(null)
             val cleared = discord.setActivity()

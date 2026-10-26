@@ -27,6 +27,8 @@ data class PresenceActivity(
     val album: String,
     val startMs: Long,
     val endMs: Long?,
+    /** Public URL of the album cover; the app logo is shown when null. */
+    val coverUrl: String? = null,
 )
 
 /**
@@ -161,7 +163,15 @@ class DiscordPresence(
             a.endMs?.let { put("end", it) }
         }
         putJsonObject("assets") {
-            put("large_image", "logo") // uploaded under Rich Presence → Art Assets
+            val cover = a.coverUrl?.takeIf { it.startsWith("https://") && it.length <= 256 } // Discord's limits
+            if (cover != null) {
+                // Album cover from the web, with the app logo as the small badge.
+                put("large_image", cover)
+                put("small_image", "logo")
+                put("small_text", "Vanity Player")
+            } else {
+                put("large_image", "logo") // uploaded under Rich Presence → Art Assets
+            }
             if (a.album.isNotBlank()) put("large_text", field(a.album))
         }
     }

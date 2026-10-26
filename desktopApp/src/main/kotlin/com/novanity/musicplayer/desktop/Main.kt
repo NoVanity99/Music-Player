@@ -1,5 +1,8 @@
 package com.novanity.musicplayer.desktop
 
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.MutableStateFlow
 import androidx.compose.ui.graphics.Color
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
@@ -91,19 +94,28 @@ class DesktopApp {
         presence?.let(::showPresence)
     }
 
+    private val coverArt = CoverArtLookup()
+
+    /** Album covers found so far ("artist|album" to URL, or null when there's none). */
+    private val covers = MutableStateFlow<Map<String, String?>>(emptyMap())
+
     private fun showPresence(presence: DiscordPresence) = scope.launch {
         var shown: PresenceActivity? = null
-        combine(graph.settings.discordPresence, player.state, player.positionMs, player.speed) { enabled, s, pos, speed ->
+        combine(graph.settings.discordPresence, player.state, player.positionMs, player.speed, covers) { enabled, s, pos, speed, found ->
             val entry = s.current
             if (!enabled || entry == null || !s.isPlaying) return@combine null // cleared while paused or stopped
             val rate = speed.coerceAtLeast(0.1f)
             val start = System.currentTimeMillis() - (pos / rate).toLong()
+            val album = entry.songId?.let { graph.musicRepository.songsById[it]?.album }.orEmpty()
+            val coverKey = "${entry.artist}|$album"
+            if (coverKey !in found) lookUpCover(coverKey, entry.artist, album)
             PresenceActivity(
                 title = entry.title,
                 artist = entry.artist,
-                album = entry.songId?.let { graph.musicRepository.songsById[it]?.album }.orEmpty(),
+                album = album,
                 startMs = start,
                 endMs = if (s.durationMs > 0) start + (s.durationMs / rate).toLong() else null,
+                coverUrl = found[coverKey],
             )
         }.collect { next ->
             // The position ticks constantly; only resend for a new song, play/pause, or a real seek.
@@ -113,6 +125,17 @@ class DesktopApp {
                 shown = next
                 presence.update(next)
             }
+        }
+    }
+
+    private val coverRequests = mutableSetOf<String>()
+
+    /** Looks the cover up once per album in the background; the presence updates when it's found. */
+    private fun lookUpCover(key: String, artist: String, album: String) {
+        if (!coverRequests.add(key)) return
+        scope.launch {
+            val url = withContext(Dispatchers.IO) { coverArt.find(artist, album) }
+            covers.update { it + (key to url) }
         }
     }
 
