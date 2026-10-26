@@ -29,6 +29,7 @@ import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.LibraryMusic
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Bedtime
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.History
@@ -57,6 +58,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TooltipBox
+import androidx.compose.material3.TooltipAnchorPosition
 import androidx.compose.material3.TooltipDefaults
 import androidx.compose.material3.PlainTooltip
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -281,7 +283,7 @@ private fun SidebarItem(art: @Composable () -> Unit, title: String, subtitle: St
 @Composable
 private fun Tip(text: String, content: @Composable () -> Unit) {
     TooltipBox(
-        positionProvider = TooltipDefaults.rememberTooltipPositionProvider(),
+        positionProvider = TooltipDefaults.rememberTooltipPositionProvider(TooltipAnchorPosition.Above),
         tooltip = { PlainTooltip { Text(text) } },
         state = rememberTooltipState(),
     ) { content() }
@@ -378,6 +380,15 @@ private fun NowPlayingBar(
 
         // Right: panels + volume
         Row(Modifier.weight(0.3f).widthIn(min = 200.dp), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+            val sleepTimer by player.sleepTimer.collectAsStateWithLifecycle()
+            val sleepLabel = com.novanity.musicplayer.ui.components.rememberSleepLabel(sleepTimer)
+            var showSleep by remember { mutableStateOf(false) }
+            Tip(sleepLabel?.let { "Sleep timer: $it" } ?: "Sleep timer") {
+                IconButton(onClick = { showSleep = true }) {
+                    Icon(Icons.Rounded.Bedtime, contentDescription = "Sleep timer", tint = if (sleepTimer != null) accent else muted)
+                }
+            }
+            if (showSleep) com.novanity.musicplayer.ui.components.SleepTimerDialog(player) { showSleep = false }
             if (showPanelToggles) {
                 Tip("Lyrics") {
                     IconButton(onClick = { uiState.sidePanel = if (uiState.sidePanel == SidePanel.LYRICS) null else SidePanel.LYRICS }) {

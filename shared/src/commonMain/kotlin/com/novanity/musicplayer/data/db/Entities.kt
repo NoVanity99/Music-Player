@@ -55,3 +55,5 @@ data class PlaylistCoverEntry(
     val playlistId: Long,
     val songId: Long,
 )
+
+data class PlayCount(val songId: Long, val plays: Int)

@@ -25,6 +25,8 @@ import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.CreateNewFolder
 import androidx.compose.material.icons.rounded.DarkMode
 import androidx.compose.material.icons.rounded.Folder
+import androidx.compose.material.icons.rounded.GraphicEq
+import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material.icons.rounded.FolderOff
 import androidx.compose.material.icons.rounded.LightMode
 import androidx.compose.material.icons.rounded.Palette
@@ -123,7 +125,7 @@ fun SettingsScreen(actions: SongActions, contentPadding: PaddingValues) {
                 SettingRow(
                     icon = Icons.Rounded.Refresh,
                     title = if (syncing) "Checking for new songs\u2026" else "Check for new songs now",
-                    subtitle = "Looks through your folders for files Android hasn't picked up yet",
+                    subtitle = "Looks through your folders for newly added files",
                     onClick = if (syncing) null else ({ vm.checkForNewSongs() }),
                     trailing = if (syncing) ({ CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp) }) else null,
                 )
@@ -161,6 +163,33 @@ fun SettingsScreen(actions: SongActions, contentPadding: PaddingValues) {
                     accent = true,
                 )
             }
+        }
+
+        // ---- Playback ----
+        item { GroupLabel("Playback") }
+        item {
+            val crossfade by vm.crossfadeSeconds.collectAsStateWithLifecycle()
+            val speed by actions.player.speed.collectAsStateWithLifecycle()
+            var showSpeed by remember { mutableStateOf(false) }
+            SettingsCard {
+                Column(Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Crossfade", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+                        Text(if (crossfade == 0) "Off" else "$crossfade s", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                    }
+                    Text("Blend the end of each song into the next.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    androidx.compose.material3.Slider(
+                        value = crossfade.toFloat(),
+                        onValueChange = { vm.setCrossfadeSeconds(kotlin.math.round(it).toInt()) },
+                        valueRange = 0f..12f,
+                    )
+                }
+                SettingRow(Icons.Rounded.Speed, "Playback speed", if (speed == 1f) "Normal" else "${speed}\u00D7", onClick = { showSpeed = true })
+                if (LocalPlatform.current.supportsEqualizer) {
+                    SettingRow(Icons.Rounded.GraphicEq, "Equalizer", "Presets and band levels", onClick = { vm.open(com.novanity.musicplayer.ui.Destination.Equalizer) })
+                }
+            }
+            if (showSpeed) com.novanity.musicplayer.ui.components.SpeedDialog(actions.player) { showSpeed = false }
         }
 
         // ---- Appearance ----

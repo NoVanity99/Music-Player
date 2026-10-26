@@ -78,6 +78,9 @@ abstract class HistoryDao {
     @Query("SELECT songId FROM play_history GROUP BY songId ORDER BY MAX(playedAt) DESC LIMIT :limit")
     abstract fun observeRecentSongIds(limit: Int): Flow<List<Long>>
 
+    @Query("SELECT songId, COUNT(*) AS plays FROM play_history GROUP BY songId")
+    abstract fun observePlayCounts(): Flow<List<PlayCount>>
+
     @Query("DELETE FROM play_history WHERE id NOT IN (SELECT id FROM play_history ORDER BY playedAt DESC LIMIT :keep)")
     abstract suspend fun prune(keep: Int)
 }

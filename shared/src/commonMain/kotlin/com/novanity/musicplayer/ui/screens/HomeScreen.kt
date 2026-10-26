@@ -72,6 +72,7 @@ fun HomeScreen(actions: SongActions, contentPadding: PaddingValues) {
     val liked by vm.likedSongs.collectAsStateWithLifecycle()
     val grouped by vm.grouped.collectAsStateWithLifecycle()
     val syncing by vm.syncing.collectAsStateWithLifecycle()
+    val mostPlayed by vm.mostPlayed.collectAsStateWithLifecycle()
     val accentWash = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
 
     Box(Modifier.fillMaxSize()) {
@@ -118,6 +119,14 @@ fun HomeScreen(actions: SongActions, contentPadding: PaddingValues) {
                     item {
                         CardRow(home.recentlyPlayed, key = { it.id }) { song, m ->
                             SongCard(song, onClick = { actions.play(home.recentlyPlayed, home.recentlyPlayed.indexOf(song), "Recently played") }, modifier = m)
+                        }
+                    }
+                }
+                if (mostPlayed.size >= 3) {
+                    item { SectionHeader("On repeat", action = "See all") { vm.open(Destination.MostPlayed) } }
+                    item {
+                        CardRow(mostPlayed.take(12), key = { it.id }) { song, m ->
+                            SongCard(song, onClick = { actions.play(mostPlayed, mostPlayed.indexOf(song), "Most played") }, modifier = m)
                         }
                     }
                 }

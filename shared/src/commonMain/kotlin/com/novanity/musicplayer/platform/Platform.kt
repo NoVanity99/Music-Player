@@ -72,6 +72,9 @@ interface PlatformUi {
     @Composable
     fun rememberSystemFolderPicker(onPicked: (String) -> Unit): () -> Unit
 
+    /** Band layout + presets of the system equalizer (Android), or null where there is none. */
+    val equalizer: EqualizerInfo? get() = null
+
     /**
      * Android: asks the user to approve a folder so .lrc files can be read (scoped storage).
      * Returns null where no extra access is needed.
@@ -81,3 +84,9 @@ interface PlatformUi {
 }
 
 val LocalPlatform = staticCompositionLocalOf<PlatformUi> { error("No PlatformUi provided") }
+
+@Immutable
+data class EqBand(val centerHz: Int, val minLevel: Int, val maxLevel: Int)
+
+@Immutable
+data class EqualizerInfo(val bands: List<EqBand>, val presets: List<String>)

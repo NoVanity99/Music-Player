@@ -9,6 +9,8 @@ import com.novanity.musicplayer.data.db.AppDatabase
 import com.novanity.musicplayer.data.db.AppDatabase.Companion.configure
 import com.novanity.musicplayer.platform.AndroidArtworkProvider
 import com.novanity.musicplayer.platform.AndroidLibrarySource
+import com.novanity.musicplayer.platform.AndroidLyricsProvider
+import com.novanity.musicplayer.lyrics.LyricsLoader
 import com.novanity.musicplayer.platform.SharedPrefsStore
 import com.novanity.musicplayer.platform.StorageRoot
 import com.novanity.musicplayer.ui.components.ArtworkLoader
@@ -34,6 +36,7 @@ class MusicApp : Application() {
             appScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
         )
         ArtworkLoader.provider = AndroidArtworkProvider(appContext)
+        LyricsLoader.provider = AndroidLyricsProvider(appContext)
         PathLabels.roots = listOf(StorageRoot("Internal storage", Environment.getExternalStorageDirectory().absolutePath, false))
     }
 }

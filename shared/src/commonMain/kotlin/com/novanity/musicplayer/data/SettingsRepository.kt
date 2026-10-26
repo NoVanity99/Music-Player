@@ -40,6 +40,36 @@ class SettingsRepository(private val prefs: KeyValueStore) {
     private val _crossfadeSeconds = MutableStateFlow(prefs.getInt(KEY_CROSSFADE, 0))
     val crossfadeSeconds: StateFlow<Int> = _crossfadeSeconds.asStateFlow()
 
+    // ---- Equalizer (Android) ----
+
+    private val _eqEnabled = MutableStateFlow(prefs.getBoolean(KEY_EQ_ENABLED, false))
+    val eqEnabled: StateFlow<Boolean> = _eqEnabled.asStateFlow()
+
+    /** Selected preset index, or -1 for the custom band levels below. */
+    private val _eqPreset = MutableStateFlow(prefs.getInt(KEY_EQ_PRESET, -1))
+    val eqPreset: StateFlow<Int> = _eqPreset.asStateFlow()
+
+    /** Custom band levels in millibels. */
+    private val _eqBands = MutableStateFlow(prefs.getString(KEY_EQ_BANDS)?.split(',')?.mapNotNull { it.toIntOrNull() }.orEmpty())
+    val eqBands: StateFlow<List<Int>> = _eqBands.asStateFlow()
+
+    fun setEqEnabled(enabled: Boolean) {
+        _eqEnabled.value = enabled
+        prefs.putBoolean(KEY_EQ_ENABLED, enabled)
+    }
+
+    fun setEqPreset(index: Int) {
+        _eqPreset.value = index
+        prefs.putInt(KEY_EQ_PRESET, index)
+    }
+
+    fun setEqBands(levels: List<Int>) {
+        _eqBands.value = levels
+        _eqPreset.value = -1
+        prefs.putString(KEY_EQ_BANDS, levels.joinToString(","))
+        prefs.putInt(KEY_EQ_PRESET, -1)
+    }
+
     fun setVolume(value: Float) {
         _volume.value = value.coerceIn(0f, 1f)
         prefs.putFloat(KEY_VOLUME, _volume.value)
@@ -96,5 +126,8 @@ class SettingsRepository(private val prefs: KeyValueStore) {
         const val KEY_VOLUME = "volume"
         const val KEY_SPEED = "speed"
         const val KEY_CROSSFADE = "crossfade_seconds"
+        const val KEY_EQ_ENABLED = "eq_enabled"
+        const val KEY_EQ_PRESET = "eq_preset"
+        const val KEY_EQ_BANDS = "eq_bands"
     }
 }

@@ -55,6 +55,7 @@ val LikedGradient = listOf(Color(0xFF5B2BFF), Color(0xFFC2B5FF))
 val ShuffleGradient = listOf(Color(0xFFFF375F), Color(0xFFFF9F0A))
 val RecentGradient = listOf(Color(0xFF0A84FF), Color(0xFF64D2FF))
 val FolderGradient = listOf(Color(0xFF30B158), Color(0xFFA8E063))
+val MostPlayedGradient = listOf(Color(0xFFFF6B00), Color(0xFFFF2D55))
 
 /** A square tile filled with a diagonal gradient and a centered icon. */
 @Composable

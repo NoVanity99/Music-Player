@@ -48,7 +48,10 @@ data class Folder(
 enum class SortOrder(val label: String) {
     TITLE("Title"),
     ARTIST("Artist"),
-    DATE_ADDED("Date added"),
+    ALBUM("Album"),
+    DATE_ADDED("Recently added"),
+    DURATION("Duration"),
+    MOST_PLAYED("Most played"),
 }
 
 enum class ThemeMode(val label: String) {

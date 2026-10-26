@@ -23,6 +23,8 @@ class AndroidPlatformUi(private val context: Context) : PlatformUi {
     override val supportsDiscordPresence = false
     override val supportsEqualizer = true
 
+    override val equalizer: EqualizerInfo? get() = AndroidEqualizer.info
+
     override fun dynamicColorScheme(dark: Boolean): ColorScheme? =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
@@ -45,6 +47,19 @@ class AndroidPlatformUi(private val context: Context) : PlatformUi {
                 .map { FolderEntry(it.name, it.absolutePath) },
             audioFileCount = children.count { it.isFile && it.extension.lowercase() in AUDIO_EXTENSIONS },
         )
+    }
+
+    @Composable
+    override fun rememberLyricsAccessRequest(onGranted: () -> Unit): ((folder: String) -> Unit)? {
+        val launcher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+            if (uri != null) {
+                runCatching {
+                    context.contentResolver.takePersistableUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                onGranted()
+            }
+        }
+        return { folder -> launcher.launch(AndroidLyricsProvider.folderHintUri(folder)) }
     }
 
     @Composable

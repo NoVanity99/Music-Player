@@ -105,7 +105,9 @@ sealed interface Destination {
     data class PlaylistDetail(val playlistId: Long) : Destination
     data object RecentlyPlayed : Destination
     data object LikedSongs : Destination
+    data object MostPlayed : Destination
     data object Settings : Destination
+    data object Equalizer : Destination
 }
 
 @OptIn(FlowPreview::class)
@@ -165,6 +167,15 @@ class LibraryViewModel(
     val newSongsFound = music.newSongsFound
 
     fun setSortOrder(order: SortOrder) = settings.setSortOrder(order)
+
+    val crossfadeSeconds: StateFlow<Int> = settings.crossfadeSeconds
+    fun setCrossfadeSeconds(value: Int) = settings.setCrossfadeSeconds(value)
+    val eqEnabled: StateFlow<Boolean> = settings.eqEnabled
+    val eqPreset: StateFlow<Int> = settings.eqPreset
+    val eqBands: StateFlow<List<Int>> = settings.eqBands
+    fun setEqEnabled(enabled: Boolean) = settings.setEqEnabled(enabled)
+    fun setEqPreset(index: Int) = settings.setEqPreset(index)
+    fun setEqBands(levels: List<Int>) = settings.setEqBands(levels)
     fun setThemeMode(mode: ThemeMode) = settings.setThemeMode(mode)
     fun setDynamicColor(enabled: Boolean) = settings.setDynamicColor(enabled)
 
@@ -211,8 +222,15 @@ class LibraryViewModel(
         .flowOn(Dispatchers.Default)
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
-    val library: StateFlow<LibraryUi> = combine(grouped, sortOrder) { lib, sort ->
-        if (lib == null) LibraryUi(loading = true) else sorted(lib, sort)
+    /** Plays per song id (from play history). */
+    val playCounts: StateFlow<Map<Long, Int>> = history.playCounts
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
+
+    /** Songs tab: show only liked songs. */
+    val likedOnly = MutableStateFlow(false)
+
+    val library: StateFlow<LibraryUi> = combine(grouped, sortOrder, playCounts) { lib, sort, plays ->
+        if (lib == null) LibraryUi(loading = true) else sorted(lib, sort, plays)
     }
         .flowOn(Dispatchers.Default)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), LibraryUi())
@@ -237,6 +255,12 @@ class LibraryViewModel(
     val likedSongs: StateFlow<List<Song>> = combine(favorites.songIds, music.songs) { ids, _ ->
         val byId = music.songsById
         ids.mapNotNull(byId::get)
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    /** Most played songs, most first. */
+    val mostPlayed: StateFlow<List<Song>> = combine(playCounts, music.songs) { plays, _ ->
+        val byId = music.songsById
+        plays.entries.sortedByDescending { it.value }.take(100).mapNotNull { byId[it.key] }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     val recentlyPlayed: StateFlow<List<Song>> = combine(history.recentSongIds(), music.songs) { ids, _ ->
@@ -418,38 +442,47 @@ class LibraryViewModel(
         return GroupedLibrary(songs, albums, artists, folders)
     }
 
-    private fun sorted(lib: GroupedLibrary, sort: SortOrder) = LibraryUi(
-        loading = false,
-        isEmpty = lib.songs.isEmpty(),
-        songs = lib.songs.sortedWith(
-            when (sort) {
-                SortOrder.TITLE -> compareBy<Song, String>(String.CASE_INSENSITIVE_ORDER) { it.title }
-                SortOrder.ARTIST -> compareBy<Song, String>(String.CASE_INSENSITIVE_ORDER) { it.artist }
-                    .thenBy(String.CASE_INSENSITIVE_ORDER) { it.album }
-                    .thenBy { it.disc }
-                    .thenBy { it.track }
-                SortOrder.DATE_ADDED -> compareByDescending<Song> { it.dateAdded }
-            }
-        ),
-        albums = lib.albums.sortedWith(
-            when (sort) {
-                SortOrder.TITLE -> compareBy<Album, String>(String.CASE_INSENSITIVE_ORDER) { it.title }
-                SortOrder.ARTIST -> compareBy<Album, String>(String.CASE_INSENSITIVE_ORDER) { it.artist }
-                    .thenBy(String.CASE_INSENSITIVE_ORDER) { it.title }
-                SortOrder.DATE_ADDED -> compareByDescending<Album> { it.dateAdded }
-            }
-        ),
-        artists = lib.artists.sortedWith(
-            when (sort) {
-                SortOrder.DATE_ADDED -> compareByDescending<Artist> { it.dateAdded }
-                else -> compareBy<Artist, String>(String.CASE_INSENSITIVE_ORDER) { it.name }
-            }
-        ),
-        folders = lib.folders.sortedWith(
-            when (sort) {
-                SortOrder.DATE_ADDED -> compareByDescending<Folder> { it.dateAdded }
-                else -> compareBy<Folder, String>(String.CASE_INSENSITIVE_ORDER) { it.name }
-            }
-        ),
-    )
+    private fun sorted(lib: GroupedLibrary, sort: SortOrder, plays: Map<Long, Int>): LibraryUi {
+        val byTitle = compareBy<Song, String>(String.CASE_INSENSITIVE_ORDER) { it.title }
+        val songOrder: Comparator<Song> = when (sort) {
+            SortOrder.TITLE -> byTitle
+            SortOrder.ARTIST -> compareBy<Song, String>(String.CASE_INSENSITIVE_ORDER) { it.artist }
+                .thenBy(String.CASE_INSENSITIVE_ORDER) { it.album }.thenBy { it.disc }.thenBy { it.track }
+            SortOrder.ALBUM -> compareBy<Song, String>(String.CASE_INSENSITIVE_ORDER) { it.album }
+                .thenBy { it.disc }.thenBy { it.track }
+            SortOrder.DATE_ADDED -> compareByDescending<Song> { it.dateAdded }.then(byTitle)
+            SortOrder.DURATION -> compareByDescending<Song> { it.durationMs }
+            SortOrder.MOST_PLAYED -> compareByDescending<Song> { plays[it.id] ?: 0 }.then(byTitle)
+        }
+        fun List<Song>.plays() = sumOf { plays[it.id] ?: 0 }
+        val albumTitle = compareBy<Album, String>(String.CASE_INSENSITIVE_ORDER) { it.title }
+        val albumOrder: Comparator<Album> = when (sort) {
+            SortOrder.TITLE, SortOrder.ALBUM -> albumTitle
+            SortOrder.ARTIST -> compareBy<Album, String>(String.CASE_INSENSITIVE_ORDER) { it.artist }.then(albumTitle)
+            SortOrder.DATE_ADDED -> compareByDescending<Album> { it.dateAdded }.then(albumTitle)
+            SortOrder.DURATION -> compareByDescending<Album> { a -> a.songs.sumOf { it.durationMs } }
+            SortOrder.MOST_PLAYED -> compareByDescending<Album> { it.songs.plays() }.then(albumTitle)
+        }
+        val artistName = compareBy<Artist, String>(String.CASE_INSENSITIVE_ORDER) { it.name }
+        val artistOrder: Comparator<Artist> = when (sort) {
+            SortOrder.DATE_ADDED -> compareByDescending<Artist> { it.dateAdded }.then(artistName)
+            SortOrder.MOST_PLAYED -> compareByDescending<Artist> { it.songs.plays() }.then(artistName)
+            SortOrder.DURATION -> compareByDescending<Artist> { it.songs.size }.then(artistName)
+            else -> artistName
+        }
+        val folderName = compareBy<Folder, String>(String.CASE_INSENSITIVE_ORDER) { it.name }
+        val folderOrder: Comparator<Folder> = when (sort) {
+            SortOrder.DATE_ADDED -> compareByDescending<Folder> { it.dateAdded }.then(folderName)
+            SortOrder.MOST_PLAYED -> compareByDescending<Folder> { it.songs.plays() }.then(folderName)
+            else -> folderName
+        }
+        return LibraryUi(
+            loading = false,
+            isEmpty = lib.songs.isEmpty(),
+            songs = lib.songs.sortedWith(songOrder),
+            albums = lib.albums.sortedWith(albumOrder),
+            artists = lib.artists.sortedWith(artistOrder),
+            folders = lib.folders.sortedWith(folderOrder),
+        )
+    }
 }

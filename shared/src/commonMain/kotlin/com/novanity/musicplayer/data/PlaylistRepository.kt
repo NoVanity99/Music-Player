@@ -10,6 +10,7 @@ import com.novanity.musicplayer.data.db.PlaylistEntity
 import com.novanity.musicplayer.data.db.PlaylistSongEntity
 import com.novanity.musicplayer.data.db.PlaylistSummary
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 
 class PlaylistRepository(private val dao: PlaylistDao) {
     val playlists: Flow<List<PlaylistSummary>> = dao.observePlaylists()
@@ -29,9 +30,12 @@ class PlaylistRepository(private val dao: PlaylistDao) {
 class HistoryRepository(private val dao: HistoryDao) {
     fun recentSongIds(limit: Int = 100): Flow<List<Long>> = dao.observeRecentSongIds(limit)
 
+    /** How many times each song was played (from the last few thousand plays). */
+    val playCounts: Flow<Map<Long, Int>> = dao.observePlayCounts().map { rows -> rows.associate { it.songId to it.plays } }
+
     suspend fun record(songId: Long) {
         dao.insert(PlayHistoryEntity(songId = songId, playedAt = nowMillis()))
-        dao.prune(keep = 1_000)
+        dao.prune(keep = 5_000)
     }
 }
 

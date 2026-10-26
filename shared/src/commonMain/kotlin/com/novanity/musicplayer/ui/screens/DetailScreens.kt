@@ -36,6 +36,7 @@ import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Shuffle
+import androidx.compose.material.icons.rounded.Whatshot
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -79,6 +80,7 @@ import com.novanity.musicplayer.ui.components.FolderGradient
 import com.novanity.musicplayer.ui.components.GradientArt
 import com.novanity.musicplayer.ui.components.LikedArt
 import com.novanity.musicplayer.ui.components.LikedGradient
+import com.novanity.musicplayer.ui.components.MostPlayedGradient
 import com.novanity.musicplayer.ui.components.MenuAction
 import com.novanity.musicplayer.ui.components.OverflowMenu
 import com.novanity.musicplayer.ui.components.PlaylistArt
@@ -102,6 +104,8 @@ fun DetailScreen(destination: Destination, actions: SongActions, contentPadding:
         Destination.LikedSongs -> LikedScreen(actions, contentPadding)
         Destination.RecentlyPlayed -> RecentScreen(actions, contentPadding)
         Destination.Settings -> SettingsScreen(actions, contentPadding)
+        Destination.MostPlayed -> MostPlayedScreen(actions, contentPadding)
+        Destination.Equalizer -> EqualizerScreen(actions, contentPadding)
     }
 }
 
@@ -438,6 +442,34 @@ private fun RecentScreen(actions: SongActions, contentPadding: PaddingValues) {
         item { PlayShuffleRow(songs, actions, "Recently played") }
         if (songs.isEmpty()) item { EmptyHint("Songs you play show up here.") }
         songItems(songs, likedIds, actions, "Recently played")
+    }
+}
+
+@Composable
+private fun MostPlayedScreen(actions: SongActions, contentPadding: PaddingValues) {
+    val vm = actions.library
+    val songs by vm.mostPlayed.collectAsStateWithLifecycle()
+    val plays by vm.playCounts.collectAsStateWithLifecycle()
+    val likedIds by vm.likedIds.collectAsStateWithLifecycle()
+    val tint = MostPlayedGradient.first()
+    CollectionScaffold("Most played", tint, { vm.back() }, actions.collectionMenu(songs), contentPadding) {
+        item {
+            Hero(tint, { m -> GradientArt(MostPlayedGradient, Icons.Rounded.Whatshot, m, RoundedCornerShape(10.dp)) }, "Most played", null,
+                "Playlist \u2022 ${songCount(songs.size)}")
+        }
+        item { PlayShuffleRow(songs, actions, "Most played") }
+        if (songs.isEmpty()) item { EmptyHint("Your most played songs show up here once you've listened for a while.") }
+        itemsIndexed(songs, key = { _, s -> s.id }) { index, song ->
+            val liked = song.id in likedIds
+            val n = plays[song.id] ?: 0
+            SongRow(
+                song = song,
+                liked = liked,
+                subtitle = "${song.artist} \u2022 ${if (n == 1) "1 play" else "$n plays"}",
+                onClick = { actions.play(songs, index, "Most played") },
+                menu = actions.songMenu(song, liked),
+            )
+        }
     }
 }
 

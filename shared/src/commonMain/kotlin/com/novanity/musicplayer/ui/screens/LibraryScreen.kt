@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -28,6 +29,8 @@ import androidx.compose.material.icons.automirrored.rounded.Sort
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Folder
+import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.Whatshot
 import androidx.compose.material.icons.rounded.FolderOff
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.LibraryMusic
@@ -184,8 +187,20 @@ private fun SongsList(actions: SongActions, padding: PaddingValues) {
     val vm = actions.library
     val lib by vm.library.collectAsStateWithLifecycle()
     val likedIds by vm.likedIds.collectAsStateWithLifecycle()
-    val songs = lib.songs
+    val likedOnly by vm.likedOnly.collectAsStateWithLifecycle()
+    val songs = if (likedOnly) lib.songs.filter { it.id in likedIds } else lib.songs
     LazyColumn(Modifier.fillMaxSize(), contentPadding = padding) {
+        item(key = "filter") {
+            Row(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+                FilterChip(
+                    selected = likedOnly,
+                    onClick = { vm.likedOnly.value = !likedOnly },
+                    label = { Text("Liked only") },
+                    leadingIcon = { Icon(Icons.Rounded.Favorite, contentDescription = null, modifier = Modifier.size(16.dp)) },
+                    shape = CircleShape,
+                )
+            }
+        }
         item(key = "shuffle") {
             CollectionRow(
                 title = "Shuffle all",
@@ -222,6 +237,15 @@ private fun PlaylistsList(actions: SongActions, padding: PaddingValues, onCreate
                 subtitle = "Playlist • ${songCount(liked.size)}",
                 art = { m -> LikedArt(m) },
                 onClick = { vm.open(Destination.LikedSongs) },
+            )
+        }
+        item(key = "most") {
+            val most by vm.mostPlayed.collectAsStateWithLifecycle()
+            CollectionRow(
+                title = "Most played",
+                subtitle = songCount(most.size),
+                art = { m -> GradientArt(com.novanity.musicplayer.ui.components.MostPlayedGradient, Icons.Rounded.Whatshot, m) },
+                onClick = { vm.open(Destination.MostPlayed) },
             )
         }
         item(key = "recent") {

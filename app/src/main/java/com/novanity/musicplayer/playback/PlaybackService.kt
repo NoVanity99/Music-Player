@@ -18,6 +18,7 @@ import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import com.novanity.musicplayer.MainActivity
 import com.novanity.musicplayer.appContainer
+import com.novanity.musicplayer.platform.AndroidEqualizer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -41,6 +42,7 @@ class PlaybackService : MediaSessionService() {
     private val container by lazy { appContainer }
 
     private var positionSaver: Job? = null
+    private var crossfader: Crossfader? = null
     private var consecutiveErrors = 0
     private var lastHistoryMediaId: String? = null
 
@@ -58,6 +60,13 @@ class PlaybackService : MediaSessionService() {
             .setWakeMode(C.WAKE_MODE_LOCAL)
             .build()
         player.addListener(PlayerListener())
+
+        // Crossfade (settings-driven) and the system equalizer on our audio session.
+        crossfader = Crossfader(this, player, scope) { container.settings.crossfadeSeconds.value * 1000 }.also { it.start() }
+        scope.launch {
+            kotlinx.coroutines.flow.combine(container.settings.eqEnabled, container.settings.eqPreset, container.settings.eqBands) { e, p, b -> Triple(e, p, b) }
+                .collect { (e, p, b) -> AndroidEqualizer.apply(e, p, b) }
+        }
 
         val openApp = PendingIntent.getActivity(
             this,
@@ -86,6 +95,8 @@ class PlaybackService : MediaSessionService() {
     }
 
     override fun onDestroy() {
+        crossfader?.release()
+        AndroidEqualizer.release()
         saveEverything()
         scope.cancel()
         mediaSession?.run {
@@ -162,6 +173,15 @@ class PlaybackService : MediaSessionService() {
     }
 
     private inner class PlayerListener : Player.Listener {
+        override fun onAudioSessionIdChanged(audioSessionId: Int) {
+            AndroidEqualizer.attach(audioSessionId)
+        }
+
+        override fun onPositionDiscontinuity(oldPosition: Player.PositionInfo, newPosition: Player.PositionInfo, reason: Int) {
+            // A user seek/skip during a crossfade ends the fade immediately.
+            if (reason == Player.DISCONTINUITY_REASON_SEEK && newPosition.mediaItemIndex == oldPosition.mediaItemIndex) crossfader?.cancel()
+        }
+
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
             savePosition()
             recordHistory()

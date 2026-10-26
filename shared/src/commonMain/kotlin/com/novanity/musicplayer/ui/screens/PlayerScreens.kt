@@ -104,6 +104,11 @@ import com.novanity.musicplayer.ui.components.MenuAction
 import com.novanity.musicplayer.ui.components.OverflowMenu
 import com.novanity.musicplayer.ui.components.dismissDrag
 import com.novanity.musicplayer.ui.components.formatDuration
+import com.novanity.musicplayer.ui.components.SleepTimerDialog
+import com.novanity.musicplayer.ui.components.SpeedDialog
+import com.novanity.musicplayer.ui.components.rememberSleepLabel
+import androidx.compose.material.icons.rounded.Bedtime
+import androidx.compose.material.icons.rounded.Speed
 import com.novanity.musicplayer.ui.components.rememberDismissDragState
 import com.novanity.musicplayer.ui.components.rememberTrackSwipeState
 import com.novanity.musicplayer.ui.components.trackSwipe
@@ -216,6 +221,10 @@ fun NowPlayingScreen(
     val tint by rememberArtColor(song, DefaultTint)
     var showQueue by rememberSaveable { mutableStateOf(false) }
     var showLyrics by rememberSaveable { mutableStateOf(false) }
+    var showSleep by remember { mutableStateOf(false) }
+    var showSpeed by remember { mutableStateOf(false) }
+    val sleepTimer by player.sleepTimer.collectAsStateWithLifecycle()
+    val sleepLabel = rememberSleepLabel(sleepTimer)
 
     // Drag the whole sheet down to dismiss (distance or flick), else spring back.
     val dismiss = rememberDismissDragState()
@@ -360,11 +369,24 @@ fun NowPlayingScreen(
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
+                        if (sleepLabel != null) {
+                            Row(
+                                Modifier.padding(top = 4.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.14f))
+                                    .clickable { showSleep = true }.padding(horizontal = 10.dp, vertical = 3.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Icon(Icons.Rounded.Bedtime, contentDescription = null, modifier = Modifier.size(14.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text(sleepLabel, style = MaterialTheme.typography.labelMedium)
+                            }
+                        }
                     }
                     if (song != null) {
                         OverflowMenu(
                             listOf(
                                 MenuAction("Add to playlist") { actions.library.requestAddToPlaylist(listOf(song)) },
+                                MenuAction(if (sleepTimer == null) "Sleep timer" else "Sleep timer \u2022 $sleepLabel", Icons.Rounded.Bedtime) { showSleep = true },
+                                MenuAction("Playback speed", Icons.Rounded.Speed) { showSpeed = true },
                                 MenuAction("Go to album") {
                                     onCollapse()
                                     actions.library.open(Destination.AlbumDetail(song.albumId))
@@ -405,6 +427,9 @@ fun NowPlayingScreen(
             }
         }
     }
+
+    if (showSleep) SleepTimerDialog(player) { showSleep = false }
+    if (showSpeed) SpeedDialog(player) { showSpeed = false }
 
     if (showQueue) {
         ModalBottomSheet(
