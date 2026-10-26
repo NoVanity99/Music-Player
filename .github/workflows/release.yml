@@ -109,6 +109,7 @@ jobs:
           VERSION: ${{ needs.prepare.outputs.version }}
           CODE: ${{ needs.prepare.outputs.code }}
         run: |
+          set -o pipefail
           cd dist
           if [ -z "$UPDATE_SIGNING_KEY" ]; then
             # No manifest: installed apps simply won't see this release as an update.
@@ -128,9 +129,24 @@ jobs:
             --argjson a "$(asset "MusicPlayer-$VERSION.apk")" \
             --argjson w "$(asset "MusicPlayer-$VERSION.msi")" \
             '{version:$v, versionCode:$c, publishedAt:$t, notes:$notes, android:$a, windows:$w}' > latest.json
-          printf '%s\n' "$UPDATE_SIGNING_KEY" > ../signing.pem
-          openssl pkeyutl -sign -inkey ../signing.pem -rawin -in latest.json | base64 -w0 > latest.json.sig
+          # Accept the key as pasted: full PEM, or just its base64 body, with any line endings.
+          key=$(printf '%s' "$UPDATE_SIGNING_KEY" | tr -d '\r' | sed 's/\\n/\n/g')
+          if ! grep -q -- '-----BEGIN' <<< "$key"; then
+            key=$(printf -- '-----BEGIN PRIVATE KEY-----\n%s\n-----END PRIVATE KEY-----\n' "$(tr -d ' \n\t' <<< "$key")")
+          fi
+          printf '%s\n' "$key" > ../signing.pem
+          # It must be the key whose public half is built into the apps, or they'd reject every update.
+          expected=$(grep -o 'PUBLIC_KEY = "[^"]*"' ../shared/src/commonMain/kotlin/com/novanity/musicplayer/update/Updates.kt | cut -d'"' -f2)
+          actual=$(openssl pkey -in ../signing.pem -pubout -outform DER 2>/dev/null | tail -c 32 | base64) || true
+          if [ "$actual" != "$expected" ]; then
+            rm ../signing.pem
+            echo "::error::UPDATE_SIGNING_KEY isn't the update signing key (paste the whole of keystore/update-signing-key.pem)"
+            exit 1
+          fi
+          openssl pkeyutl -sign -inkey ../signing.pem -rawin -in latest.json -out sig.bin
           rm ../signing.pem
+          base64 -w0 sig.bin > latest.json.sig && rm sig.bin
+          [ -s latest.json.sig ]
           sha256sum MusicPlayer-* latest.json > SHA256SUMS.txt
           cat latest.json
       - name: Publish GitHub Release
