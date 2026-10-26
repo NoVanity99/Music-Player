@@ -1,217 +1,443 @@
 package com.novanity.musicplayer.ui.screens
 
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.DragHandle
+import androidx.compose.material.icons.rounded.Folder
+import androidx.compose.material.icons.rounded.HeartBroken
 import androidx.compose.material.icons.rounded.History
+import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.novanity.musicplayer.data.Song
+import com.novanity.musicplayer.data.friendlyPath
 import com.novanity.musicplayer.ui.Destination
 import com.novanity.musicplayer.ui.PlaylistTrack
 import com.novanity.musicplayer.ui.SongActions
 import com.novanity.musicplayer.ui.components.AlbumArt
+import com.novanity.musicplayer.ui.components.AlbumCard
 import com.novanity.musicplayer.ui.components.ConfirmDialog
-import com.novanity.musicplayer.ui.components.EmptyState
+import com.novanity.musicplayer.ui.components.FolderGradient
+import com.novanity.musicplayer.ui.components.GradientArt
+import com.novanity.musicplayer.ui.components.LikedArt
+import com.novanity.musicplayer.ui.components.LikedGradient
 import com.novanity.musicplayer.ui.components.MenuAction
 import com.novanity.musicplayer.ui.components.OverflowMenu
+import com.novanity.musicplayer.ui.components.PlaylistArt
+import com.novanity.musicplayer.ui.components.RecentGradient
+import com.novanity.musicplayer.ui.components.SectionHeader
 import com.novanity.musicplayer.ui.components.SongRow
 import com.novanity.musicplayer.ui.components.TextInputDialog
-import com.novanity.musicplayer.ui.components.formatDuration
+import com.novanity.musicplayer.ui.components.formatTotal
+import com.novanity.musicplayer.ui.components.rememberArtColor
 import com.novanity.musicplayer.ui.components.songCount
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
 
 @Composable
-fun DetailScreen(destination: Destination, actions: SongActions, currentSongId: Long?) {
+fun DetailScreen(destination: Destination, actions: SongActions, contentPadding: PaddingValues) {
     when (destination) {
-        is Destination.PlaylistDetail -> PlaylistDetailScreen(destination.playlistId, actions, currentSongId)
-        else -> CollectionDetail(destination, actions, currentSongId)
+        is Destination.AlbumDetail -> AlbumScreen(destination.albumId, actions, contentPadding)
+        is Destination.ArtistDetail -> ArtistScreen(destination.name, actions, contentPadding)
+        is Destination.PlaylistDetail -> PlaylistScreen(destination.playlistId, actions, contentPadding)
+        is Destination.FolderDetail -> FolderScreen(destination.path, actions, contentPadding)
+        Destination.LikedSongs -> LikedScreen(actions, contentPadding)
+        Destination.RecentlyPlayed -> RecentScreen(actions, contentPadding)
+        Destination.Settings -> SettingsScreen(actions, contentPadding)
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+// ---------- Shared scaffolding ----------
+
+/**
+ * Scrolling page with a tinted hero header and a top bar that fades in once the hero scrolls away.
+ */
 @Composable
-private fun DetailScaffold(
+private fun CollectionScaffold(
     title: String,
+    tint: Color,
     onBack: () -> Unit,
     menu: List<MenuAction>,
-    content: @Composable (Modifier) -> Unit,
+    contentPadding: PaddingValues,
+    content: LazyListScope.() -> Unit,
 ) {
-    Scaffold(
-        contentWindowInsets = WindowInsets(0),
-        topBar = {
-            TopAppBar(
-                title = { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back") }
-                },
-                actions = { OverflowMenu(menu) },
+    val listState = rememberLazyListState()
+    val collapsed by remember {
+        derivedStateOf { listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 600 }
+    }
+    val barAlpha by animateFloatAsState(if (collapsed) 1f else 0f, label = "bar")
+    val background = MaterialTheme.colorScheme.background
+
+    Box(Modifier.fillMaxSize()) {
+        androidx.compose.foundation.lazy.LazyColumn(
+            state = listState,
+            contentPadding = PaddingValues(bottom = contentPadding.calculateBottomPadding() + 24.dp),
+            modifier = Modifier.fillMaxSize(),
+        ) {
+            content()
+        }
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .background(lerp(background, tint, 0.35f).copy(alpha = barAlpha))
+                .statusBarsPadding()
+                .height(56.dp)
+                .padding(horizontal = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            IconButton(onClick = onBack) {
+                Box(
+                    Modifier
+                        .size(36.dp)
+                        .background(Color.Black.copy(alpha = 0.35f * (1f - barAlpha)), CircleShape),
+                    contentAlignment = Alignment.Center,
+                ) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back", tint = Color.White) }
+            }
+            Text(
+                title,
+                style = MaterialTheme.typography.titleMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .weight(1f)
+                    .alpha(barAlpha),
             )
-        },
-    ) { padding -> content(Modifier.padding(padding).fillMaxSize()) }
+            OverflowMenu(menu, Icons.Rounded.MoreVert, tint = Color.White)
+        }
+    }
 }
 
+/** Centered artwork + title block with a vertical wash of the art's color, Apple Music style. */
 @Composable
-private fun CollectionHeader(
+private fun Hero(
+    tint: Color,
+    art: @Composable (Modifier) -> Unit,
     title: String,
-    subtitle: String,
-    art: (@Composable () -> Unit),
-    songs: List<Song>,
-    actions: SongActions,
+    subtitle: String?,
+    meta: String,
+    onSubtitleClick: (() -> Unit)? = null,
 ) {
-    Column(Modifier.fillMaxWidth().padding(16.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            art()
-            Spacer(Modifier.width(16.dp))
-            Column(Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.headlineSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                val total = songs.sumOf { it.durationMs }
-                Text(
-                    "${songCount(songs.size)} • ${formatDuration(total)}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+    val background = MaterialTheme.colorScheme.background
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .background(Brush.verticalGradient(listOf(tint.copy(alpha = 0.85f), tint.copy(alpha = 0.35f), background)))
+            .statusBarsPadding()
+            .padding(top = 64.dp, start = 24.dp, end = 24.dp, bottom = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        art(
+            Modifier
+                .size(240.dp)
+                .shadow(24.dp, RoundedCornerShape(10.dp), ambientColor = Color.Black, spotColor = Color.Black)
+        )
+        Spacer(Modifier.height(20.dp))
+        Text(title, style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        if (subtitle != null) {
+            Text(
+                subtitle,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.primary,
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = if (onSubtitleClick != null) Modifier.clickable(onClick = onSubtitleClick) else Modifier,
+            )
         }
-        Spacer(Modifier.height(16.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Button(onClick = { actions.player.playSongs(songs) }, enabled = songs.isNotEmpty(), modifier = Modifier.weight(1f)) {
-                Icon(Icons.Rounded.PlayArrow, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text("Play")
-            }
-            FilledTonalButton(
-                onClick = { actions.player.playSongs(songs, shuffle = true) },
-                enabled = songs.isNotEmpty(),
-                modifier = Modifier.weight(1f),
-            ) {
-                Icon(Icons.Rounded.Shuffle, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text("Shuffle")
+        Spacer(Modifier.height(4.dp))
+        Text(meta, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
+    }
+}
+
+/** Apple-style pair of pill buttons. */
+@Composable
+private fun PlayShuffleRow(songs: List<Song>, actions: SongActions, source: String) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp, vertical = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Button(
+            onClick = { actions.play(songs, 0, source) },
+            enabled = songs.isNotEmpty(),
+            shape = RoundedCornerShape(12.dp),
+            contentPadding = PaddingValues(vertical = 14.dp),
+            modifier = Modifier.weight(1f),
+        ) {
+            Icon(Icons.Rounded.PlayArrow, contentDescription = null)
+            Spacer(Modifier.width(6.dp))
+            Text("Play", style = MaterialTheme.typography.titleSmall)
+        }
+        FilledTonalButton(
+            onClick = { actions.shuffle(songs, source) },
+            enabled = songs.isNotEmpty(),
+            shape = RoundedCornerShape(12.dp),
+            contentPadding = PaddingValues(vertical = 14.dp),
+            colors = ButtonDefaults.filledTonalButtonColors(
+                containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                contentColor = MaterialTheme.colorScheme.primary,
+            ),
+            modifier = Modifier.weight(1f),
+        ) {
+            Icon(Icons.Rounded.Shuffle, contentDescription = null)
+            Spacer(Modifier.width(6.dp))
+            Text("Shuffle", style = MaterialTheme.typography.titleSmall)
+        }
+    }
+}
+
+private fun meta(kind: String, songs: List<Song>) =
+    "$kind • ${songCount(songs.size)} • ${formatTotal(songs.sumOf { it.durationMs })}"
+
+@Composable
+private fun Missing(contentPadding: PaddingValues, loading: Boolean, onBack: () -> Unit) {
+    CollectionScaffold("", MaterialTheme.colorScheme.background, onBack, emptyList(), contentPadding) {
+        item {
+            Box(Modifier.fillMaxWidth().height(400.dp), contentAlignment = Alignment.Center) {
+                if (loading) CircularProgressIndicator() else Text("This is no longer in your library.")
             }
         }
     }
 }
 
-private data class Info(
-    val title: String,
-    val subtitle: String,
-    val songs: List<Song>,
-    val round: Boolean = false,
-    val icon: Boolean = false,
-)
+/** Generic song list body used by most collection pages. */
+private fun LazyListScope.songItems(
+    songs: List<Song>,
+    likedIds: Set<Long>,
+    actions: SongActions,
+    source: String,
+    trackNumbers: Boolean = false,
+    showAlbum: Boolean = true,
+) {
+    itemsIndexed(songs, key = { i, s -> "${s.id}-$i" }) { index, song ->
+        val liked = song.id in likedIds
+        SongRow(
+            song = song,
+            liked = liked,
+            trackNumber = if (trackNumbers) song.track else null,
+            subtitle = if (showAlbum) "${song.artist} • ${song.album}" else song.artist,
+            onClick = { actions.play(songs, index, source) },
+            menu = actions.songMenu(song, liked),
+        )
+    }
+}
+
+// ---------- Album ----------
 
 @Composable
-private fun CollectionDetail(destination: Destination, actions: SongActions, currentSongId: Long?) {
+private fun AlbumScreen(albumId: Long, actions: SongActions, contentPadding: PaddingValues) {
     val vm = actions.library
-    val grouped by vm.grouped.collectAsStateWithLifecycle()
-    val recent by vm.recentlyPlayed.collectAsStateWithLifecycle()
-    val lib = grouped
+    val lib by vm.grouped.collectAsStateWithLifecycle()
+    val likedIds by vm.likedIds.collectAsStateWithLifecycle()
+    val album = lib?.albumsById?.get(albumId) ?: return Missing(contentPadding, lib == null, { vm.back() })
+    val tint by rememberArtColor(album.songs.first(), MaterialTheme.colorScheme.surfaceContainerHigh)
 
-    val info: Info? = when (destination) {
-        is Destination.AlbumDetail -> lib?.albumsById?.get(destination.albumId)?.let { Info(it.title, it.artist, it.songs) }
-        is Destination.ArtistDetail -> lib?.artistsByName?.get(destination.name)?.let {
-            Info(it.name, if (it.albumCount == 1) "1 album" else "${it.albumCount} albums", it.songs, round = true)
+    CollectionScaffold(album.title, tint, { vm.back() }, actions.collectionMenu(album.songs), contentPadding) {
+        item {
+            Hero(
+                tint = tint,
+                art = { m -> AlbumArt(album.songs.first(), m, shape = RoundedCornerShape(10.dp), large = true) },
+                title = album.title,
+                subtitle = album.artist,
+                meta = meta("Album", album.songs),
+                onSubtitleClick = { vm.open(Destination.ArtistDetail(album.songs.first().artist)) },
+            )
         }
-        is Destination.FolderDetail -> lib?.foldersByPath?.get(destination.path)?.let { Info(it.name, it.path, it.songs) }
-        Destination.RecentlyPlayed -> Info("Recently played", "Your latest listens", recent, icon = true)
-        is Destination.PlaylistDetail -> null
+        item { PlayShuffleRow(album.songs, actions, album.title) }
+        songItems(album.songs, likedIds, actions, album.title, trackNumbers = true, showAlbum = false)
     }
+}
 
-    DetailScaffold(info?.title.orEmpty(), vm::pop, info?.songs?.let { actions.collectionMenu(it) }.orEmpty()) { modifier ->
-        if (info == null) {
-            Box(modifier, contentAlignment = Alignment.Center) {
-                if (lib == null) CircularProgressIndicator() else Text("This item is no longer on your device.")
-            }
-            return@DetailScaffold
-        }
-        val songs = info.songs
-        LazyColumn(modifier) {
-            item(key = "header") {
-                CollectionHeader(
-                    title = info.title,
-                    subtitle = info.subtitle,
-                    songs = songs,
-                    actions = actions,
-                    art = {
-                        val shape = if (info.round) RoundedCornerShape(50) else RoundedCornerShape(12.dp)
-                        if (info.icon) {
-                            Box(
-                                Modifier.size(112.dp).background(MaterialTheme.colorScheme.primaryContainer, shape),
-                                contentAlignment = Alignment.Center,
-                            ) { Icon(Icons.Rounded.History, contentDescription = null, modifier = Modifier.size(48.dp)) }
-                        } else {
-                            AlbumArt(songs.firstOrNull(), Modifier.size(112.dp), shape = shape)
-                        }
-                    },
+// ---------- Artist ----------
+
+@Composable
+private fun ArtistScreen(name: String, actions: SongActions, contentPadding: PaddingValues) {
+    val vm = actions.library
+    val lib by vm.grouped.collectAsStateWithLifecycle()
+    val likedIds by vm.likedIds.collectAsStateWithLifecycle()
+    val artist = lib?.artistsByName?.get(name) ?: return Missing(contentPadding, lib == null, { vm.back() })
+    val albums = remember(artist, lib) {
+        artist.songs.map { it.albumId }.distinct().mapNotNull { lib?.albumsById?.get(it) }
+    }
+    var expanded by rememberSaveable(name) { mutableStateOf(false) }
+    val tint by rememberArtColor(artist.songs.first(), MaterialTheme.colorScheme.surfaceContainerHigh)
+    val background = MaterialTheme.colorScheme.background
+
+    CollectionScaffold(artist.name, tint, { vm.back() }, actions.collectionMenu(artist.songs), contentPadding) {
+        item {
+            // Full-bleed image with the name over a fade, YouTube Music style.
+            Box(Modifier.fillMaxWidth().aspectRatio(1.05f)) {
+                AlbumArt(artist.songs.first(), Modifier.fillMaxSize(), shape = RoundedCornerShape(0.dp), large = true)
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .background(Brush.verticalGradient(0.35f to Color.Transparent, 1f to background))
                 )
+                Column(Modifier.align(Alignment.BottomStart).padding(horizontal = 20.dp, vertical = 8.dp)) {
+                    Text(artist.name, style = MaterialTheme.typography.displaySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text(
+                        "${if (artist.albumCount == 1) "1 album" else "${artist.albumCount} albums"} • ${songCount(artist.songs.size)}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
-            itemsIndexed(songs, key = { i, s -> "${s.id}-$i" }) { index, song ->
+        }
+        item { PlayShuffleRow(artist.songs, actions, artist.name) }
+        item { SectionHeader("Songs", action = if (artist.songs.size > 5) (if (expanded) "Show less" else "See all") else null) { expanded = !expanded } }
+        songItems(if (expanded) artist.songs else artist.songs.take(5), likedIds, actions, artist.name)
+        if (albums.isNotEmpty()) {
+            item { SectionHeader("Albums") }
+            item {
+                LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    items(albums, key = { it.id }) { AlbumCard(it, onClick = { vm.open(Destination.AlbumDetail(it.id)) }) }
+                }
+            }
+        }
+    }
+}
+
+// ---------- Folder / Recently played / Liked ----------
+
+@Composable
+private fun FolderScreen(path: String, actions: SongActions, contentPadding: PaddingValues) {
+    val vm = actions.library
+    val lib by vm.grouped.collectAsStateWithLifecycle()
+    val likedIds by vm.likedIds.collectAsStateWithLifecycle()
+    val folder = lib?.foldersByPath?.get(path) ?: return Missing(contentPadding, lib == null, { vm.back() })
+    val tint = FolderGradient.first()
+    CollectionScaffold(folder.name, tint, { vm.back() }, actions.collectionMenu(folder.songs), contentPadding) {
+        item {
+            Hero(tint, { m -> GradientArt(FolderGradient, Icons.Rounded.Folder, m, RoundedCornerShape(10.dp)) }, folder.name, null,
+                friendlyPath(folder.path) + "\n" + meta("Folder", folder.songs))
+        }
+        item { PlayShuffleRow(folder.songs, actions, folder.name) }
+        songItems(folder.songs, likedIds, actions, folder.name)
+    }
+}
+
+@Composable
+private fun RecentScreen(actions: SongActions, contentPadding: PaddingValues) {
+    val vm = actions.library
+    val songs by vm.recentlyPlayed.collectAsStateWithLifecycle()
+    val likedIds by vm.likedIds.collectAsStateWithLifecycle()
+    val tint = RecentGradient.first()
+    CollectionScaffold("Recently played", tint, { vm.back() }, actions.collectionMenu(songs), contentPadding) {
+        item {
+            Hero(tint, { m -> GradientArt(RecentGradient, Icons.Rounded.History, m, RoundedCornerShape(10.dp)) }, "Recently played", null,
+                songCount(songs.size))
+        }
+        item { PlayShuffleRow(songs, actions, "Recently played") }
+        if (songs.isEmpty()) item { EmptyHint("Songs you play show up here.") }
+        songItems(songs, likedIds, actions, "Recently played")
+    }
+}
+
+@Composable
+private fun LikedScreen(actions: SongActions, contentPadding: PaddingValues) {
+    val vm = actions.library
+    val songs by vm.likedSongs.collectAsStateWithLifecycle()
+    val tint = LikedGradient.first()
+    CollectionScaffold("Liked Songs", tint, { vm.back() }, actions.collectionMenu(songs), contentPadding) {
+        item {
+            Hero(tint, { m -> LikedArt(m, RoundedCornerShape(10.dp)) }, "Liked Songs", null, meta("Playlist", songs))
+        }
+        item { PlayShuffleRow(songs, actions, "Liked Songs") }
+        if (songs.isEmpty()) item { EmptyHint("Tap the heart on any song to save it here.") }
+        itemsIndexed(songs, key = { _, s -> s.id }) { index, song ->
+            SwipeToDismissBox(
+                state = rememberSwipeToDismissBoxState(),
+                backgroundContent = { SwipeBackground(Icons.Rounded.HeartBroken) },
+                onDismiss = { actions.toggleLike(song, liked = true) },
+            ) {
                 SongRow(
                     song = song,
-                    highlighted = song.id == currentSongId,
-                    onClick = { actions.player.playSongs(songs, index) },
-                    menu = actions.songMenu(song),
-                    trackNumber = if (destination is Destination.AlbumDetail) song.track else null,
+                    onClick = { actions.play(songs, index, "Liked Songs") },
+                    menu = actions.songMenu(song, liked = true),
+                    modifier = Modifier.background(MaterialTheme.colorScheme.background),
                 )
             }
         }
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun PlaylistDetailScreen(playlistId: Long, actions: SongActions, currentSongId: Long?) {
+private fun EmptyHint(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        textAlign = TextAlign.Center,
+        modifier = Modifier.fillMaxWidth().padding(32.dp),
+    )
+}
+
+// ---------- Playlist ----------
+
+@Composable
+private fun PlaylistScreen(playlistId: Long, actions: SongActions, contentPadding: PaddingValues) {
     val vm = actions.library
     val playlistFlow = remember(playlistId) { vm.playlist(playlistId) }
     val tracksFlow = remember(playlistId) { vm.playlistTracks(playlistId) }
     val playlist by playlistFlow.collectAsState(initial = null)
     val tracks by tracksFlow.collectAsState(initial = null)
+    val likedIds by vm.likedIds.collectAsStateWithLifecycle()
 
     var renaming by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf(false) }
@@ -225,63 +451,51 @@ private fun PlaylistDetailScreen(playlistId: Long, actions: SongActions, current
 
     val name = playlist?.name.orEmpty()
     val songs = items.map { it.song }
-    DetailScaffold(
-        title = name,
-        onBack = vm::pop,
-        menu = actions.collectionMenu(songs) + listOf(
-            MenuAction("Rename playlist") { renaming = true },
-            MenuAction("Delete playlist") { deleting = true },
-        ),
-    ) { modifier ->
-        val listState = rememberLazyListState()
-        val reorderState = rememberReorderableLazyListState(listState) { from, to ->
-            val fromIdx = items.indexOfFirst { it.entryId == from.key }
-            val toIdx = items.indexOfFirst { it.entryId == to.key }
-            if (fromIdx >= 0 && toIdx >= 0) {
-                items = items.toMutableList().apply { add(toIdx, removeAt(fromIdx)) }
+    val covers = remember(songs) { songs.distinctBy { it.albumId }.take(4) }
+    val tint by rememberArtColor(songs.firstOrNull(), MaterialTheme.colorScheme.surfaceContainerHigh)
+
+    val listState = rememberLazyListState()
+    val reorderState = rememberReorderableLazyListState(listState) { from, to ->
+        val fromIdx = items.indexOfFirst { it.entryId == from.key }
+        val toIdx = items.indexOfFirst { it.entryId == to.key }
+        if (fromIdx >= 0 && toIdx >= 0) items = items.toMutableList().apply { add(toIdx, removeAt(fromIdx)) }
+    }
+    val collapsed by remember { derivedStateOf { listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 600 } }
+    val barAlpha by animateFloatAsState(if (collapsed) 1f else 0f, label = "bar")
+    val background = MaterialTheme.colorScheme.background
+
+    Box(Modifier.fillMaxSize()) {
+        androidx.compose.foundation.lazy.LazyColumn(
+            state = listState,
+            contentPadding = PaddingValues(bottom = contentPadding.calculateBottomPadding() + 24.dp),
+            modifier = Modifier.fillMaxSize(),
+        ) {
+            item(key = "hero") {
+                Hero(tint, { m -> PlaylistArt(covers, m, RoundedCornerShape(10.dp)) }, name, null, meta("Playlist", songs))
             }
-        }
-        LazyColumn(modifier, state = listState) {
-            item(key = "header") {
-                CollectionHeader(
-                    title = name,
-                    subtitle = "Playlist",
-                    songs = songs,
-                    actions = actions,
-                    art = {
-                        Box(
-                            Modifier.size(112.dp).background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(12.dp)),
-                            contentAlignment = Alignment.Center,
-                        ) { Icon(Icons.AutoMirrored.Rounded.QueueMusic, contentDescription = null, modifier = Modifier.size(48.dp)) }
-                    },
-                )
-            }
+            item(key = "buttons") { PlayShuffleRow(songs, actions, name) }
             if (tracks != null && items.isEmpty()) {
-                item(key = "empty") {
-                    EmptyState(
-                        Icons.AutoMirrored.Rounded.QueueMusic,
-                        "Empty playlist",
-                        "Use “Add to playlist…” from any song's menu to add music here.",
-                        modifier = Modifier.height(320.dp),
-                    )
-                }
+                item(key = "empty") { EmptyHint("This playlist is empty. Use “Add to playlist” from any song's menu.") }
             }
             itemsIndexed(items, key = { _, t -> t.entryId }) { index, track ->
                 ReorderableItem(reorderState, key = track.entryId) { isDragging ->
                     SwipeToDismissBox(
                         state = rememberSwipeToDismissBoxState(),
-                        backgroundContent = { DeleteBackground() },
+                        backgroundContent = { SwipeBackground(Icons.Rounded.Delete) },
                         onDismiss = { vm.removeFromPlaylist(track.entryId) },
                     ) {
+                        val liked = track.song.id in likedIds
                         SongRow(
                             song = track.song,
-                            highlighted = track.song.id == currentSongId || isDragging,
-                            onClick = { actions.player.playSongs(songs, index) },
+                            liked = liked,
+                            highlight = isDragging,
+                            onClick = { actions.play(songs, index, name) },
                             menu = actions.songMenu(
                                 track.song,
-                                listOf(MenuAction("Remove from playlist") { vm.removeFromPlaylist(track.entryId) }),
+                                liked,
+                                listOf(MenuAction("Remove from playlist", Icons.Rounded.Delete) { vm.removeFromPlaylist(track.entryId) }),
                             ),
-                            modifier = Modifier.background(MaterialTheme.colorScheme.surface),
+                            modifier = Modifier.background(MaterialTheme.colorScheme.background),
                             trailing = {
                                 IconButton(
                                     onClick = {},
@@ -292,12 +506,38 @@ private fun PlaylistDetailScreen(playlistId: Long, actions: SongActions, current
                                             dragging = false
                                         },
                                     ),
-                                ) { Icon(Icons.Rounded.DragHandle, contentDescription = "Reorder") }
+                                ) {
+                                    Icon(Icons.Rounded.DragHandle, contentDescription = "Reorder", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
                             },
                         )
                     }
                 }
             }
+        }
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .background(lerp(background, tint, 0.35f).copy(alpha = barAlpha))
+                .statusBarsPadding()
+                .height(56.dp)
+                .padding(horizontal = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            IconButton(onClick = { vm.back() }) {
+                Box(
+                    Modifier.size(36.dp).background(Color.Black.copy(alpha = 0.35f * (1f - barAlpha)), CircleShape),
+                    contentAlignment = Alignment.Center,
+                ) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back", tint = Color.White) }
+            }
+            Text(name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).alpha(barAlpha))
+            OverflowMenu(
+                actions.collectionMenu(songs) + listOf(
+                    MenuAction("Rename playlist") { renaming = true },
+                    MenuAction("Delete playlist", Icons.Rounded.Delete) { deleting = true },
+                ),
+                tint = Color.White,
+            )
         }
     }
 
@@ -316,7 +556,7 @@ private fun PlaylistDetailScreen(playlistId: Long, actions: SongActions, current
 }
 
 @Composable
-fun DeleteBackground() {
+fun SwipeBackground(icon: androidx.compose.ui.graphics.vector.ImageVector) {
     Box(
         Modifier
             .fillMaxSize()
@@ -324,6 +564,7 @@ fun DeleteBackground() {
             .padding(horizontal = 24.dp),
         contentAlignment = Alignment.CenterEnd,
     ) {
-        Icon(Icons.Rounded.Delete, contentDescription = "Remove", tint = MaterialTheme.colorScheme.onErrorContainer)
+        Icon(icon, contentDescription = "Remove", tint = MaterialTheme.colorScheme.onErrorContainer)
     }
 }
+

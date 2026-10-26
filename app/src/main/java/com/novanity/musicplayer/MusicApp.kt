@@ -2,6 +2,7 @@ package com.novanity.musicplayer
 
 import android.app.Application
 import android.content.Context
+import com.novanity.musicplayer.data.FavoritesRepository
 import com.novanity.musicplayer.data.HistoryRepository
 import com.novanity.musicplayer.data.MusicRepository
 import com.novanity.musicplayer.data.PlaylistRepository
@@ -29,10 +30,11 @@ class AppContainer(context: Context) {
 
     private val database by lazy { AppDatabase.build(appContext) }
 
-    val musicRepository = MusicRepository(appContext, appScope)
+    val settings = SettingsRepository(appContext)
+    val musicRepository = MusicRepository(appContext, appScope, settings.includedFolders)
     val playlistRepository by lazy { PlaylistRepository(database.playlistDao()) }
     val historyRepository by lazy { HistoryRepository(database.historyDao()) }
-    val settings = SettingsRepository(appContext)
+    val favoritesRepository by lazy { FavoritesRepository(database.favoritesDao()) }
     val playbackStateStore = PlaybackStateStore(appContext)
 }
 

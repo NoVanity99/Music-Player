@@ -5,9 +5,14 @@ MediaSessionService) and Room. No ads, no analytics, no internet permission.
 
 ## Features
 
+- Home, Search and Library tabs in a streaming-app style UI: greeting + quick picks, carousels for
+  recently played / recently added / artists / playlists, album-art-tinted pages and player
+- Choose which folders to pull music from (Settings → Music folders), via the system folder picker
+  or from a list of folders the app detected; defaults to everything on the device
 - Scans MediaStore for all audio (skips ringtones, notifications, alarms and files under 30 s)
-- Tabs for Songs, Albums, Artists, Playlists and Folders, sorting by title / artist / date added, and a
-  search bar that filters every tab
+- Library filters for Playlists, Albums, Artists, Songs and Folders, sorting by title / artist /
+  date added, and a search with a "top result"
+- Liked Songs (heart a track from the player, mini player or any song menu)
 - Play/pause, next/previous, seek, shuffle, repeat (off/all/one), and an Up Next queue with
   drag-to-reorder and swipe-to-remove
 - Background playback with a media notification, lock-screen and Bluetooth/headset controls
@@ -52,6 +57,11 @@ Both `keystore.properties` and `keystore/` are gitignored. **Back them up.** And
 update over an existing install if it is signed with the same key.
 
 Without `keystore.properties`, `assembleRelease` produces an unsigned APK, which Android won't install.
+
+### Screenshot and migration tests
+
+`./gradlew testDebugUnitTest` renders the main screens with a fake library (Robolectric + Roborazzi)
+into `app/screenshots/`, and checks the Room upgrade from the 1.0 database.
 
 ### CI
 

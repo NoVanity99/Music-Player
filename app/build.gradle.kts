@@ -20,8 +20,8 @@ android {
         applicationId = "com.novanity.musicplayer"
         minSdk = 26
         targetSdk = 37
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.1"
     }
 
     signingConfigs {
@@ -60,6 +60,17 @@ android {
         includeInBundle = false
     }
 
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true
+            all {
+                it.systemProperty("roborazzi.test.record", "true")
+                it.systemProperty("robolectric.pixelCopyRenderMode", "hardware")
+                it.maxHeapSize = "3g"
+            }
+        }
+    }
+
     packaging {
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
     }
@@ -91,4 +102,15 @@ dependencies {
     ksp(libs.androidx.room.compiler)
 
     implementation(libs.reorderable)
+    implementation(libs.androidx.palette.ktx)
+
+    // JVM screenshot tests of the Compose UI (Robolectric native graphics + Roborazzi).
+    testImplementation(libs.junit)
+    testImplementation(libs.androidx.test.ext.junit)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.roborazzi)
+    testImplementation(libs.roborazzi.compose)
+    testImplementation(platform(libs.androidx.compose.bom))
+    testImplementation(libs.androidx.compose.ui.test.junit4)
+    debugImplementation(libs.androidx.compose.ui.test.manifest)
 }

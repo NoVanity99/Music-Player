@@ -6,6 +6,7 @@ import android.graphics.BitmapFactory
 import android.os.Build
 import android.util.LruCache
 import android.util.Size
+import androidx.annotation.VisibleForTesting
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -54,6 +55,13 @@ object ArtworkLoader {
 
     fun cached(song: Song, px: Int): Bitmap? = cache.get(key(song, px))
 
+    /** Test hook: pre-seeds artwork for an album at every size. */
+    @VisibleForTesting
+    internal fun putForTest(albumId: Long, bitmap: Bitmap) {
+        cache.put("$albumId@$SMALL", bitmap)
+        cache.put("$albumId@$LARGE", bitmap)
+    }
+
     suspend fun load(context: Context, song: Song, px: Int): Bitmap? {
         val key = key(song, px)
         cache.get(key)?.let { return it }
@@ -92,7 +100,7 @@ object ArtworkLoader {
 fun AlbumArt(
     song: Song?,
     modifier: Modifier = Modifier,
-    shape: Shape = RoundedCornerShape(8.dp),
+    shape: Shape = RoundedCornerShape(6.dp),
     large: Boolean = false,
 ) {
     val context = LocalContext.current

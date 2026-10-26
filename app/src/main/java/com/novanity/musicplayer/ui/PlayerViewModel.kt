@@ -3,6 +3,7 @@ package com.novanity.musicplayer.ui
 import android.content.ComponentName
 import android.content.Context
 import android.util.Log
+import androidx.annotation.VisibleForTesting
 import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -59,6 +60,10 @@ class PlayerViewModel(
     /** Upcoming entries in actual play order (accounts for shuffle). */
     private val _upNext = MutableStateFlow<List<QueueEntry>>(emptyList())
     val upNext: StateFlow<List<QueueEntry>> = _upNext.asStateFlow()
+
+    /** "Playing from" label for the Now Playing header (e.g. an album or playlist name). */
+    private val _playingFrom = MutableStateFlow<String?>(null)
+    val playingFrom: StateFlow<String?> = _playingFrom.asStateFlow()
 
     private val _positionMs = MutableStateFlow(0L)
     val positionMs: StateFlow<Long> = _positionMs.asStateFlow()
@@ -144,11 +149,21 @@ class PlayerViewModel(
         _upNext.value = result
     }
 
+    /** Test hook: shows a fixed player state without a playback service. */
+    @VisibleForTesting
+    internal fun showForTest(state: PlayerUiState, upNext: List<QueueEntry>, positionMs: Long, playingFrom: String?) {
+        _state.value = state
+        _upNext.value = upNext
+        _positionMs.value = positionMs
+        _playingFrom.value = playingFrom
+    }
+
     // ---- Commands ----
 
-    fun playSongs(songs: List<Song>, startIndex: Int = 0, shuffle: Boolean = false) {
+    fun playSongs(songs: List<Song>, startIndex: Int = 0, shuffle: Boolean = false, source: String? = null) {
         val c = controller ?: return
         if (songs.isEmpty()) return
+        _playingFrom.value = source
         c.shuffleModeEnabled = shuffle
         val start = if (shuffle) songs.indices.random() else startIndex.coerceIn(songs.indices)
         c.setMediaItems(songs.map { it.toMediaItem() }, start, 0L)
@@ -228,6 +243,15 @@ class PlayerViewModel(
     fun removeQueueIndex(index: Int) {
         val c = controller ?: return
         if (index in 0 until c.mediaItemCount) c.removeMediaItem(index)
+    }
+
+    /** Removes everything except the current song. */
+    fun clearUpNext() {
+        val c = controller ?: return
+        val current = c.currentMediaItemIndex
+        if (current < 0) return
+        if (current + 1 < c.mediaItemCount) c.removeMediaItems(current + 1, c.mediaItemCount)
+        if (current > 0) c.removeMediaItems(0, current)
     }
 
     fun moveQueueItem(from: Int, to: Int) {

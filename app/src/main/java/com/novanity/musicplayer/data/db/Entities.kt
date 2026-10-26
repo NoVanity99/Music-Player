@@ -44,3 +44,14 @@ data class PlaylistSummary(
     val name: String,
     val songCount: Int,
 )
+
+@Entity(tableName = "favorites")
+data class FavoriteEntity(
+    @PrimaryKey val songId: Long,
+    val addedAt: Long = System.currentTimeMillis(),
+)
+
+data class PlaylistCoverEntry(
+    val playlistId: Long,
+    val songId: Long,
+)

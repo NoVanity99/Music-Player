@@ -1,12 +1,17 @@
 package com.novanity.musicplayer.ui
 
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.novanity.musicplayer.data.Album
 import com.novanity.musicplayer.data.Artist
+import com.novanity.musicplayer.data.DeviceFolder
+import com.novanity.musicplayer.data.FavoritesRepository
 import com.novanity.musicplayer.data.Folder
 import com.novanity.musicplayer.data.HistoryRepository
 import com.novanity.musicplayer.data.MusicRepository
@@ -16,13 +21,14 @@ import com.novanity.musicplayer.data.Song
 import com.novanity.musicplayer.data.SortOrder
 import com.novanity.musicplayer.data.ThemeMode
 import com.novanity.musicplayer.data.db.PlaylistEntity
-import com.novanity.musicplayer.data.db.PlaylistSummary
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -51,7 +57,46 @@ data class LibraryUi(
 )
 
 @Immutable
+data class PlaylistCard(val id: Long, val name: String, val songCount: Int, val covers: List<Song>)
+
+@Immutable
 data class PlaylistTrack(val entryId: Long, val song: Song)
+
+sealed interface QuickPick {
+    data class Liked(val count: Int) : QuickPick
+    data class ShuffleAll(val count: Int) : QuickPick
+    data class AlbumPick(val album: Album) : QuickPick
+    data class PlaylistPick(val playlist: PlaylistCard) : QuickPick
+}
+
+@Immutable
+data class HomeUi(
+    val loading: Boolean = true,
+    val isEmpty: Boolean = false,
+    val quickPicks: List<QuickPick> = emptyList(),
+    val recentlyPlayed: List<Song> = emptyList(),
+    val recentlyAdded: List<Album> = emptyList(),
+    val topArtists: List<Artist> = emptyList(),
+    val playlists: List<PlaylistCard> = emptyList(),
+)
+
+@Immutable
+data class SearchResults(
+    val query: String = "",
+    val songs: List<Song> = emptyList(),
+    val albums: List<Album> = emptyList(),
+    val artists: List<Artist> = emptyList(),
+    val playlists: List<PlaylistCard> = emptyList(),
+    val folders: List<Folder> = emptyList(),
+) {
+    val isEmpty get() = songs.isEmpty() && albums.isEmpty() && artists.isEmpty() && playlists.isEmpty() && folders.isEmpty()
+}
+
+enum class Tab(val label: String) { HOME("Home"), SEARCH("Search"), LIBRARY("Library") }
+
+enum class LibraryFilter(val label: String) {
+    PLAYLISTS("Playlists"), ALBUMS("Albums"), ARTISTS("Artists"), SONGS("Songs"), FOLDERS("Folders")
+}
 
 sealed interface Destination {
     data class AlbumDetail(val albumId: Long) : Destination
@@ -59,50 +104,172 @@ sealed interface Destination {
     data class FolderDetail(val path: String) : Destination
     data class PlaylistDetail(val playlistId: Long) : Destination
     data object RecentlyPlayed : Destination
+    data object LikedSongs : Destination
+    data object Settings : Destination
 }
 
+@OptIn(FlowPreview::class)
 class LibraryViewModel(
     private val music: MusicRepository,
     private val playlistRepo: PlaylistRepository,
     private val history: HistoryRepository,
+    private val favorites: FavoritesRepository,
     private val settings: SettingsRepository,
 ) : ViewModel() {
 
-    val query = MutableStateFlow("")
+    // ---- Navigation: one back stack per bottom-bar tab ----
+
+    var tab by mutableStateOf(Tab.HOME)
+        private set
+    private val stacks: Map<Tab, SnapshotStateList<Destination>> = Tab.entries.associateWith { mutableStateListOf() }
+    val backStack: SnapshotStateList<Destination> get() = stacks.getValue(tab)
+    var libraryFilter by mutableStateOf(LibraryFilter.PLAYLISTS)
+
+    fun selectTab(t: Tab) {
+        if (t == tab) stacks.getValue(t).clear() else tab = t
+    }
+
+    fun open(destination: Destination) {
+        backStack.add(destination)
+    }
+
+    /** Returns false when there was nothing to go back to. */
+    fun back(): Boolean {
+        if (backStack.isNotEmpty()) {
+            backStack.removeAt(backStack.lastIndex)
+            return true
+        }
+        if (tab != Tab.HOME) {
+            tab = Tab.HOME
+            return true
+        }
+        return false
+    }
+
+    fun showLibrary(filter: LibraryFilter) {
+        libraryFilter = filter
+        stacks.getValue(Tab.LIBRARY).clear()
+        tab = Tab.LIBRARY
+    }
+
+    // ---- Settings ----
+
     val sortOrder: StateFlow<SortOrder> = settings.sortOrder
     val themeMode: StateFlow<ThemeMode> = settings.themeMode
     val dynamicColor: StateFlow<Boolean> = settings.dynamicColor
+    val includedFolders: StateFlow<Set<String>> = settings.includedFolders
+    val deviceFolders: StateFlow<List<DeviceFolder>> = music.deviceFolders
 
-    /** Simple in-memory navigation stack (survives rotation via the ViewModel). */
-    val backStack = mutableStateListOf<Destination>()
+    fun setSortOrder(order: SortOrder) = settings.setSortOrder(order)
+    fun setThemeMode(mode: ThemeMode) = settings.setThemeMode(mode)
+    fun setDynamicColor(enabled: Boolean) = settings.setDynamicColor(enabled)
+    fun setIncludedFolders(folders: Set<String>) = settings.setIncludedFolders(folders)
+    fun addFolder(path: String) = settings.setIncludedFolders(includedFolders.value + path)
+    fun removeFolder(path: String) = settings.setIncludedFolders(includedFolders.value - path)
 
     /** Songs waiting for the "add to playlist" picker, if open. */
-    val pendingPlaylistAdd = mutableStateOf<List<Song>?>(null)
+    var pendingPlaylistAdd by mutableStateOf<List<Song>?>(null)
+
+    // ---- Library data ----
 
     val grouped: StateFlow<GroupedLibrary?> = music.songs
         .map { songs -> songs?.let(::group) }
         .flowOn(Dispatchers.Default)
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
-    val library: StateFlow<LibraryUi> = combine(grouped, query, sortOrder) { lib, q, sort ->
-        if (lib == null) return@combine LibraryUi(loading = true)
-        filterAndSort(lib, q.trim(), sort)
+    val library: StateFlow<LibraryUi> = combine(grouped, sortOrder) { lib, sort ->
+        if (lib == null) LibraryUi(loading = true) else sorted(lib, sort)
     }
         .flowOn(Dispatchers.Default)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), LibraryUi())
 
-    val playlists: StateFlow<List<PlaylistSummary>> = combine(playlistRepo.playlists, query) { all, q ->
-        val t = q.trim()
-        if (t.isEmpty()) all else all.filter { it.name.contains(t, ignoreCase = true) }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    val playlists: StateFlow<List<PlaylistCard>> =
+        combine(playlistRepo.playlists, playlistRepo.coverEntries, music.songs) { all, entries, _ ->
+            val byId = music.songsById
+            val byPlaylist = entries.groupBy { it.playlistId }
+            all.map { p ->
+                val covers = byPlaylist[p.id].orEmpty().asSequence()
+                    .mapNotNull { byId[it.songId] }
+                    .distinctBy { it.albumId }
+                    .take(4)
+                    .toList()
+                PlaylistCard(p.id, p.name, p.songCount, covers)
+            }
+        }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    val allPlaylists: StateFlow<List<PlaylistSummary>> = playlistRepo.playlists
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    val likedIds: StateFlow<Set<Long>> = favorites.songIds.map { it.toSet() }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
+
+    val likedSongs: StateFlow<List<Song>> = combine(favorites.songIds, music.songs) { ids, _ ->
+        val byId = music.songsById
+        ids.mapNotNull(byId::get)
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     val recentlyPlayed: StateFlow<List<Song>> = combine(history.recentSongIds(), music.songs) { ids, _ ->
         val byId = music.songsById
         ids.mapNotNull(byId::get)
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    val home: StateFlow<HomeUi> = combine(grouped, recentlyPlayed, likedSongs, playlists) { lib, recent, liked, lists ->
+        if (lib == null) return@combine HomeUi(loading = true)
+        val recentAlbums = recent.asSequence().map { it.albumId }.distinct()
+            .mapNotNull(lib.albumsById::get).take(6).toList()
+        val recentlyAdded = lib.albums.sortedByDescending { it.dateAdded }.take(12)
+
+        val picks = buildList {
+            if (liked.isNotEmpty()) add(QuickPick.Liked(liked.size))
+            if (lib.songs.isNotEmpty()) add(QuickPick.ShuffleAll(lib.songs.size))
+            lists.take(2).forEach { add(QuickPick.PlaylistPick(it)) }
+            (recentAlbums + recentlyAdded).distinctBy { it.id }.forEach {
+                if (size < 6) add(QuickPick.AlbumPick(it))
+            }
+        }.take(6)
+
+        HomeUi(
+            loading = false,
+            isEmpty = lib.songs.isEmpty(),
+            quickPicks = picks,
+            recentlyPlayed = recent.take(20),
+            recentlyAdded = recentlyAdded,
+            topArtists = lib.artists.sortedByDescending { it.songs.size }.take(12),
+            playlists = lists,
+        )
+    }
+        .flowOn(Dispatchers.Default)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeUi())
+
+    // ---- Search ----
+
+    val searchQuery = MutableStateFlow("")
+
+    val searchResults: StateFlow<SearchResults> =
+        combine(grouped, searchQuery.debounce(120), playlists) { lib, raw, lists ->
+            val q = raw.trim()
+            if (lib == null || q.isEmpty()) return@combine SearchResults(query = q)
+            fun String.hit() = contains(q, ignoreCase = true)
+            fun String.rank() = when {
+                equals(q, ignoreCase = true) -> 0
+                startsWith(q, ignoreCase = true) -> 1
+                else -> 2
+            }
+            SearchResults(
+                query = q,
+                songs = lib.songs.filter { it.title.hit() || it.artist.hit() || it.album.hit() }
+                    .sortedWith(compareBy<Song> { it.title.rank() }.thenBy(String.CASE_INSENSITIVE_ORDER) { it.title }),
+                albums = lib.albums.filter { it.title.hit() || it.artist.hit() }
+                    .sortedWith(compareBy<Album> { it.title.rank() }.thenBy(String.CASE_INSENSITIVE_ORDER) { it.title }),
+                artists = lib.artists.filter { it.name.hit() }
+                    .sortedWith(compareBy<Artist> { it.name.rank() }.thenByDescending { it.songs.size }),
+                playlists = lists.filter { it.name.hit() },
+                folders = lib.folders.filter { it.name.hit() },
+            )
+        }
+            .flowOn(Dispatchers.Default)
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SearchResults())
+
+    fun setSearchQuery(q: String) {
+        searchQuery.value = q
+    }
 
     init {
         music.startObserving()
@@ -113,20 +280,10 @@ class LibraryViewModel(
         viewModelScope.launch { music.refresh() }
     }
 
-    fun setQuery(q: String) {
-        query.value = q
-    }
+    // ---- Favorites ----
 
-    fun setSortOrder(order: SortOrder) = settings.setSortOrder(order)
-    fun setThemeMode(mode: ThemeMode) = settings.setThemeMode(mode)
-    fun setDynamicColor(enabled: Boolean) = settings.setDynamicColor(enabled)
-
-    fun open(destination: Destination) {
-        backStack.add(destination)
-    }
-
-    fun pop() {
-        backStack.removeLastOrNull()
+    fun setLiked(song: Song, liked: Boolean) {
+        viewModelScope.launch { favorites.setLiked(song.id, liked) }
     }
 
     // ---- Playlists ----
@@ -136,7 +293,7 @@ class LibraryViewModel(
     fun playlistTracks(id: Long): Flow<List<PlaylistTrack>> =
         combine(playlistRepo.entries(id), music.songs) { entries, _ ->
             val byId = music.songsById
-            // Songs deleted from the device simply drop out of the playlist view.
+            // Songs deleted from the device (or outside the chosen folders) drop out of the view.
             entries.mapNotNull { e -> byId[e.songId]?.let { PlaylistTrack(e.entryId, it) } }
         }
 
@@ -155,11 +312,11 @@ class LibraryViewModel(
 
     fun deletePlaylist(id: Long) {
         viewModelScope.launch { playlistRepo.delete(id) }
-        backStack.removeAll { it is Destination.PlaylistDetail && it.playlistId == id }
+        stacks.values.forEach { stack -> stack.removeAll { it is Destination.PlaylistDetail && it.playlistId == id } }
     }
 
     fun requestAddToPlaylist(songs: List<Song>) {
-        if (songs.isNotEmpty()) pendingPlaylistAdd.value = songs
+        if (songs.isNotEmpty()) pendingPlaylistAdd = songs
     }
 
     fun addToPlaylist(playlistId: Long, songs: List<Song>) {
@@ -174,7 +331,7 @@ class LibraryViewModel(
         viewModelScope.launch { playlistRepo.reorder(entryIdsInOrder) }
     }
 
-    // ---- Grouping / filtering ----
+    // ---- Grouping / sorting ----
 
     private fun group(songs: List<Song>): GroupedLibrary {
         val inAlbumOrder = compareBy<Song>({ it.disc }, { it.track }).thenBy(String.CASE_INSENSITIVE_ORDER) { it.title }
@@ -215,55 +372,38 @@ class LibraryViewModel(
         return GroupedLibrary(songs, albums, artists, folders)
     }
 
-    private fun filterAndSort(lib: GroupedLibrary, q: String, sort: SortOrder): LibraryUi {
-        fun String.hit() = contains(q, ignoreCase = true)
-        val filtering = q.isNotEmpty()
-
-        val songs = (if (filtering) lib.songs.filter { it.title.hit() || it.artist.hit() || it.album.hit() } else lib.songs)
-            .sortedWith(
-                when (sort) {
-                    SortOrder.TITLE -> compareBy<Song, String>(String.CASE_INSENSITIVE_ORDER) { it.title }
-                    SortOrder.ARTIST -> compareBy<Song, String>(String.CASE_INSENSITIVE_ORDER) { it.artist }
-                        .thenBy(String.CASE_INSENSITIVE_ORDER) { it.album }
-                        .thenBy { it.disc }
-                        .thenBy { it.track }
-                    SortOrder.DATE_ADDED -> compareByDescending<Song> { it.dateAdded }
-                }
-            )
-
-        val albums = (if (filtering) lib.albums.filter { it.title.hit() || it.artist.hit() } else lib.albums)
-            .sortedWith(
-                when (sort) {
-                    SortOrder.TITLE -> compareBy<Album, String>(String.CASE_INSENSITIVE_ORDER) { it.title }
-                    SortOrder.ARTIST -> compareBy<Album, String>(String.CASE_INSENSITIVE_ORDER) { it.artist }
-                        .thenBy(String.CASE_INSENSITIVE_ORDER) { it.title }
-                    SortOrder.DATE_ADDED -> compareByDescending<Album> { it.dateAdded }
-                }
-            )
-
-        val artists = (if (filtering) lib.artists.filter { it.name.hit() } else lib.artists)
-            .sortedWith(
-                when (sort) {
-                    SortOrder.DATE_ADDED -> compareByDescending<Artist> { it.dateAdded }
-                    else -> compareBy<Artist, String>(String.CASE_INSENSITIVE_ORDER) { it.name }
-                }
-            )
-
-        val folders = (if (filtering) lib.folders.filter { it.name.hit() || it.path.hit() } else lib.folders)
-            .sortedWith(
-                when (sort) {
-                    SortOrder.DATE_ADDED -> compareByDescending<Folder> { it.dateAdded }
-                    else -> compareBy<Folder, String>(String.CASE_INSENSITIVE_ORDER) { it.name }
-                }
-            )
-
-        return LibraryUi(
-            loading = false,
-            isEmpty = lib.songs.isEmpty(),
-            songs = songs,
-            albums = albums,
-            artists = artists,
-            folders = folders,
-        )
-    }
+    private fun sorted(lib: GroupedLibrary, sort: SortOrder) = LibraryUi(
+        loading = false,
+        isEmpty = lib.songs.isEmpty(),
+        songs = lib.songs.sortedWith(
+            when (sort) {
+                SortOrder.TITLE -> compareBy<Song, String>(String.CASE_INSENSITIVE_ORDER) { it.title }
+                SortOrder.ARTIST -> compareBy<Song, String>(String.CASE_INSENSITIVE_ORDER) { it.artist }
+                    .thenBy(String.CASE_INSENSITIVE_ORDER) { it.album }
+                    .thenBy { it.disc }
+                    .thenBy { it.track }
+                SortOrder.DATE_ADDED -> compareByDescending<Song> { it.dateAdded }
+            }
+        ),
+        albums = lib.albums.sortedWith(
+            when (sort) {
+                SortOrder.TITLE -> compareBy<Album, String>(String.CASE_INSENSITIVE_ORDER) { it.title }
+                SortOrder.ARTIST -> compareBy<Album, String>(String.CASE_INSENSITIVE_ORDER) { it.artist }
+                    .thenBy(String.CASE_INSENSITIVE_ORDER) { it.title }
+                SortOrder.DATE_ADDED -> compareByDescending<Album> { it.dateAdded }
+            }
+        ),
+        artists = lib.artists.sortedWith(
+            when (sort) {
+                SortOrder.DATE_ADDED -> compareByDescending<Artist> { it.dateAdded }
+                else -> compareBy<Artist, String>(String.CASE_INSENSITIVE_ORDER) { it.name }
+            }
+        ),
+        folders = lib.folders.sortedWith(
+            when (sort) {
+                SortOrder.DATE_ADDED -> compareByDescending<Folder> { it.dateAdded }
+                else -> compareBy<Folder, String>(String.CASE_INSENSITIVE_ORDER) { it.name }
+            }
+        ),
+    )
 }

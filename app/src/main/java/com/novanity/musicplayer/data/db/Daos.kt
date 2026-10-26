@@ -2,6 +2,7 @@ package com.novanity.musicplayer.data.db
 
 import androidx.room.Dao
 import androidx.room.Insert
+import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
 import kotlinx.coroutines.flow.Flow
@@ -16,6 +17,10 @@ abstract class PlaylistDao {
         """
     )
     abstract fun observePlaylists(): Flow<List<PlaylistSummary>>
+
+    /** All entries, cheapest columns only, for building playlist cover mosaics. */
+    @Query("SELECT playlistId, songId FROM playlist_songs ORDER BY playlistId, position")
+    abstract fun observeCoverEntries(): Flow<List<PlaylistCoverEntry>>
 
     @Query("SELECT * FROM playlists WHERE id = :id")
     abstract fun observePlaylist(id: Long): Flow<PlaylistEntity?>
@@ -75,4 +80,16 @@ abstract class HistoryDao {
 
     @Query("DELETE FROM play_history WHERE id NOT IN (SELECT id FROM play_history ORDER BY playedAt DESC LIMIT :keep)")
     abstract suspend fun prune(keep: Int)
+}
+
+@Dao
+abstract class FavoritesDao {
+    @Query("SELECT songId FROM favorites ORDER BY addedAt DESC")
+    abstract fun observeSongIds(): Flow<List<Long>>
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    abstract suspend fun insert(entry: FavoriteEntity)
+
+    @Query("DELETE FROM favorites WHERE songId = :songId")
+    abstract suspend fun delete(songId: Long)
 }
