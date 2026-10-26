@@ -1,5 +1,9 @@
 package com.novanity.musicplayer.ui.screens
 
+import androidx.compose.material.icons.automirrored.rounded.VolumeDown
+import androidx.compose.material.icons.automirrored.rounded.VolumeOff
+import androidx.compose.material.icons.automirrored.rounded.VolumeUp
+import com.novanity.musicplayer.ui.components.SlimSlider
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
@@ -225,6 +229,7 @@ fun NowPlayingScreen(
     var showSpeed by remember { mutableStateOf(false) }
     val sleepTimer by player.sleepTimer.collectAsStateWithLifecycle()
     val sleepLabel = rememberSleepLabel(sleepTimer)
+    val isDesktop = LocalPlatform.current.isDesktop
 
     // Drag the whole sheet down to dismiss (distance or flick), else spring back.
     val dismiss = rememberDismissDragState()
@@ -260,7 +265,7 @@ fun NowPlayingScreen(
                     )
             )
 
-            BoxWithConstraints(Modifier.fillMaxSize().systemBarsPadding()) {
+            BoxWithConstraints(Modifier.fillMaxSize().systemBarsPadding().padding(top = LocalPlatform.current.titleBarHeight)) {
                 // Wide windows: artwork on the left, controls (and lyrics, when turned on) on the right.
                 val wide = maxWidth >= 900.dp && maxHeight >= 520.dp
                 val artwork: @Composable (Modifier) -> Unit = { artModifier ->
@@ -334,6 +339,10 @@ fun NowPlayingScreen(
                 Spacer(Modifier.height(12.dp))
                 Controls(state, player)
                 Spacer(Modifier.height(12.dp))
+                if (isDesktop) {
+                    VolumeRow(player)
+                    Spacer(Modifier.height(8.dp))
+                }
                 }
                 val bottomButtons: @Composable () -> Unit = {
                     Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), horizontalArrangement = Arrangement.Center) {
@@ -682,6 +691,29 @@ private fun QueueRow(
                     Icon(Icons.Rounded.DragHandle, contentDescription = "Reorder", tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
+        }
+    }
+}
+
+/** Desktop volume: mute button, slider (drag, click or scroll wheel) and a max button. */
+@Composable
+private fun VolumeRow(player: PlayerViewModel) {
+    val volume by player.volume.collectAsStateWithLifecycle()
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        IconButton(onClick = player::toggleMute) {
+            Icon(
+                when {
+                    volume == 0f -> Icons.AutoMirrored.Rounded.VolumeOff
+                    volume < 0.5f -> Icons.AutoMirrored.Rounded.VolumeDown
+                    else -> Icons.AutoMirrored.Rounded.VolumeUp
+                },
+                contentDescription = if (volume == 0f) "Unmute" else "Mute",
+                tint = Muted,
+            )
+        }
+        SlimSlider(volume, player::setVolume, color = Color.White, trackColor = Color.White.copy(alpha = 0.25f), modifier = Modifier.weight(1f))
+        IconButton(onClick = { player.setVolume(1f) }) {
+            Icon(Icons.AutoMirrored.Rounded.VolumeUp, contentDescription = "Full volume", tint = Muted)
         }
     }
 }

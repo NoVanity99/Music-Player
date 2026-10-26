@@ -1,5 +1,6 @@
 package com.novanity.musicplayer.desktop
 
+import androidx.compose.ui.unit.dp
 import androidx.compose.material3.ColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.rememberUpdatedState
@@ -18,6 +19,7 @@ class DesktopPlatformUi(private val parent: java.awt.Component?) : PlatformUi {
     override val supportsDynamicColor = false
     override val supportsBlur = true
     override val supportsDiscordPresence = true
+    override val titleBarHeight = TitleBarHeight
     override val supportsEqualizer = false
 
     override fun dynamicColorScheme(dark: Boolean): ColorScheme? = null
@@ -66,3 +68,6 @@ fun desktopStorageRoots(): List<StorageRoot> {
     }
     return roots
 }
+
+/** The app draws its own title bar (see WindowChrome). */
+val TitleBarHeight = 32.dp

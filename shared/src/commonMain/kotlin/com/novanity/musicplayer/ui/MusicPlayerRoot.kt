@@ -84,9 +84,13 @@ fun MusicPlayerRoot(
         library.newSongsFound.collect { n -> library.notify(if (n == 1) "Found 1 new song" else "Found $n new songs") }
     }
 
+    val titleBar = com.novanity.musicplayer.platform.LocalPlatform.current.titleBarHeight
+
     // No folder chosen yet: nothing is auto-detected, so ask where the music lives.
     if (includedFolders.isEmpty()) {
-        FolderSetupScreen(actions)
+        Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(top = titleBar)) {
+            FolderSetupScreen(actions)
+        }
         return
     }
 
@@ -123,6 +127,13 @@ fun MusicPlayerRoot(
     CompositionLocalProvider(LocalNowPlaying provides NowPlayingInfo(state.current?.songId, state.isPlaying)) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val wide = maxWidth >= WideLayoutMinWidth
+            // Strip behind the desktop title bar, in the colour of the layout below it.
+            Box(
+                Modifier.fillMaxSize().background(
+                    if (wide) MaterialTheme.colorScheme.surfaceContainerLowest else MaterialTheme.colorScheme.background
+                )
+            )
+            Box(Modifier.fillMaxSize().padding(top = titleBar)) {
             if (wide) {
                 // Desktop / large windows: sidebar, content panel, side panel and a player bar.
                 Scaffold(
@@ -130,7 +141,7 @@ fun MusicPlayerRoot(
                     contentWindowInsets = WindowInsets(0),
                     containerColor = MaterialTheme.colorScheme.surfaceContainerLowest,
                 ) { _ ->
-                    WideLayout(library, player, actions, uiState, maxWidth, screens)
+                    WideLayout(library, player, actions, uiState, this@BoxWithConstraints.maxWidth, screens)
                 }
             } else {
                 Scaffold(
@@ -159,6 +170,7 @@ fun MusicPlayerRoot(
                     },
                 ) { padding -> screens(padding) }
                 if (uiState.showShortcuts) ShortcutsDialog { uiState.showShortcuts = false }
+            }
             }
 
             AnimatedVisibility(

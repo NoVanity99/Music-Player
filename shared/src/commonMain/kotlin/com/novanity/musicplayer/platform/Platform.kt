@@ -5,6 +5,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import com.novanity.musicplayer.data.Song
 
 /** Simple persistent key-value storage (SharedPreferences on Android, a properties file on desktop). */
@@ -60,6 +62,9 @@ interface PlatformUi {
     val supportsBlur: Boolean
     val supportsDiscordPresence: Boolean
     val supportsEqualizer: Boolean
+
+    /** Height of the app-drawn window title bar (desktop); content starts below it. */
+    val titleBarHeight: Dp get() = 0.dp
 
     fun dynamicColorScheme(dark: Boolean): ColorScheme?
 

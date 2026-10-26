@@ -1,5 +1,6 @@
 package com.novanity.musicplayer.desktop
 
+import androidx.compose.ui.graphics.Color
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -182,11 +183,13 @@ fun main() {
                 exitApplication()
             },
             state = windowState,
-            title = "Music Player",
+            title = "Vanity Player",
             icon = icon,
+            undecorated = true, // the app draws its own title bar
             onKeyEvent = app::onKey,
         ) {
             window.minimumSize = Dimension(400, 640)
+            val frame = remember { WindowFrame(window) }
             val platform = remember { DesktopPlatformUi(window) }
             val themeMode by app.graph.settings.themeMode.collectAsStateWithLifecycle()
             val dark = when (themeMode) {
@@ -196,8 +199,13 @@ fun main() {
             }
             CompositionLocalProvider(LocalPlatform provides platform) {
                 MusicPlayerTheme(darkTheme = dark, dynamicColor = false) {
+                    val playerState by app.player.state.collectAsStateWithLifecycle()
+                    // White controls over the full-screen player, theme colours elsewhere.
+                    val chromeColor = if (app.rootUi.nowPlayingOpen && playerState.hasMedia) Color.White else MaterialTheme.colorScheme.onSurface
                     Surface(color = MaterialTheme.colorScheme.background) {
-                        MusicPlayerRoot(app.library, app.player, app.rootUi, app.updates)
+                        WindowChrome(frame, window, TitleBarHeight, chromeColor, onClose = app.exitApp) {
+                            MusicPlayerRoot(app.library, app.player, app.rootUi, app.updates)
+                        }
                     }
                 }
             }
