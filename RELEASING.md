@@ -32,7 +32,8 @@ The `Release` workflow (`.github/workflows/release.yml`) does all of this for yo
    git tag v1.4.0
    git push origin main v1.4.0
    ```
-   The tag must be `v` + `app.versionName`, or the workflow stops.
+   The tag must be `v` + `app.versionName`, or the workflow stops. (Or skip the tag: run the
+   **Release** workflow from the Actions tab on your branch, and it creates the tag itself.)
 4. Wait for the **Release** workflow to finish (about 15 minutes). It builds and publishes
    release `v1.4.0` with:
 

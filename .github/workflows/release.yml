@@ -7,6 +7,8 @@ name: Release
 on:
   push:
     tags: ["v*"]
+  # Or run it from the Actions tab on any branch: it tags that commit v<app.versionName>.
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -27,7 +29,7 @@ jobs:
         run: |
           version=$(grep '^app.versionName=' gradle.properties | cut -d= -f2)
           code=$(grep '^app.versionCode=' gradle.properties | cut -d= -f2)
-          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+          if [ "$GITHUB_REF_TYPE" = "tag" ] && [ "v$version" != "$GITHUB_REF_NAME" ]; then
             echo "::error::Tag $GITHUB_REF_NAME does not match app.versionName=$version"; exit 1
           fi
           if [ ! -f "release-notes/$version.md" ]; then
@@ -137,6 +139,7 @@ jobs:
           VERSION: ${{ needs.prepare.outputs.version }}
         run: |
           gh release create "v$VERSION" dist/* \
+            --target "$GITHUB_SHA" \
             --title "Music Player $VERSION" \
             --notes-file "release-notes/$VERSION.md" \
             --latest
