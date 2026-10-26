@@ -289,6 +289,18 @@ fun SettingsScreen(actions: SongActions, contentPadding: PaddingValues) {
                     )
                 }
             }
+        } else {
+            item { GroupLabel("Integrations") }
+            item {
+                SettingsCard {
+                    SettingRow(
+                        icon = Icons.Rounded.Gamepad,
+                        title = "Discord Rich Presence",
+                        subtitle = "Available in the Windows app. Discord's phone app doesn't let other apps " +
+                            "set your status, so it can't be shown from Android.",
+                    )
+                }
+            }
         }
 
         // ---- Library ----

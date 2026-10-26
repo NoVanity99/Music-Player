@@ -60,7 +60,8 @@ tasks.withType<Test>().configureEach {
 compose.desktop {
     application {
         mainClass = "com.novanity.musicplayer.desktop.MainKt"
-        jvmArgs += listOf("-Dapp.version=$appVersion", "-Xmx768m")
+        val discordClientId = providers.gradleProperty("discord.clientId").getOrElse("")
+        jvmArgs += listOf("-Dapp.version=$appVersion", "-Ddiscord.clientId=$discordClientId", "-Xmx768m")
 
         nativeDistributions {
             targetFormats(TargetFormat.Exe, TargetFormat.Msi)

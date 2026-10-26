@@ -1,5 +1,8 @@
 package com.novanity.musicplayer.desktop
 
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.launch
+import kotlin.math.abs
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -80,6 +83,44 @@ class DesktopApp {
         updates.checkOnLaunch()
     }
 
+    /** Discord Rich Presence; the client ID is baked in at build time (see gradle.properties). */
+    private val presence = System.getProperty("discord.clientId")?.takeIf { it.isNotBlank() }?.let(::DiscordPresence)
+
+    init {
+        presence?.let(::showPresence)
+    }
+
+    private fun showPresence(presence: DiscordPresence) = scope.launch {
+        var shown: PresenceActivity? = null
+        combine(graph.settings.discordPresence, player.state, player.positionMs, player.speed) { enabled, s, pos, speed ->
+            val entry = s.current
+            if (!enabled || entry == null || !s.isPlaying) return@combine null // cleared while paused or stopped
+            val rate = speed.coerceAtLeast(0.1f)
+            val start = System.currentTimeMillis() - (pos / rate).toLong()
+            PresenceActivity(
+                title = entry.title,
+                artist = entry.artist,
+                album = entry.songId?.let { graph.musicRepository.songsById[it]?.album }.orEmpty(),
+                startMs = start,
+                endMs = if (s.durationMs > 0) start + (s.durationMs / rate).toLong() else null,
+            )
+        }.collect { next ->
+            // The position ticks constantly; only resend for a new song, play/pause, or a real seek.
+            val same = next != null && shown != null && next.copy(startMs = 0, endMs = null) == shown!!.copy(startMs = 0, endMs = null) &&
+                abs(next.startMs - shown!!.startMs) < 2_000
+            if (!same) {
+                shown = next
+                presence.update(next)
+            }
+        }
+    }
+
+    /** Stops playback and clears the Discord status; called before the app exits. */
+    fun shutdown() {
+        player.shutdown()
+        presence?.close()
+    }
+
     /** Keyboard shortcuts for the whole window (only keys the focused control didn't use). */
     fun onKey(event: KeyEvent): Boolean {
         if (event.type != KeyEventType.KeyDown) return false
@@ -120,7 +161,7 @@ fun main() {
         val app = remember { DesktopApp() }
         val icon = remember { loadIcon() }
         app.exitApp = {
-            app.player.shutdown()
+            app.shutdown()
             exitApplication()
         }
         val windowState = rememberWindowState(size = DpSize(1280.dp, 820.dp), position = WindowPosition(Alignment.Center))
@@ -137,7 +178,7 @@ fun main() {
 
         Window(
             onCloseRequest = {
-                app.player.shutdown()
+                app.shutdown()
                 exitApplication()
             },
             state = windowState,

@@ -20,3 +20,6 @@
 -dontwarn org.checkerframework.**
 -dontwarn javax.annotation.**
 -dontwarn afu.org.checkerframework.**
+
+# eddsa (update signature check) mentions a JDK-internal class on a path Android never takes.
+-dontwarn sun.security.x509.X509Key

@@ -1,53 +1,59 @@
 # Music Player
 
-A local-only Android music player: Kotlin, Jetpack Compose (Material 3), Media3 (ExoPlayer +
-MediaSessionService) and Room. No ads, no analytics, no internet permission.
+A local music player for **Android** and **Windows**, built from one Kotlin Multiplatform codebase:
+Compose Multiplatform (Material 3) UI, Room database, Media3 playback on Android, FFmpeg (via
+JavaCV) playback on desktop. No ads and no analytics. The only network access is checking GitHub
+for updates.
 
 ## Features
 
-- Home, Search and Library tabs in a streaming-app style UI: greeting + quick picks, carousels for
-  recently played / recently added / artists / playlists, album-art-tinted pages and player
-- Nothing is auto-detected: on first launch you pick the folder(s) music is pulled from (built-in
-  folder browser, which also allows Download; system picker as a fallback). Add more or ignore
-  subfolders later in Settings, or via "Ignore this folder" in any folder's menu
-- Every app start, the chosen folders are walked on disk and any audio files Android hasn't indexed
-  yet are handed to the media scanner, so newly copied songs appear right away
-- Scans MediaStore for all audio (skips ringtones, notifications, alarms and files under 30 s)
-- Library filters for Playlists, Albums, Artists, Songs and Folders, sorting by title / artist /
-  date added, and a search with a "top result"
-- Liked Songs (heart a track from the player, mini player or any song menu)
-- Play/pause, next/previous, seek, shuffle, repeat (off/all/one), and an Up Next queue with
-  drag-to-reorder and swipe-to-remove
-- Background playback with a media notification, lock-screen and Bluetooth/headset controls
-- Audio focus: pauses for calls, ducks for notifications, pauses when headphones are unplugged
-- Playlists (create, rename, delete, add/remove, reorder) and play history in Room
-- Remembers the last queue, song and position
-- Dark theme by default, light/system options, dynamic color on Android 12+
-- Unplayable files are skipped with a toast
+- Streaming-app style UI: Home, Search and Library, with pages tinted by the album art. Phones get
+  bottom tabs and a mini player; wide windows (840 dp and up) get a sidebar, a player bar and a
+  queue/lyrics side panel (1180 dp and up)
+- You pick the music folders yourself (nothing is auto-detected), can ignore subfolders, and the
+  folders are checked for new songs every time the app starts
+- Playlists, Liked Songs, Most Played, history, and sorting by title, artist, album, date added,
+  duration or play count, plus a "Liked only" filter
+- Shuffle, repeat, an Up Next queue with drag-to-reorder, a sleep timer that fades out, playback
+  speed, crossfade between songs, and synced lyrics from `.lrc` files next to each song
+- Equalizer on Android (system effect with presets)
+- Desktop: keyboard shortcuts (press `?` or F1 to list them), media keys that work even when the window
+  isn't focused, right-click menus, hover states and scroll wheel support
+- Discord Rich Presence on desktop ("Listening to" with song, artist and time left), with a toggle
+  in Settings
+- Self-updating from GitHub Releases, with signed and checksummed downloads (see [RELEASING.md](RELEASING.md))
 
 ## Project layout
 
 ```
-app/src/main/java/com/novanity/musicplayer/
-  MusicApp.kt              Application + manual DI container
-  MainActivity.kt          Single activity
-  data/                    MediaStore scanner, repositories, Room database, settings
-  playback/                PlaybackService (MediaSessionService), queue persistence
-  ui/                      ViewModels, theme, Compose screens and components
+shared/       Common code: data layer, Room, ViewModels, the whole Compose UI, updater logic
+app/          Android app: Media3 playback service, MediaStore scanning, equalizer, APK updates
+desktopApp/   Windows/desktop app: FFmpeg audio engine, file scanner, media keys, Discord, MSI updates
+updatecore/   Small JVM library for the downloads and Ed25519 signature checks (used by both apps)
+branding/     App icon sources (SVG) and exports (PNG, ICO)
 ```
+
+The version (`app.versionName`, `app.versionCode`) lives only in `gradle.properties`.
 
 ## Building
 
-Requirements: JDK 17+ and the Android SDK (platform 37). Point `local.properties` at the SDK
-(`sdk.dir=/path/to/Android/sdk`) or set `ANDROID_HOME`.
+You need JDK 17 or newer. For Android you also need the Android SDK (platform 37): point
+`local.properties` at it (`sdk.dir=/path/to/Android/sdk`) or set `ANDROID_HOME`.
 
-```
-./gradlew assembleRelease
-```
+| Target | Command | Output |
+|---|---|---|
+| Android APK | `./gradlew :app:assembleRelease` | `app/build/outputs/apk/release/app-release.apk` |
+| Windows installers (run on Windows) | `gradlew.bat :desktopApp:packageReleaseExe :desktopApp:packageReleaseMsi` | `desktopApp/build/compose/binaries/main-release/{exe,msi}/` |
+| Run the desktop app (any OS) | `./gradlew :desktopApp:run` | |
+| Tests | `./gradlew :app:testDebugUnitTest :desktopApp:test :updatecore:test` | screenshots in `app/screenshots/`, `desktopApp/screenshots/` |
 
-### Release signing
+The Windows installers have to be built on Windows because jpackage can't cross-compile. The
+`Build` workflow builds them on a Windows runner for every push, and the `Release` workflow publishes
+them. See [RELEASING.md](RELEASING.md).
 
-The release build is signed when `keystore.properties` exists in the project root:
+### Release signing (Android)
+
+The release APK is signed when `keystore.properties` exists in the project root:
 
 ```
 storeFile=keystore/musicplayer-release.jks
@@ -56,18 +62,12 @@ keyAlias=musicplayer
 keyPassword=...
 ```
 
-Both `keystore.properties` and `keystore/` are gitignored. **Back them up.** Android only installs an
-update over an existing install if it is signed with the same key.
+`keystore.properties` and `keystore/` are gitignored. **Back them up.** Android only installs an
+update over an existing install if it's signed with the same key. Without `keystore.properties`,
+`assembleRelease` produces an unsigned APK, which Android won't install.
 
-Without `keystore.properties`, `assembleRelease` produces an unsigned APK, which Android won't install.
+### Discord
 
-### Screenshot and migration tests
-
-`./gradlew testDebugUnitTest` renders the main screens with a fake library (Robolectric + Roborazzi)
-into `app/screenshots/`, and checks the Room upgrade from the 1.0 database.
-
-### CI
-
-`.github/workflows/build.yml` builds the release APK on every push. To have CI sign it with your
-key, add two repository secrets: `KEYSTORE_BASE64` (output of `base64 -w0 keystore/musicplayer-release.jks`)
-and `KEYSTORE_PASSWORD`.
+The Discord application ID is set by `discord.clientId` in `gradle.properties` and passed to the
+desktop app at build time. For the logo to show, upload an image named **`logo`** under the
+application's *Rich Presence → Art Assets* in the Discord Developer Portal.
