@@ -1,5 +1,16 @@
 package com.novanity.musicplayer.ui
 
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode as AnimRepeat
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -175,9 +186,9 @@ private fun Sidebar(library: LibraryViewModel, actions: SongActions, uiState: Ro
 
     Column(modifier.background(MaterialTheme.colorScheme.surfaceContainerLow).padding(vertical = 12.dp)) {
         Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            GradientArt(ShuffleGradient, Icons.Rounded.MusicNote, Modifier.size(32.dp), RoundedCornerShape(9.dp), iconFraction = 0.6f)
+            AnimatedLogo(Modifier.size(32.dp))
             Spacer(Modifier.width(10.dp))
-            Text("Music", style = MaterialTheme.typography.titleLarge)
+            Text("Vanity Player", style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         Spacer(Modifier.height(8.dp))
         NavRow(Icons.Rounded.Home, Icons.Outlined.Home, "Home", library.tab == Tab.HOME && top == null) { library.selectTab(Tab.HOME); library.backStack.clear() }
@@ -471,4 +482,41 @@ fun ShortcutsDialog(onDismiss: () -> Unit) {
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } },
     )
+}
+
+/** App mark: a music note that always bobs and sways on a slowly shifting gradient. */
+@Composable
+private fun AnimatedLogo(modifier: Modifier) {
+    val motion = rememberInfiniteTransition(label = "logo")
+    val beat by motion.animateFloat(0f, 1f, infiniteRepeatable(tween(700, easing = FastOutSlowInEasing), AnimRepeat.Reverse), label = "beat")
+    val sway by motion.animateFloat(-10f, 10f, infiniteRepeatable(tween(1400, easing = FastOutSlowInEasing), AnimRepeat.Reverse), label = "sway")
+    val shift by motion.animateFloat(0f, 1f, infiniteRepeatable(tween(3000, easing = LinearEasing), AnimRepeat.Reverse), label = "shift")
+    Box(
+        modifier
+            .clip(RoundedCornerShape(9.dp))
+            .drawBehind {
+                // Diagonal gradient whose direction drifts back and forth.
+                drawRect(
+                    Brush.linearGradient(
+                        ShuffleGradient,
+                        start = Offset(size.width * shift, 0f),
+                        end = Offset(size.width * (1f - shift), size.height),
+                    )
+                )
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            Icons.Rounded.MusicNote,
+            contentDescription = null,
+            tint = Color.White,
+            modifier = Modifier.fillMaxSize(0.62f).graphicsLayer {
+                translationY = -beat * 2.5.dp.toPx()
+                rotationZ = sway
+                val s = 1f + beat * 0.08f
+                scaleX = s
+                scaleY = s
+            },
+        )
+    }
 }

@@ -65,9 +65,9 @@ compose.desktop {
 
         nativeDistributions {
             targetFormats(TargetFormat.Exe, TargetFormat.Msi)
-            packageName = "MusicPlayer"
+            packageName = "VanityPlayer"
             packageVersion = appVersion
-            description = "Music Player"
+            description = "Vanity Player"
             vendor = "NoVanity"
             copyright = "© NoVanity"
             // Modules the bundled runtime needs (sqlite driver, JNA/JNI loaders, HTTPS for updates).
@@ -77,7 +77,7 @@ compose.desktop {
                 iconFile.set(rootProject.file("branding/icon.ico"))
                 // Never change this: it's what lets a new installer upgrade the existing install in place.
                 upgradeUuid = "6F3C2A8E-4B1D-4C7E-9A52-0D8E1B7F3C21"
-                menuGroup = "Music Player"
+                menuGroup = "Vanity Player"
                 shortcut = true
                 dirChooser = true
                 perUserInstall = true

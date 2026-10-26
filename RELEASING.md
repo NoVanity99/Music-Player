@@ -39,9 +39,9 @@ The `Release` workflow (`.github/workflows/release.yml`) does all of this for yo
 
    | File | What it is |
    |---|---|
-   | `MusicPlayer-1.4.0.apk` | Signed Android app (sideload, and what Android updates install) |
-   | `MusicPlayer-1.4.0-Setup.exe` | Windows installer for first-time installs |
-   | `MusicPlayer-1.4.0.msi` | Windows installer that desktop updates install silently |
+   | `VanityPlayer-1.4.0.apk` | Signed Android app (sideload, and what Android updates install) |
+   | `VanityPlayer-1.4.0-Setup.exe` | Windows installer for first-time installs |
+   | `VanityPlayer-1.4.0.msi` | Windows installer that desktop updates install silently |
    | `latest.json` | Update manifest (version, notes, URLs, SHA-256, sizes) |
    | `latest.json.sig` | Ed25519 signature of `latest.json` (base64) |
    | `SHA256SUMS.txt` | Checksums of everything, for manual checks |
@@ -94,5 +94,5 @@ To sign a manifest by hand: `openssl pkeyutl -sign -inkey keystore/update-signin
   To remove it, buy a code-signing certificate and add a `signtool` step to the Windows job.
 - Never change `upgradeUuid` in `desktopApp/build.gradle.kts`. It's what makes a new MSI replace
   the installed version instead of installing a second copy.
-- On Android, the first update asks the user to allow "Install unknown apps" for Music Player.
+- On Android, the first update asks the user to allow "Install unknown apps" for Vanity Player.
   The app sends them to that setting and picks the update back up when they return.

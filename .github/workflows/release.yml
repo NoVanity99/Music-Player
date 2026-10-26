@@ -70,7 +70,7 @@ jobs:
         run: ./gradlew :app:assembleRelease --stacktrace
       - run: |
           mkdir -p out
-          cp app/build/outputs/apk/release/app-release.apk "out/MusicPlayer-${{ needs.prepare.outputs.version }}.apk"
+          cp app/build/outputs/apk/release/app-release.apk "out/VanityPlayer-${{ needs.prepare.outputs.version }}.apk"
       - uses: actions/upload-artifact@v4
         with: { name: android, path: out/* }
 
@@ -90,8 +90,8 @@ jobs:
         run: |
           v=${{ needs.prepare.outputs.version }}
           mkdir -p out
-          cp desktopApp/build/compose/binaries/main-release/exe/*.exe "out/MusicPlayer-$v-Setup.exe"
-          cp desktopApp/build/compose/binaries/main-release/msi/*.msi "out/MusicPlayer-$v.msi"
+          cp desktopApp/build/compose/binaries/main-release/exe/*.exe "out/VanityPlayer-$v-Setup.exe"
+          cp desktopApp/build/compose/binaries/main-release/msi/*.msi "out/VanityPlayer-$v.msi"
       - uses: actions/upload-artifact@v4
         with: { name: windows, path: out/* }
 
@@ -114,7 +114,7 @@ jobs:
           if [ -z "$UPDATE_SIGNING_KEY" ]; then
             # No manifest: installed apps simply won't see this release as an update.
             echo "::warning::UPDATE_SIGNING_KEY is not set; publishing without latest.json (no in-app update)"
-            sha256sum MusicPlayer-* > SHA256SUMS.txt
+            sha256sum VanityPlayer-* > SHA256SUMS.txt
             exit 0
           fi
           base="https://github.com/$GITHUB_REPOSITORY/releases/download/v$VERSION"
@@ -126,8 +126,8 @@ jobs:
           # The app installs the MSI (silent in-place upgrade); the Setup.exe is for first installs.
           jq -n --arg v "$VERSION" --argjson c "$CODE" --arg t "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
             --rawfile notes "../release-notes/$VERSION.md" \
-            --argjson a "$(asset "MusicPlayer-$VERSION.apk")" \
-            --argjson w "$(asset "MusicPlayer-$VERSION.msi")" \
+            --argjson a "$(asset "VanityPlayer-$VERSION.apk")" \
+            --argjson w "$(asset "VanityPlayer-$VERSION.msi")" \
             '{version:$v, versionCode:$c, publishedAt:$t, notes:$notes, android:$a, windows:$w}' > latest.json
           # Accept the key as pasted: full PEM, or just its base64 body, with any line endings.
           key=$(printf '%s' "$UPDATE_SIGNING_KEY" | tr -d '\r' | sed 's/\\n/\n/g')
@@ -147,7 +147,7 @@ jobs:
           rm ../signing.pem
           base64 -w0 sig.bin > latest.json.sig && rm sig.bin
           [ -s latest.json.sig ]
-          sha256sum MusicPlayer-* latest.json > SHA256SUMS.txt
+          sha256sum VanityPlayer-* latest.json > SHA256SUMS.txt
           cat latest.json
       - name: Publish GitHub Release
         env:
@@ -162,6 +162,6 @@ jobs:
           fi
           gh release create "v$VERSION" dist/* \
             --target "$GITHUB_SHA" \
-            --title "Music Player $VERSION" \
+            --title "Vanity Player $VERSION" \
             --notes-file "release-notes/$VERSION.md" \
             --latest

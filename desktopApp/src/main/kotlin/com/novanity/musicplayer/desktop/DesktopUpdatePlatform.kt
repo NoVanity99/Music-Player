@@ -44,7 +44,7 @@ class DesktopUpdatePlatform(private val exitApp: () -> Unit) : UpdatePlatform {
             runCatching { Desktop.getDesktop().open(msi.parentFile) }
             return@withContext InstallOutcome.STARTED
         }
-        val app = System.getProperty("jpackage.app-path") // the installed MusicPlayer.exe
+        val app = System.getProperty("jpackage.app-path") // the installed VanityPlayer.exe
         val pid = ProcessHandle.current().pid()
         val script = File(msi.parentFile, "install-update.cmd")
         script.writeText(
@@ -54,7 +54,7 @@ class DesktopUpdatePlatform(private val exitApp: () -> Unit) : UpdatePlatform {
                 appendLine(":wait")
                 appendLine("tasklist /FI \"PID eq $pid\" 2>nul | find \"$pid\" >nul && (timeout /t 1 /nobreak >nul & goto wait)")
                 appendLine("msiexec /i \"${msi.absolutePath}\" /passive /norestart")
-                if (app != null) appendLine("start \"\" \"$app\"")
+                if (app != null) appendLine("if exist \"$app\" start \"\" \"$app\"")
             }
         )
         ProcessBuilder("cmd.exe", "/c", "start", "\"\"", "/min", script.absolutePath)

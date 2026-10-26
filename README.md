@@ -1,4 +1,4 @@
-# Music Player
+# Vanity Player
 
 A local music player for **Android** and **Windows**, built from one Kotlin Multiplatform codebase:
 Compose Multiplatform (Material 3) UI, Room database, Media3 playback on Android, FFmpeg (via
