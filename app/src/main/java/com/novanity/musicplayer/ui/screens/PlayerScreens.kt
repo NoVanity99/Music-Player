@@ -45,7 +45,6 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.SwipeToDismissBox
-import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.rememberSwipeToDismissBoxState
@@ -390,15 +389,11 @@ private fun QueueRow(
     onRemove: () -> Unit,
     handle: Modifier,
 ) {
-    val dismissState = rememberSwipeToDismissBoxState(
-        confirmValueChange = { value ->
-            if (value != SwipeToDismissBoxValue.Settled) {
-                onRemove()
-                true
-            } else false
-        }
-    )
-    SwipeToDismissBox(state = dismissState, backgroundContent = { DeleteBackground() }) {
+    SwipeToDismissBox(
+        state = rememberSwipeToDismissBoxState(),
+        backgroundContent = { DeleteBackground() },
+        onDismiss = { onRemove() },
+    ) {
         Surface(tonalElevation = if (isDragging) 8.dp else 1.dp) {
             ListItem(
                 modifier = Modifier

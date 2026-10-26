@@ -30,7 +30,7 @@ app/src/main/java/com/novanity/musicplayer/
 
 ## Building
 
-Requirements: JDK 17+ and the Android SDK (platform 36). Point `local.properties` at the SDK
+Requirements: JDK 17+ and the Android SDK (platform 37). Point `local.properties` at the SDK
 (`sdk.dir=/path/to/Android/sdk`) or set `ANDROID_HOME`.
 
 ```

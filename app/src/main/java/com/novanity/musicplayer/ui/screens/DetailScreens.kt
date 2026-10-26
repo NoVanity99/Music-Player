@@ -34,7 +34,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SwipeToDismissBox
-import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberSwipeToDismissBoxState
@@ -269,17 +268,10 @@ private fun PlaylistDetailScreen(playlistId: Long, actions: SongActions, current
             }
             itemsIndexed(items, key = { _, t -> t.entryId }) { index, track ->
                 ReorderableItem(reorderState, key = track.entryId) { isDragging ->
-                    val dismissState = rememberSwipeToDismissBoxState(
-                        confirmValueChange = { value ->
-                            if (value != SwipeToDismissBoxValue.Settled) {
-                                vm.removeFromPlaylist(track.entryId)
-                                true
-                            } else false
-                        }
-                    )
                     SwipeToDismissBox(
-                        state = dismissState,
+                        state = rememberSwipeToDismissBoxState(),
                         backgroundContent = { DeleteBackground() },
+                        onDismiss = { vm.removeFromPlaylist(track.entryId) },
                     ) {
                         SongRow(
                             song = track.song,

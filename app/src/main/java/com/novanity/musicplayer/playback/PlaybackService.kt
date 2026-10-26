@@ -241,6 +241,7 @@ class PlaybackService : MediaSessionService() {
         override fun onPlaybackResumption(
             mediaSession: MediaSession,
             controller: MediaSession.ControllerInfo,
+            isForPlayback: Boolean,
         ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> = scope.future {
             val restored = buildRestoredQueue() ?: error("Nothing to resume")
             MediaSession.MediaItemsWithStartPosition(restored.items, restored.startIndex, restored.positionMs)

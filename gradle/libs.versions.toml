@@ -1,14 +1,14 @@
 [versions]
-agp = "8.13.2"
-kotlin = "2.2.21"
-ksp = "2.2.21-2.0.4"
-coreKtx = "1.17.0"
-activityCompose = "1.11.0"
-lifecycle = "2.9.4"
-composeBom = "2025.10.01"
-media3 = "1.8.0"
-room = "2.8.3"
-coroutines = "1.10.2"
+agp = "9.4.1"
+kotlin = "2.4.21"
+ksp = "2.3.12"
+coreKtx = "1.19.1"
+activityCompose = "1.13.0"
+lifecycle = "2.11.0"
+composeBom = "2026.09.00"
+media3 = "1.11.1"
+room = "2.8.5"
+coroutines = "1.11.0"
 reorderable = "2.5.1"
 
 [libraries]
@@ -32,6 +32,5 @@ reorderable = { group = "sh.calvin.reorderable", name = "reorderable", version.r
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
-kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
