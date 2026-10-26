@@ -32,6 +32,7 @@ java {
 
 dependencies {
     implementation(project(":shared"))
+    implementation(project(":updatecore"))
     implementation(compose.desktop.currentOs)
     implementation(libs.kotlinx.coroutines.swing)
     implementation(libs.androidx.sqlite.bundled)
@@ -45,7 +46,6 @@ dependencies {
 
     implementation(libs.jaudiotagger)
     implementation(libs.jnativehook)
-    implementation(libs.eddsa)
 
     testImplementation(kotlin("test-junit"))
     testImplementation("org.jetbrains.compose.ui:ui-test-junit4:${libs.versions.composeMultiplatform.get()}")

@@ -70,6 +70,33 @@ class SettingsRepository(private val prefs: KeyValueStore) {
         prefs.putInt(KEY_EQ_PRESET, -1)
     }
 
+    // ---- Updates & integrations ----
+
+    private val _autoUpdateCheck = MutableStateFlow(prefs.getBoolean(KEY_AUTO_UPDATE, true))
+    val autoUpdateCheck: StateFlow<Boolean> = _autoUpdateCheck.asStateFlow()
+
+    private val _lastPromptedVersion = MutableStateFlow(prefs.getString(KEY_LAST_PROMPTED))
+    val lastPromptedVersion: StateFlow<String?> = _lastPromptedVersion.asStateFlow()
+
+    /** Discord Rich Presence (desktop). */
+    private val _discordPresence = MutableStateFlow(prefs.getBoolean(KEY_DISCORD, true))
+    val discordPresence: StateFlow<Boolean> = _discordPresence.asStateFlow()
+
+    fun setAutoUpdateCheck(enabled: Boolean) {
+        _autoUpdateCheck.value = enabled
+        prefs.putBoolean(KEY_AUTO_UPDATE, enabled)
+    }
+
+    fun setLastPromptedVersion(version: String) {
+        _lastPromptedVersion.value = version
+        prefs.putString(KEY_LAST_PROMPTED, version)
+    }
+
+    fun setDiscordPresence(enabled: Boolean) {
+        _discordPresence.value = enabled
+        prefs.putBoolean(KEY_DISCORD, enabled)
+    }
+
     fun setVolume(value: Float) {
         _volume.value = value.coerceIn(0f, 1f)
         prefs.putFloat(KEY_VOLUME, _volume.value)
@@ -127,6 +154,9 @@ class SettingsRepository(private val prefs: KeyValueStore) {
         const val KEY_SPEED = "speed"
         const val KEY_CROSSFADE = "crossfade_seconds"
         const val KEY_EQ_ENABLED = "eq_enabled"
+        const val KEY_AUTO_UPDATE = "auto_update_check"
+        const val KEY_LAST_PROMPTED = "last_prompted_version"
+        const val KEY_DISCORD = "discord_presence"
         const val KEY_EQ_PRESET = "eq_preset"
         const val KEY_EQ_BANDS = "eq_bands"
     }

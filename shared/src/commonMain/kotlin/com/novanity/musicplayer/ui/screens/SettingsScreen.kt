@@ -25,6 +25,11 @@ import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.CreateNewFolder
 import androidx.compose.material.icons.rounded.DarkMode
 import androidx.compose.material.icons.rounded.Folder
+import androidx.compose.material.icons.rounded.Autorenew
+import androidx.compose.material.icons.rounded.Gamepad
+import androidx.compose.material.icons.rounded.SystemUpdate
+import androidx.compose.material3.TextButton
+import com.novanity.musicplayer.update.UpdateState
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material.icons.rounded.FolderOff
@@ -74,6 +79,7 @@ fun SettingsScreen(actions: SongActions, contentPadding: PaddingValues) {
     val syncing by vm.syncing.collectAsStateWithLifecycle()
     val lib by vm.grouped.collectAsStateWithLifecycle()
     var browse by remember { mutableStateOf<Browse?>(null) }
+    val platform = LocalPlatform.current
 
     LazyColumn(
         Modifier.fillMaxSize(),
@@ -223,6 +229,63 @@ fun SettingsScreen(actions: SongActions, contentPadding: PaddingValues) {
                         subtitle = "Use Material You dynamic color",
                         onClick = { vm.setDynamicColor(!dynamic) },
                         trailing = { Switch(checked = dynamic, onCheckedChange = { vm.setDynamicColor(it) }) },
+                    )
+                }
+            }
+        }
+
+        // ---- Updates ----
+        actions.updates?.let { updates ->
+            item { GroupLabel("Updates") }
+            item {
+                val state by updates.state.collectAsStateWithLifecycle()
+                val auto by updates.autoCheck.collectAsStateWithLifecycle()
+                SettingsCard {
+                    SettingRow(
+                        icon = Icons.Rounded.SystemUpdate,
+                        title = "Version ${updates.currentVersion}",
+                        subtitle = when (val s = state) {
+                            UpdateState.Checking -> "Checking for updates\u2026"
+                            is UpdateState.UpToDate -> "You're up to date"
+                            is UpdateState.Available -> "Version ${s.info.version} is available"
+                            is UpdateState.Downloading -> "Downloading ${s.info.version}\u2026 ${(s.progress * 100).toInt()}%"
+                            is UpdateState.Verifying -> "Verifying\u2026"
+                            is UpdateState.Installing -> "Starting the installer\u2026"
+                            is UpdateState.NeedsPermission -> "Allow installs from this app to continue"
+                            is UpdateState.Failed -> s.message
+                            UpdateState.Idle -> "Updates come from this app's GitHub releases"
+                        },
+                        trailing = {
+                            when (state) {
+                                UpdateState.Checking -> CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                                is UpdateState.Available, is UpdateState.NeedsPermission -> TextButton(onClick = updates::showNotes) { Text("View") }
+                                else -> TextButton(onClick = { updates.check(userInitiated = true) }) { Text("Check now") }
+                            }
+                        },
+                    )
+                    SettingRow(
+                        icon = Icons.Rounded.Autorenew,
+                        title = "Check automatically",
+                        subtitle = "Look for a new version each time the app starts",
+                        onClick = { updates.setAutoCheck(!auto) },
+                        trailing = { Switch(checked = auto, onCheckedChange = updates::setAutoCheck) },
+                    )
+                }
+            }
+        }
+
+        // ---- Integrations ----
+        if (platform.supportsDiscordPresence) {
+            item { GroupLabel("Integrations") }
+            item {
+                val discord by vm.discordPresence.collectAsStateWithLifecycle()
+                SettingsCard {
+                    SettingRow(
+                        icon = Icons.Rounded.Gamepad,
+                        title = "Discord Rich Presence",
+                        subtitle = "Show what you're listening to on your Discord profile",
+                        onClick = { vm.setDiscordPresence(!discord) },
+                        trailing = { Switch(checked = discord, onCheckedChange = vm::setDiscordPresence) },
                     )
                 }
             }

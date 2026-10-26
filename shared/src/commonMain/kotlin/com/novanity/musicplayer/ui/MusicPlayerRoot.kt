@@ -58,8 +58,14 @@ import com.novanity.musicplayer.ui.screens.SearchScreen
 
 /** The whole app UI, shared by Android and desktop. Each platform creates the ViewModels. */
 @Composable
-fun MusicPlayerRoot(library: LibraryViewModel, player: PlayerViewModel, uiState: RootUiState) {
-    val actions = remember(library, player) { SongActions(player, library) }
+fun MusicPlayerRoot(
+    library: LibraryViewModel,
+    player: PlayerViewModel,
+    uiState: RootUiState,
+    updates: com.novanity.musicplayer.update.UpdateManager? = null,
+) {
+    val actions = remember(library, player, updates) { SongActions(player, library, updates) }
+    updates?.let { com.novanity.musicplayer.ui.components.UpdateDialog(it) }
     val snackbars = remember { SnackbarHostState() }
     LaunchedEffect(library) {
         library.messages.collect { snackbars.currentSnackbarData?.dismiss()

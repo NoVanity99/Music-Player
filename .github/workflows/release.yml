@@ -1,0 +1,127 @@
+name: Release
+
+# Push a tag like v1.3.0 (matching app.versionName in gradle.properties) to build the signed
+# Android APK and the Windows installers, sign the update manifest, and publish a GitHub Release.
+# See RELEASING.md.
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      code: ${{ steps.v.outputs.code }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: v
+        name: Check tag matches gradle.properties
+        run: |
+          version=$(grep '^app.versionName=' gradle.properties | cut -d= -f2)
+          code=$(grep '^app.versionCode=' gradle.properties | cut -d= -f2)
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match app.versionName=$version"; exit 1
+          fi
+          if [ ! -f "release-notes/$version.md" ]; then
+            echo "::error::Missing release-notes/$version.md"; exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+
+  android:
+    needs: prepare
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 21 }
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Restore signing key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+        run: |
+          # Updates only install over the existing app when signed with the same key.
+          if [ -z "$KEYSTORE_BASE64" ]; then echo "::error::KEYSTORE_BASE64 secret is not set"; exit 1; fi
+          mkdir -p keystore
+          echo "$KEYSTORE_BASE64" | base64 -d > keystore/musicplayer-release.jks
+          cat > keystore.properties <<PROPS
+          storeFile=keystore/musicplayer-release.jks
+          storePassword=$KEYSTORE_PASSWORD
+          keyAlias=musicplayer
+          keyPassword=$KEYSTORE_PASSWORD
+          PROPS
+      - name: Build release APK
+        run: ./gradlew :app:assembleRelease --stacktrace
+      - run: |
+          mkdir -p out
+          cp app/build/outputs/apk/release/app-release.apk "out/MusicPlayer-${{ needs.prepare.outputs.version }}.apk"
+      - uses: actions/upload-artifact@v4
+        with: { name: android, path: out/* }
+
+  windows:
+    needs: prepare
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 21 }
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Build installers
+        shell: bash
+        run: ./gradlew :desktopApp:packageReleaseExe :desktopApp:packageReleaseMsi --stacktrace
+      - name: Collect
+        shell: bash
+        run: |
+          v=${{ needs.prepare.outputs.version }}
+          mkdir -p out
+          cp desktopApp/build/compose/binaries/main-release/exe/*.exe "out/MusicPlayer-$v-Setup.exe"
+          cp desktopApp/build/compose/binaries/main-release/msi/*.msi "out/MusicPlayer-$v.msi"
+      - uses: actions/upload-artifact@v4
+        with: { name: windows, path: out/* }
+
+  publish:
+    needs: [prepare, android, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { path: dist, merge-multiple: true }
+      - name: Build and sign latest.json
+        env:
+          UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+          CODE: ${{ needs.prepare.outputs.code }}
+        run: |
+          if [ -z "$UPDATE_SIGNING_KEY" ]; then echo "::error::UPDATE_SIGNING_KEY secret is not set"; exit 1; fi
+          cd dist
+          base="https://github.com/$GITHUB_REPOSITORY/releases/download/v$VERSION"
+          asset() { # file -> JSON object
+            jq -n --arg f "$1" --arg u "$base/$1" --arg s "$(sha256sum "$1" | cut -d' ' -f1)" \
+              --argjson n "$(stat -c%s "$1")" '{file:$f, url:$u, sha256:$s, size:$n}'
+          }
+          # The app installs the MSI (silent in-place upgrade); the Setup.exe is for first installs.
+          jq -n --arg v "$VERSION" --argjson c "$CODE" --arg t "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --rawfile notes "../release-notes/$VERSION.md" \
+            --argjson a "$(asset "MusicPlayer-$VERSION.apk")" \
+            --argjson w "$(asset "MusicPlayer-$VERSION.msi")" \
+            '{version:$v, versionCode:$c, publishedAt:$t, notes:$notes, android:$a, windows:$w}' > latest.json
+          printf '%s\n' "$UPDATE_SIGNING_KEY" > ../signing.pem
+          openssl pkeyutl -sign -inkey ../signing.pem -rawin -in latest.json | base64 -w0 > latest.json.sig
+          rm ../signing.pem
+          sha256sum MusicPlayer-* latest.json > SHA256SUMS.txt
+          cat latest.json
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          gh release create "v$VERSION" dist/* \
+            --title "Music Player $VERSION" \
+            --notes-file "release-notes/$VERSION.md" \
+            --latest

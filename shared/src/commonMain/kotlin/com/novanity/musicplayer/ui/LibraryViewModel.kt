@@ -168,6 +168,9 @@ class LibraryViewModel(
 
     fun setSortOrder(order: SortOrder) = settings.setSortOrder(order)
 
+    val discordPresence: StateFlow<Boolean> = settings.discordPresence
+    fun setDiscordPresence(enabled: Boolean) = settings.setDiscordPresence(enabled)
+
     val crossfadeSeconds: StateFlow<Int> = settings.crossfadeSeconds
     fun setCrossfadeSeconds(value: Int) = settings.setCrossfadeSeconds(value)
     val eqEnabled: StateFlow<Boolean> = settings.eqEnabled

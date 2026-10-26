@@ -33,6 +33,7 @@ import com.novanity.musicplayer.data.db.AppDatabase
 import com.novanity.musicplayer.data.db.AppDatabase.Companion.configure
 import com.novanity.musicplayer.desktop.audio.FfmpegPlayerController
 import com.novanity.musicplayer.lyrics.LyricsLoader
+import com.novanity.musicplayer.update.UpdateManager
 import com.novanity.musicplayer.platform.LocalPlatform
 import com.novanity.musicplayer.ui.LibraryViewModel
 import com.novanity.musicplayer.ui.MusicPlayerRoot
@@ -68,10 +69,15 @@ class DesktopApp {
     val player = PlayerViewModel(FfmpegPlayerController(graph, scope) { message -> library.notify(message) }, graph.settings)
     val rootUi = RootUiState()
 
+    /** Set by main(): closes the window so the updater can replace the app's files. */
+    var exitApp: () -> Unit = {}
+    val updates = UpdateManager(DesktopUpdatePlatform { exitApp() }, graph.settings, scope)
+
     init {
         ArtworkLoader.provider = DesktopArtworkProvider()
         LyricsLoader.provider = DesktopLyricsProvider()
         PathLabels.roots = desktopStorageRoots()
+        updates.checkOnLaunch()
     }
 
     /** Keyboard shortcuts for the whole window (only keys the focused control didn't use). */
@@ -113,6 +119,10 @@ fun main() {
     application {
         val app = remember { DesktopApp() }
         val icon = remember { loadIcon() }
+        app.exitApp = {
+            app.player.shutdown()
+            exitApplication()
+        }
         val windowState = rememberWindowState(size = DpSize(1280.dp, 820.dp), position = WindowPosition(Alignment.Center))
 
         DisposableEffect(Unit) {
@@ -146,7 +156,7 @@ fun main() {
             CompositionLocalProvider(LocalPlatform provides platform) {
                 MusicPlayerTheme(darkTheme = dark, dynamicColor = false) {
                     Surface(color = MaterialTheme.colorScheme.background) {
-                        MusicPlayerRoot(app.library, app.player, app.rootUi)
+                        MusicPlayerRoot(app.library, app.player, app.rootUi, app.updates)
                     }
                 }
             }

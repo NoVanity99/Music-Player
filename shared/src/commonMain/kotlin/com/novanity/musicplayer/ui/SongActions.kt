@@ -16,6 +16,7 @@ import com.novanity.musicplayer.ui.components.MenuAction
 class SongActions(
     val player: PlayerViewModel,
     val library: LibraryViewModel,
+    val updates: com.novanity.musicplayer.update.UpdateManager? = null,
 ) {
     /** Shows a short message (a snackbar on every platform). */
     fun toast(msg: String) = library.notify(msg)

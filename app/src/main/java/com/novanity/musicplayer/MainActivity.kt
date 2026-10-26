@@ -60,6 +60,8 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         volumeControlStream = AudioManager.STREAM_MUSIC
         handleIntent(intent)
+        val updates = (application as MusicApp).updates
+        if (savedInstanceState == null) updates.checkOnLaunch()
 
         val container = appContainer
         setContent {
@@ -82,12 +84,18 @@ class MainActivity : ComponentActivity() {
                 MusicPlayerTheme(darkTheme = dark, dynamicColor = dynamicColor) {
                     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                         PermissionGate {
-                            MusicPlayerRoot(libraryViewModel, playerViewModel, rootUiState)
+                            MusicPlayerRoot(libraryViewModel, playerViewModel, rootUiState, updates)
                         }
                     }
                 }
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Back from "Install unknown apps": continue a pending update install.
+        (application as MusicApp).updates.resumeInstall()
     }
 
     override fun onNewIntent(intent: Intent) {
