@@ -11,7 +11,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -65,6 +67,7 @@ fun HomeScreen(actions: SongActions, contentPadding: PaddingValues) {
     val home by vm.home.collectAsStateWithLifecycle()
     val liked by vm.likedSongs.collectAsStateWithLifecycle()
     val grouped by vm.grouped.collectAsStateWithLifecycle()
+    val syncing by vm.syncing.collectAsStateWithLifecycle()
     val accentWash = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
 
     Box(Modifier.fillMaxSize()) {
@@ -95,6 +98,7 @@ fun HomeScreen(actions: SongActions, contentPadding: PaddingValues) {
             else -> LazyColumn(Modifier.fillMaxSize(), contentPadding = contentPadding) {
                 item { Spacer(Modifier.statusBarsPadding()) }
                 item { HomeHeader(onSettings = { vm.open(Destination.Settings) }) }
+                if (syncing) item { SyncingBanner() }
                 item {
                     QuickPicksGrid(home.quickPicks) { pick ->
                         when (pick) {
@@ -171,6 +175,22 @@ private fun HomeHeader(onSettings: () -> Unit) {
     ) {
         Text(greeting(), style = MaterialTheme.typography.headlineLarge, modifier = Modifier.weight(1f))
         IconButton(onClick = onSettings) { Icon(Icons.Rounded.Settings, contentDescription = "Settings") }
+    }
+}
+
+@Composable
+private fun SyncingBanner() {
+    Row(
+        Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp)
+        Spacer(Modifier.width(10.dp))
+        Text(
+            "Checking your music folder for new songs\u2026",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 

@@ -1,8 +1,6 @@
 package com.novanity.musicplayer.ui.screens
 
 import android.os.Build
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -14,7 +12,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -24,18 +21,17 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.rounded.Checklist
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.CreateNewFolder
 import androidx.compose.material.icons.rounded.DarkMode
 import androidx.compose.material.icons.rounded.Folder
+import androidx.compose.material.icons.rounded.FolderOff
 import androidx.compose.material.icons.rounded.LightMode
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.PhoneAndroid
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Shield
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -45,7 +41,6 @@ import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -58,13 +53,14 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.novanity.musicplayer.data.DeviceFolder
 import com.novanity.musicplayer.data.ThemeMode
 import com.novanity.musicplayer.data.friendlyPath
-import com.novanity.musicplayer.data.pathIsIn
-import com.novanity.musicplayer.data.treeUriToPath
+import com.novanity.musicplayer.data.isIn
+import com.novanity.musicplayer.ui.components.FolderBrowser
 import com.novanity.musicplayer.ui.SongActions
 import com.novanity.musicplayer.ui.components.songCount
+
+private enum class Browse { ADD, IGNORE }
 
 @Composable
 fun SettingsScreen(actions: SongActions, contentPadding: PaddingValues) {
@@ -72,20 +68,10 @@ fun SettingsScreen(actions: SongActions, contentPadding: PaddingValues) {
     val theme by vm.themeMode.collectAsStateWithLifecycle()
     val dynamic by vm.dynamicColor.collectAsStateWithLifecycle()
     val included by vm.includedFolders.collectAsStateWithLifecycle()
-    val deviceFolders by vm.deviceFolders.collectAsStateWithLifecycle()
+    val excluded by vm.excludedFolders.collectAsStateWithLifecycle()
+    val syncing by vm.syncing.collectAsStateWithLifecycle()
     val lib by vm.grouped.collectAsStateWithLifecycle()
-    var choosing by remember { mutableStateOf(false) }
-
-    val pickFolder = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
-        if (uri == null) return@rememberLauncherForActivityResult
-        val path = treeUriToPath(uri)
-        if (path == null) {
-            actions.toast("That location isn't on this phone's storage. Pick a folder on internal storage or an SD card.")
-        } else {
-            vm.addFolder(path)
-            actions.toast("Added ${friendlyPath(path)}")
-        }
-    }
+    var browse by remember { mutableStateOf<Browse?>(null) }
 
     LazyColumn(
         Modifier.fillMaxSize(),
@@ -109,54 +95,71 @@ fun SettingsScreen(actions: SongActions, contentPadding: PaddingValues) {
         item {
             SettingsCard {
                 Text(
-                    if (included.isEmpty()) {
-                        "Playing music from every folder on this phone."
-                    } else {
-                        "Only showing music from these folders (and their subfolders)."
-                    },
+                    "Music is only pulled from these folders and their subfolders. They're checked for new songs every time you open the app.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(16.dp),
                 )
-                if (included.isEmpty()) {
-                    SettingRow(Icons.Rounded.PhoneAndroid, "All folders", "${songCount(lib?.songs?.size ?: 0)} in your library")
-                } else {
-                    included.sorted().forEach { path ->
-                        val count = deviceFolders.filter { pathIsIn(it.path, path) }.sumOf { it.songCount }
-                        SettingRow(
-                            icon = Icons.Rounded.Folder,
-                            title = friendlyPath(path),
-                            subtitle = songCount(count),
-                            trailing = {
-                                IconButton(onClick = { vm.removeFolder(path) }) {
-                                    Icon(Icons.Rounded.Close, contentDescription = "Remove folder")
-                                }
-                            },
-                        )
-                    }
+                val songs = lib?.songs.orEmpty()
+                included.sorted().forEach { path ->
+                    SettingRow(
+                        icon = Icons.Rounded.Folder,
+                        title = friendlyPath(path),
+                        subtitle = songCount(songs.count { it.isIn(path) }),
+                        trailing = {
+                            IconButton(onClick = { vm.removeFolder(path) }) {
+                                Icon(Icons.Rounded.Close, contentDescription = "Stop using this folder")
+                            }
+                        },
+                    )
                 }
                 SettingRow(
                     icon = Icons.Rounded.CreateNewFolder,
                     title = "Add a folder",
-                    subtitle = "Browse your phone's storage",
-                    onClick = { pickFolder.launch(null) },
+                    subtitle = "Pull music from another folder",
+                    onClick = { browse = Browse.ADD },
                     accent = true,
                 )
                 SettingRow(
-                    icon = Icons.Rounded.Checklist,
-                    title = "Choose from detected folders",
-                    subtitle = "${deviceFolders.size} folders with music found",
-                    onClick = { choosing = true },
-                    accent = true,
+                    icon = Icons.Rounded.Refresh,
+                    title = if (syncing) "Checking for new songs\u2026" else "Check for new songs now",
+                    subtitle = "Looks through your folders for files Android hasn't picked up yet",
+                    onClick = if (syncing) null else ({ vm.checkForNewSongs() }),
+                    trailing = if (syncing) ({ CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp) }) else null,
                 )
-                if (included.isNotEmpty()) {
+            }
+        }
+
+        // ---- Ignored folders ----
+        item { GroupLabel("Ignored folders") }
+        item {
+            SettingsCard {
+                Text(
+                    if (excluded.isEmpty()) "Nothing is ignored. Ignore a folder to hide everything in it, like voice memos or audiobooks."
+                    else "Songs in these folders (and their subfolders) are hidden.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(16.dp),
+                )
+                excluded.sorted().forEach { path ->
                     SettingRow(
-                        icon = Icons.Rounded.PhoneAndroid,
-                        title = "Use all folders",
-                        subtitle = "Clear the folder selection",
-                        onClick = { vm.setIncludedFolders(emptySet()) },
+                        icon = Icons.Rounded.FolderOff,
+                        title = friendlyPath(path),
+                        subtitle = "Ignored",
+                        trailing = {
+                            IconButton(onClick = { vm.unignoreFolder(path) }) {
+                                Icon(Icons.Rounded.Close, contentDescription = "Stop ignoring")
+                            }
+                        },
                     )
                 }
+                SettingRow(
+                    icon = Icons.Rounded.FolderOff,
+                    title = "Ignore a folder",
+                    subtitle = "Hide a folder inside your music folders",
+                    onClick = { browse = Browse.IGNORE },
+                    accent = true,
+                )
             }
         }
 
@@ -209,73 +212,30 @@ fun SettingsScreen(actions: SongActions, contentPadding: PaddingValues) {
         }
     }
 
-    if (choosing) {
-        FolderChooserDialog(
-            folders = deviceFolders,
-            selected = included,
-            onConfirm = {
-                vm.setIncludedFolders(it)
-                choosing = false
+    when (browse) {
+        Browse.ADD -> FolderBrowser(
+            title = "Add a music folder",
+            confirmLabel = "Use this folder",
+            onPick = { path ->
+                vm.addFolder(path)
+                actions.toast("Added ${friendlyPath(path)}")
+                browse = null
             },
-            onDismiss = { choosing = false },
+            onDismiss = { browse = null },
         )
+        Browse.IGNORE -> FolderBrowser(
+            title = "Ignore a folder",
+            confirmLabel = "Ignore this folder",
+            startPath = included.minOrNull(),
+            onPick = { path ->
+                vm.ignoreFolder(path)
+                actions.toast("Ignoring ${friendlyPath(path)}")
+                browse = null
+            },
+            onDismiss = { browse = null },
+        )
+        null -> Unit
     }
-}
-
-@Composable
-private fun FolderChooserDialog(
-    folders: List<DeviceFolder>,
-    selected: Set<String>,
-    onConfirm: (Set<String>) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    var picked by remember { mutableStateOf(selected) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        icon = { Icon(Icons.Rounded.Folder, contentDescription = null) },
-        title = { Text("Choose music folders") },
-        text = {
-            if (folders.isEmpty()) {
-                Text("No folders with music were found on this phone yet.")
-            } else {
-                LazyColumn(Modifier.heightIn(max = 420.dp)) {
-                    items(folders, key = { it.path }) { folder ->
-                        val checked = folder.path in picked
-                        Row(
-                            Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(10.dp))
-                                .clickable { picked = if (checked) picked - folder.path else picked + folder.path }
-                                .padding(vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Checkbox(checked = checked, onCheckedChange = null)
-                            Spacer(Modifier.width(12.dp))
-                            Column(Modifier.weight(1f)) {
-                                Text(
-                                    folder.path.substringAfterLast('/').ifEmpty { folder.path },
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                                Text(
-                                    "${friendlyPath(folder.path)} • ${songCount(folder.songCount)}",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = { onConfirm(picked) }) { Text(if (picked.isEmpty()) "Use all folders" else "Save") }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
-    )
 }
 
 @Composable

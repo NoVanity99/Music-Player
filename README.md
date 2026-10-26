@@ -7,8 +7,11 @@ MediaSessionService) and Room. No ads, no analytics, no internet permission.
 
 - Home, Search and Library tabs in a streaming-app style UI: greeting + quick picks, carousels for
   recently played / recently added / artists / playlists, album-art-tinted pages and player
-- Choose which folders to pull music from (Settings → Music folders), via the system folder picker
-  or from a list of folders the app detected; defaults to everything on the device
+- Nothing is auto-detected: on first launch you pick the folder(s) music is pulled from (built-in
+  folder browser, which also allows Download; system picker as a fallback). Add more or ignore
+  subfolders later in Settings, or via "Ignore this folder" in any folder's menu
+- Every app start, the chosen folders are walked on disk and any audio files Android hasn't indexed
+  yet are handed to the media scanner, so newly copied songs appear right away
 - Scans MediaStore for all audio (skips ringtones, notifications, alarms and files under 30 s)
 - Library filters for Playlists, Albums, Artists, Songs and Folders, sorting by title / artist /
   date added, and a search with a "top result"

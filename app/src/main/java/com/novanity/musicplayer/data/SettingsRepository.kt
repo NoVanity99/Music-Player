@@ -22,9 +22,13 @@ class SettingsRepository(context: Context) {
     )
     val sortOrder: StateFlow<SortOrder> = _sortOrder.asStateFlow()
 
-    /** Absolute folder paths to include (subfolders included). Empty means "everything". */
+    /** Folders the user picked to pull music from (subfolders included). Empty = not set up yet. */
     private val _includedFolders = MutableStateFlow(prefs.getStringSet(KEY_FOLDERS, null).orEmpty().toSet())
     val includedFolders: StateFlow<Set<String>> = _includedFolders.asStateFlow()
+
+    /** Folders (and their subfolders) to leave out, even if they sit inside an included folder. */
+    private val _excludedFolders = MutableStateFlow(prefs.getStringSet(KEY_EXCLUDED, null).orEmpty().toSet())
+    val excludedFolders: StateFlow<Set<String>> = _excludedFolders.asStateFlow()
 
     fun setThemeMode(mode: ThemeMode) {
         _themeMode.value = mode
@@ -42,10 +46,18 @@ class SettingsRepository(context: Context) {
     }
 
     fun setIncludedFolders(folders: Set<String>) {
-        val normalized = folders.map { it.trimEnd('/') }.filter { it.isNotEmpty() }.toSet()
+        val normalized = normalize(folders)
         _includedFolders.value = normalized
         prefs.edit { putStringSet(KEY_FOLDERS, normalized) }
     }
+
+    fun setExcludedFolders(folders: Set<String>) {
+        val normalized = normalize(folders)
+        _excludedFolders.value = normalized
+        prefs.edit { putStringSet(KEY_EXCLUDED, normalized) }
+    }
+
+    private fun normalize(folders: Set<String>) = folders.map { it.trimEnd('/') }.filter { it.isNotEmpty() }.toSet()
 
     private inline fun <reified T : Enum<T>> enumValueOr(name: String?, default: T): T =
         enumValues<T>().firstOrNull { it.name == name } ?: default
@@ -55,5 +67,6 @@ class SettingsRepository(context: Context) {
         const val KEY_DYNAMIC = "dynamic_color"
         const val KEY_SORT = "sort_order"
         const val KEY_FOLDERS = "included_folders"
+        const val KEY_EXCLUDED = "excluded_folders"
     }
 }

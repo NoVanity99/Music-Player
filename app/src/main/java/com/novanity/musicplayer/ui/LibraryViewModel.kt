@@ -10,7 +10,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.novanity.musicplayer.data.Album
 import com.novanity.musicplayer.data.Artist
-import com.novanity.musicplayer.data.DeviceFolder
 import com.novanity.musicplayer.data.FavoritesRepository
 import com.novanity.musicplayer.data.Folder
 import com.novanity.musicplayer.data.HistoryRepository
@@ -20,6 +19,7 @@ import com.novanity.musicplayer.data.SettingsRepository
 import com.novanity.musicplayer.data.Song
 import com.novanity.musicplayer.data.SortOrder
 import com.novanity.musicplayer.data.ThemeMode
+import com.novanity.musicplayer.data.pathIsIn
 import com.novanity.musicplayer.data.db.PlaylistEntity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
@@ -158,14 +158,37 @@ class LibraryViewModel(
     val themeMode: StateFlow<ThemeMode> = settings.themeMode
     val dynamicColor: StateFlow<Boolean> = settings.dynamicColor
     val includedFolders: StateFlow<Set<String>> = settings.includedFolders
-    val deviceFolders: StateFlow<List<DeviceFolder>> = music.deviceFolders
+    val excludedFolders: StateFlow<Set<String>> = settings.excludedFolders
+    val syncing: StateFlow<Boolean> = music.syncing
+    val newSongsFound = music.newSongsFound
 
     fun setSortOrder(order: SortOrder) = settings.setSortOrder(order)
     fun setThemeMode(mode: ThemeMode) = settings.setThemeMode(mode)
     fun setDynamicColor(enabled: Boolean) = settings.setDynamicColor(enabled)
-    fun setIncludedFolders(folders: Set<String>) = settings.setIncludedFolders(folders)
-    fun addFolder(path: String) = settings.setIncludedFolders(includedFolders.value + path)
+
+    /** Start pulling music from [path] (and check it for new files right away). */
+    fun addFolder(path: String) {
+        settings.setExcludedFolders(excludedFolders.value - path)
+        // A parent folder already covers its subfolders; a new parent replaces them.
+        val current = includedFolders.value
+        if (current.any { pathIsIn(path, it) }) return
+        settings.setIncludedFolders(current.filterNot { pathIsIn(it, path) }.toSet() + path)
+        checkForNewSongs()
+    }
+
     fun removeFolder(path: String) = settings.setIncludedFolders(includedFolders.value - path)
+
+    /** Leave [path] and its subfolders out of the library. */
+    fun ignoreFolder(path: String) = settings.setExcludedFolders(excludedFolders.value + path)
+
+    fun unignoreFolder(path: String) {
+        settings.setExcludedFolders(excludedFolders.value - path)
+        checkForNewSongs()
+    }
+
+    fun checkForNewSongs() {
+        viewModelScope.launch { music.syncFolders() }
+    }
 
     /** Songs waiting for the "add to playlist" picker, if open. */
     var pendingPlaylistAdd by mutableStateOf<List<Song>?>(null)
@@ -273,7 +296,11 @@ class LibraryViewModel(
 
     init {
         music.startObserving()
-        refresh()
+        // Every app start: load what Android already knows, then check the folders for new files.
+        viewModelScope.launch {
+            music.refresh()
+            music.syncFolders()
+        }
     }
 
     fun refresh() {

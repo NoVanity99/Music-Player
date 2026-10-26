@@ -31,7 +31,7 @@ class AppContainer(context: Context) {
     private val database by lazy { AppDatabase.build(appContext) }
 
     val settings = SettingsRepository(appContext)
-    val musicRepository = MusicRepository(appContext, appScope, settings.includedFolders)
+    val musicRepository = MusicRepository(appContext, appScope, settings.includedFolders, settings.excludedFolders)
     val playlistRepository by lazy { PlaylistRepository(database.playlistDao()) }
     val historyRepository by lazy { HistoryRepository(database.historyDao()) }
     val favoritesRepository by lazy { FavoritesRepository(database.favoritesDao()) }

@@ -28,6 +28,7 @@ import androidx.compose.material.icons.automirrored.rounded.Sort
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Folder
+import androidx.compose.material.icons.rounded.FolderOff
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.LibraryMusic
 import androidx.compose.material.icons.rounded.Shuffle
@@ -123,9 +124,9 @@ fun LibraryScreen(actions: SongActions, contentPadding: PaddingValues) {
                 vm.libraryFilter == LibraryFilter.PLAYLISTS -> PlaylistsList(actions, listPadding, onCreate = { creating = true })
                 lib.isEmpty -> EmptyState(
                     Icons.Rounded.LibraryMusic,
-                    "No music found",
-                    "Choose the folders that hold your music in Settings, or rescan after copying files to your phone.",
-                    action = { Button(onClick = { vm.open(Destination.Settings) }) { Text("Choose music folders") } },
+                    "No songs in your folders",
+                    "Copy music into your chosen folder, or change folders in Settings.",
+                    action = { Button(onClick = { vm.open(Destination.Settings) }) { Text("Music folder settings") } },
                 )
                 else -> when (vm.libraryFilter) {
                     LibraryFilter.SONGS -> SongsList(actions, listPadding)
@@ -158,7 +159,10 @@ fun LibraryScreen(actions: SongActions, contentPadding: PaddingValues) {
                                 subtitle = "${songCount(folder.songs.size)} • ${friendlyPath(folder.path)}",
                                 art = { m -> GradientArt(FolderGradient, Icons.Rounded.Folder, m) },
                                 onClick = { vm.open(Destination.FolderDetail(folder.path)) },
-                                menu = actions.collectionMenu(folder.songs),
+                                menu = actions.collectionMenu(
+                                    folder.songs,
+                                    listOf(MenuAction("Ignore this folder", Icons.Rounded.FolderOff) { actions.ignoreFolder(folder.path) }),
+                                ),
                             )
                         }
                     }

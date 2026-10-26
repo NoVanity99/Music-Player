@@ -108,6 +108,7 @@ class ScreenshotTest {
         albums.forEachIndexed { a, album -> ArtworkLoader.putForTest(100L + a, art(album.colors)) }
         container.musicRepository.scanOverride = { songs }
         container.settings.setThemeMode(ThemeMode.DARK)
+        container.settings.setIncludedFolders(setOf("/storage/emulated/0/Music", "/storage/emulated/0/Download"))
         runBlocking {
             container.musicRepository.refresh()
             listOf(1L, 6L, 12L, 18L, 22L).forEach { container.favoritesRepository.setLiked(it, true) }
@@ -198,14 +199,21 @@ class ScreenshotTest {
         compose.runOnUiThread { library.open(Destination.PlaylistDetail(1L)) }
         shot("10_playlist")
         compose.runOnUiThread {
-            container.settings.setIncludedFolders(setOf("/storage/emulated/0/Music/Neon Harbor"))
+            container.settings.setExcludedFolders(setOf("/storage/emulated/0/Music/The Pines"))
             library.open(Destination.Settings)
         }
         shot("11_settings")
-        compose.runOnUiThread { container.settings.setIncludedFolders(emptySet()) }
+        compose.runOnUiThread { container.settings.setExcludedFolders(emptySet()) }
 
         compose.runOnUiThread { rootUi.nowPlayingOpen = true }
         shot("12_now_playing")
+    }
+
+    @Test
+    fun firstRunAsksForAFolder() {
+        launch()
+        compose.runOnUiThread { container.settings.setIncludedFolders(emptySet()) }
+        shot("00_choose_folder")
     }
 
     @Test

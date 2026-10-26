@@ -16,6 +16,8 @@ data class Song(
     val disc: Int,
     val dateAdded: Long,
     val folderPath: String,
+    /** Absolute path of the file, when MediaStore reports one. */
+    val filePath: String = "",
 ) {
     val albumArtUri: Uri get() = Uri.parse("content://media/external/audio/albumart/$albumId")
 }

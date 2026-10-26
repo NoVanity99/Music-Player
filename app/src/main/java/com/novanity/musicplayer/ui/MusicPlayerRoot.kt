@@ -31,6 +31,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
@@ -48,6 +49,7 @@ import com.novanity.musicplayer.ui.components.AddToPlaylistDialog
 import com.novanity.musicplayer.ui.components.LocalNowPlaying
 import com.novanity.musicplayer.ui.components.NowPlayingInfo
 import com.novanity.musicplayer.ui.screens.DetailScreen
+import com.novanity.musicplayer.ui.screens.FolderSetupScreen
 import com.novanity.musicplayer.ui.screens.HomeScreen
 import com.novanity.musicplayer.ui.screens.LibraryScreen
 import com.novanity.musicplayer.ui.screens.MiniPlayer
@@ -82,6 +84,19 @@ fun MusicPlayerRoot(container: AppContainer, uiState: RootUiState) {
     val likedIds by library.likedIds.collectAsStateWithLifecycle()
     val currentSong = state.current?.songId?.let(songsById::get)
     val stateHolder = rememberSaveableStateHolder()
+
+    val includedFolders by library.includedFolders.collectAsStateWithLifecycle()
+    LaunchedEffect(library) {
+        library.newSongsFound.collect { n ->
+            Toast.makeText(context, if (n == 1) "Found 1 new song" else "Found $n new songs", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // No folder chosen yet: nothing is auto-detected, so ask where the music lives.
+    if (includedFolders.isEmpty()) {
+        FolderSetupScreen(actions)
+        return
+    }
 
     BackHandler(enabled = library.backStack.isNotEmpty() || library.tab != Tab.HOME) { library.back() }
 

@@ -82,10 +82,23 @@ object MediaStoreScanner {
                     disc = rawTrack / 1000,
                     dateAdded = c.getLong(dateCol),
                     folderPath = folder,
+                    filePath = data.orEmpty(),
                 )
             }
             songs
         }
+    }
+
+    /** Every audio file path MediaStore has indexed (no filters), used to spot new files on disk. */
+    @Suppress("DEPRECATION")
+    fun knownAudioPaths(context: Context): Set<String> = try {
+        context.contentResolver.query(collection, arrayOf(AudioColumns.DATA), null, null, null)?.use { c ->
+            val paths = HashSet<String>(c.count)
+            while (c.moveToNext()) c.getString(0)?.let(paths::add)
+            paths
+        }.orEmpty()
+    } catch (e: SecurityException) {
+        emptySet()
     }
 
     private fun String?.cleanTag(): String? =

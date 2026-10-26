@@ -29,6 +29,7 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.DragHandle
 import androidx.compose.material.icons.rounded.Folder
+import androidx.compose.material.icons.rounded.FolderOff
 import androidx.compose.material.icons.rounded.HeartBroken
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.MoreVert
@@ -362,7 +363,16 @@ private fun FolderScreen(path: String, actions: SongActions, contentPadding: Pad
     val likedIds by vm.likedIds.collectAsStateWithLifecycle()
     val folder = lib?.foldersByPath?.get(path) ?: return Missing(contentPadding, lib == null, { vm.back() })
     val tint = FolderGradient.first()
-    CollectionScaffold(folder.name, tint, { vm.back() }, actions.collectionMenu(folder.songs), contentPadding) {
+    val menu = actions.collectionMenu(
+        folder.songs,
+        listOf(
+            MenuAction("Ignore this folder", Icons.Rounded.FolderOff) {
+                vm.back()
+                actions.ignoreFolder(folder.path)
+            },
+        ),
+    )
+    CollectionScaffold(folder.name, tint, { vm.back() }, menu, contentPadding) {
         item {
             Hero(tint, { m -> GradientArt(FolderGradient, Icons.Rounded.Folder, m, RoundedCornerShape(10.dp)) }, folder.name, null,
                 friendlyPath(folder.path) + "\n" + meta("Folder", folder.songs))

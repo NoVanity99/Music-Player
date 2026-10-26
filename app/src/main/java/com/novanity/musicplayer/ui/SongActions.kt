@@ -11,6 +11,7 @@ import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.SkipNext
 import com.novanity.musicplayer.data.Song
+import com.novanity.musicplayer.data.friendlyPath
 import com.novanity.musicplayer.ui.components.MenuAction
 
 /** Shared song/collection actions so every list behaves the same. */
@@ -26,6 +27,11 @@ class SongActions(
 
     fun shuffle(songs: List<Song>, source: String? = null) =
         player.playSongs(songs, shuffle = true, source = source)
+
+    fun ignoreFolder(path: String) {
+        library.ignoreFolder(path)
+        toast("Ignoring ${friendlyPath(path)} \u2022 undo in Settings")
+    }
 
     fun toggleLike(song: Song, liked: Boolean) {
         library.setLiked(song, !liked)
