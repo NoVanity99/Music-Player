@@ -1,5 +1,6 @@
 package com.novanity.musicplayer.ui
 
+import com.novanity.musicplayer.ui.components.ArtistLinks
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -334,8 +335,7 @@ private fun NowPlayingBar(
                 Column(Modifier.weight(1f, fill = false)) {
                     Text(current.title, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.clickable { song?.let { actions.library.open(Destination.AlbumDetail(it.albumId)) } })
-                    Text(current.artist, style = MaterialTheme.typography.bodySmall, color = muted, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.clickable { song?.let { actions.library.open(Destination.ArtistDetail(it.artist)) } })
+                    ArtistLinks(current.artist, actions.library, MaterialTheme.typography.bodySmall, color = muted)
                 }
                 if (song != null) {
                     val liked = song.id in likedIds

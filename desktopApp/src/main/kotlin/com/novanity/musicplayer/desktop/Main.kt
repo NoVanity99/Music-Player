@@ -72,8 +72,14 @@ class DesktopApp {
         storeFactory = { name -> PropertiesStore(File(DesktopPaths.dataDir, "$name.properties")) },
         librarySource = FileLibrarySource(File(DesktopPaths.cacheDir, "library.json")),
         appScope = scope,
+        httpGet = { url ->
+            kotlinx.coroutines.withContext(Dispatchers.IO) {
+                val (status, body) = com.novanity.musicplayer.updatecore.UpdateCore.getText(url, BIO_USER_AGENT)
+                com.novanity.musicplayer.data.HttpText(status, body)
+            }
+        },
     )
-    val library = LibraryViewModel(graph.musicRepository, graph.playlistRepository, graph.historyRepository, graph.favoritesRepository, graph.settings)
+    val library = LibraryViewModel(graph.musicRepository, graph.playlistRepository, graph.historyRepository, graph.favoritesRepository, graph.settings, graph.artistBios)
     val player = PlayerViewModel(FfmpegPlayerController(graph, scope) { message -> library.notify(message) }, graph.settings)
     val rootUi = RootUiState()
     private val artwork = DesktopArtworkProvider()
@@ -243,3 +249,6 @@ fun main() {
         }
     }
 }
+
+/** Wikipedia asks API clients to identify themselves. */
+private const val BIO_USER_AGENT = "VanityPlayer/Desktop (https://github.com/NoVanity99/Music-Player)"

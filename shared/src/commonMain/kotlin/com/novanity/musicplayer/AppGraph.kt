@@ -17,6 +17,8 @@ class AppGraph(
     storeFactory: (name: String) -> KeyValueStore,
     librarySource: LibrarySource,
     val appScope: CoroutineScope,
+    /** HTTP GET for artist bios; null leaves bios off (tests). */
+    httpGet: (suspend (url: String) -> com.novanity.musicplayer.data.HttpText)? = null,
 ) {
     private val database by lazy(databaseFactory)
 
@@ -26,4 +28,5 @@ class AppGraph(
     val historyRepository by lazy { HistoryRepository(database.historyDao()) }
     val favoritesRepository by lazy { FavoritesRepository(database.favoritesDao()) }
     val playbackStateStore = PlaybackStateStore(storeFactory("playback_state"))
+    val artistBios = httpGet?.let { com.novanity.musicplayer.data.ArtistBios(storeFactory("artist_bios"), it) }
 }

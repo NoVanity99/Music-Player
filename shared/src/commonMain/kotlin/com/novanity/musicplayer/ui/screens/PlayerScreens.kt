@@ -1,5 +1,6 @@
 package com.novanity.musicplayer.ui.screens
 
+import com.novanity.musicplayer.ui.components.ArtistLinks
 import androidx.compose.material.icons.automirrored.rounded.VolumeDown
 import androidx.compose.material.icons.automirrored.rounded.VolumeOff
 import androidx.compose.material.icons.automirrored.rounded.VolumeUp
@@ -309,19 +310,7 @@ fun NowPlayingScreen(
                             maxLines = 1,
                             modifier = Modifier.basicMarquee(),
                         )
-                        Text(
-                            current.artist,
-                            style = MaterialTheme.typography.titleMedium,
-                            color = Muted,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.clickable(enabled = song != null) {
-                                song?.let {
-                                    onCollapse()
-                                    actions.library.open(Destination.ArtistDetail(it.artist))
-                                }
-                            },
-                        )
+                        ArtistLinks(current.artist, actions.library, MaterialTheme.typography.titleMedium, color = Muted, onOpen = onCollapse)
                     }
                     if (song != null) {
                         IconButton(onClick = { actions.toggleLike(song, liked) }) {
@@ -398,11 +387,7 @@ fun NowPlayingScreen(
                                     onCollapse()
                                     actions.library.open(Destination.AlbumDetail(song.albumId))
                                 },
-                                MenuAction("Go to artist") {
-                                    onCollapse()
-                                    actions.library.open(Destination.ArtistDetail(song.artist))
-                                },
-                            ),
+                            ) + actions.artistMenu(song.artist, before = onCollapse),
                             icon = Icons.Rounded.MoreHoriz,
                             tint = Color.White,
                         )

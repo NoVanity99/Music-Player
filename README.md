@@ -5,7 +5,8 @@ Compose Multiplatform (Material 3) UI, Room database, Media3 playback on Android
 JavaCV) playback on desktop. No ads and no analytics. The only network access is checking GitHub
 for updates and, with Discord Rich Presence on, uploading the playing song's own cover art (from the
 file's tags or folder) to Litterbox, a temporary image host that deletes it after 72 hours, because
-Discord can only show images from the web.
+Discord can only show images from the web. Artist pages look up a short bio on English Wikipedia by artist name
+(cached, and can be turned off in Settings).
 
 ## Features
 
@@ -16,6 +17,9 @@ Discord can only show images from the web.
   folders are checked for new songs every time the app starts
 - Playlists, Liked Songs, Most Played, history, and sorting by title, artist, album, date added,
   duration or play count, plus a "Liked only" filter
+- Collaborations: credits like "Drake & Future" or "A feat. B" link to each artist separately (or
+  say the artist isn't in your library); band names like "Mumford & Sons" stay whole. Artist pages
+  show their songs, the songs they appear on, their discography and a short Wikipedia bio
 - Shuffle, repeat, an Up Next queue with drag-to-reorder, a sleep timer that fades out, playback
   speed, crossfade between songs, and synced lyrics from `.lrc` files next to each song
 - Equalizer on Android (system effect with presets)

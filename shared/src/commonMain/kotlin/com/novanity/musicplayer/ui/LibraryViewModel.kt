@@ -1,5 +1,9 @@
 package com.novanity.musicplayer.ui
 
+import com.novanity.musicplayer.data.ArtistBios
+import com.novanity.musicplayer.data.ArtistBio
+import com.novanity.musicplayer.data.ArtistPart
+import com.novanity.musicplayer.data.ArtistIndex
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
@@ -40,6 +44,8 @@ data class GroupedLibrary(
     val albums: List<Album>,
     val artists: List<Artist>,
     val folders: List<Folder>,
+    /** Splits "A & B" credits into library artists. */
+    val artistIndex: ArtistIndex = ArtistIndex(emptyList()),
 ) {
     val albumsById: Map<Long, Album> = albums.associateBy { it.id }
     val artistsByName: Map<String, Artist> = artists.associateBy { it.name }
@@ -117,6 +123,7 @@ class LibraryViewModel(
     private val history: HistoryRepository,
     private val favorites: FavoritesRepository,
     private val settings: SettingsRepository,
+    private val bios: ArtistBios? = null,
 ) : ViewModel() {
 
     // ---- Navigation: one back stack per bottom-bar tab ----
@@ -134,6 +141,27 @@ class LibraryViewModel(
     fun open(destination: Destination) {
         backStack.add(destination)
     }
+
+    /** The artists in a credit such as "Drake & Future", each with whether it has a page here. */
+    fun artistParts(credit: String): List<ArtistPart> =
+        grouped.value?.artistIndex?.resolve(credit) ?: listOf(ArtistPart(credit, credit, false))
+
+    /** Opens the artist's page, or says they aren't in the library. */
+    fun openArtist(part: ArtistPart) {
+        if (part.inLibrary && grouped.value?.artistsByName?.containsKey(part.name) == true) {
+            open(Destination.ArtistDetail(part.name))
+        } else {
+            notify("${part.text} isn't in your library")
+        }
+    }
+
+    val artistBiosEnabled: StateFlow<Boolean> = settings.artistBios
+    fun setArtistBiosEnabled(enabled: Boolean) = settings.setArtistBios(enabled)
+    val canShowBios: Boolean get() = bios != null
+
+    /** A short bio for [artist] from Wikipedia, or null (none found, offline, or turned off). */
+    suspend fun artistBio(artist: String): ArtistBio? =
+        if (settings.artistBios.value) bios?.bio(artist) else null
 
     /** Returns false when there was nothing to go back to. */
     fun back(): Boolean {
@@ -409,27 +437,40 @@ class LibraryViewModel(
     private fun group(songs: List<Song>): GroupedLibrary {
         val inAlbumOrder = compareBy<Song>({ it.disc }, { it.track }).thenBy(String.CASE_INSENSITIVE_ORDER) { it.title }
 
+        val index = ArtistIndex(songs.map { it.artist }.distinct())
+
         val albums = songs.groupBy { it.albumId }.map { (id, list) ->
             val sorted = list.sortedWith(inAlbumOrder)
             val artists = sorted.map { it.artist }.distinct()
+            // "Daft Punk" and "Daft Punk feat. Sol Vega" on one album: the album is Daft Punk's.
+            val leads = artists.map { index.resolve(it).first().name }.distinct()
             Album(
                 id = id,
                 title = sorted.first().album,
-                artist = if (artists.size == 1) artists.first() else "Various artists",
+                artist = when {
+                    artists.size == 1 -> artists.first()
+                    leads.size == 1 -> leads.first()
+                    else -> "Various artists"
+                },
                 songs = sorted,
                 dateAdded = sorted.maxOf { it.dateAdded },
             )
         }
 
-        val artists = songs.groupBy { it.artist }.map { (name, list) ->
-            val sorted = list.sortedWith(
-                compareBy(String.CASE_INSENSITIVE_ORDER) { s: Song -> s.album }.then(inAlbumOrder)
-            )
+        // Collaborations ("A & B") don't get their own artist: their songs appear on each member's page.
+        val byArtist = compareBy(String.CASE_INSENSITIVE_ORDER) { s: Song -> s.album }.then(inAlbumOrder)
+        val appearsOn = HashMap<String, MutableList<Song>>()
+        for (song in songs) {
+            val parts = index.resolve(song.artist)
+            if (parts.size > 1) parts.filter { it.inLibrary }.forEach { appearsOn.getOrPut(it.name, ::ArrayList) += song }
+        }
+        val artists = songs.filter { !index.isCollaboration(it.artist) }.groupBy { it.artist }.map { (name, list) ->
             Artist(
                 name = name,
-                songs = sorted,
+                songs = list.sortedWith(byArtist),
                 albumCount = list.distinctBy { it.albumId }.size,
                 dateAdded = list.maxOf { it.dateAdded },
+                appearsOn = appearsOn[name].orEmpty().sortedWith(byArtist),
             )
         }
 
@@ -442,7 +483,7 @@ class LibraryViewModel(
             )
         }
 
-        return GroupedLibrary(songs, albums, artists, folders)
+        return GroupedLibrary(songs, albums, artists, folders, index)
     }
 
     private fun sorted(lib: GroupedLibrary, sort: SortOrder, plays: Map<Long, Int>): LibraryUi {

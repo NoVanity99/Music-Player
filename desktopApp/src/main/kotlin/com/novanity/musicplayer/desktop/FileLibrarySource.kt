@@ -155,7 +155,13 @@ class FileLibrarySource(private val cacheFile: File) : LibrarySource {
     private fun CachedTrack.toSong(): Song {
         val folder = path.substringBeforeLast('/', "").ifEmpty { "/" }
         val albumName = album.ifEmpty { "Unknown album" }
-        val albumKey = if (album.isEmpty()) "folder:$folder" else "${albumArtist.ifEmpty { artist }.lowercase()}|${album.lowercase()}"
+        // With an album-artist tag, that names the album. Without one, group by album name within the
+        // folder, so a "feat." track doesn't split off into its own copy of the album.
+        val albumKey = when {
+            album.isEmpty() -> "folder:$folder"
+            albumArtist.isNotEmpty() -> "${albumArtist.lowercase()}|${album.lowercase()}"
+            else -> "folder:$folder|${album.lowercase()}"
+        }
         return Song(
             id = stableId(path),
             uri = path,

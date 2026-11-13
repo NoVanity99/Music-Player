@@ -1,5 +1,6 @@
 package com.novanity.musicplayer.ui.screens
 
+import androidx.compose.material.icons.rounded.Person
 import com.novanity.musicplayer.platform.LocalPlatform
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -309,6 +310,16 @@ fun SettingsScreen(actions: SongActions, contentPadding: PaddingValues) {
         item { GroupLabel("Library") }
         item {
             SettingsCard {
+                if (vm.canShowBios) {
+                    val bios by vm.artistBiosEnabled.collectAsStateWithLifecycle()
+                    SettingRow(
+                        icon = Icons.Rounded.Person,
+                        title = "Artist bios",
+                        subtitle = "Show a short bio from Wikipedia on artist pages (looked up by artist name)",
+                        onClick = { vm.setArtistBiosEnabled(!bios) },
+                        trailing = { Switch(checked = bios, onCheckedChange = vm::setArtistBiosEnabled) },
+                    )
+                }
                 SettingRow(Icons.Rounded.Refresh, "Rescan library", "Look for new or deleted songs", onClick = {
                     vm.refresh()
                     actions.toast("Rescanning…")

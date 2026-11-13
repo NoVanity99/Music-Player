@@ -32,9 +32,12 @@ data class Album(
 @Immutable
 data class Artist(
     val name: String,
+    /** Songs credited to this artist alone. */
     val songs: List<Song>,
     val albumCount: Int,
     val dateAdded: Long,
+    /** Collaborations: songs credited to this artist together with others ("A & B", "A feat. B"). */
+    val appearsOn: List<Song> = emptyList(),
 )
 
 @Immutable

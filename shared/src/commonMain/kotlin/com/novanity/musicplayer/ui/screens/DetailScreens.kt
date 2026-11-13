@@ -1,5 +1,10 @@
 package com.novanity.musicplayer.ui.screens
 
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.runtime.produceState
+import com.novanity.musicplayer.data.ArtistBio
+import com.novanity.musicplayer.ui.components.ArtistLinks
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -181,6 +186,8 @@ private fun Hero(
     subtitle: String?,
     meta: String,
     onSubtitleClick: (() -> Unit)? = null,
+    /** Shown instead of a plain [subtitle], e.g. clickable artist names. */
+    subtitleContent: (@Composable (TextAlign) -> Unit)? = null,
 ) {
     val background = MaterialTheme.colorScheme.background
     androidx.compose.foundation.layout.BoxWithConstraints(
@@ -189,7 +196,7 @@ private fun Hero(
             .background(Brush.verticalGradient(listOf(tint.copy(alpha = 0.85f), tint.copy(alpha = 0.35f), background))),
     ) {
         val wide = maxWidth >= 600.dp
-        val subtitleText: @Composable (TextAlign) -> Unit = { align ->
+        val subtitleText: @Composable (TextAlign) -> Unit = subtitleContent ?: { align ->
             if (subtitle != null) {
                 Text(
                     subtitle,
@@ -339,7 +346,9 @@ private fun AlbumScreen(albumId: Long, actions: SongActions, contentPadding: Pad
                 title = album.title,
                 subtitle = album.artist,
                 meta = meta("Album", album.songs),
-                onSubtitleClick = { vm.open(Destination.ArtistDetail(album.songs.first().artist)) },
+                subtitleContent = if (album.artist == "Various artists") null else { align ->
+                    ArtistLinks(album.artist, vm, MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary, textAlign = align)
+                },
             )
         }
         item { PlayShuffleRow(album.songs, actions, album.title) }
@@ -355,10 +364,15 @@ private fun ArtistScreen(name: String, actions: SongActions, contentPadding: Pad
     val lib by vm.grouped.collectAsStateWithLifecycle()
     val likedIds by vm.likedIds.collectAsStateWithLifecycle()
     val artist = lib?.artistsByName?.get(name) ?: return Missing(contentPadding, lib == null, { vm.back() })
+    // Discography: their own albums first, then albums they appear on as a collaborator.
     val albums = remember(artist, lib) {
-        artist.songs.map { it.albumId }.distinct().mapNotNull { lib?.albumsById?.get(it) }
+        (artist.songs + artist.appearsOn).map { it.albumId }.distinct().mapNotNull { lib?.albumsById?.get(it) }
     }
+    val everything = remember(artist) { artist.songs + artist.appearsOn }
     var expanded by rememberSaveable(name) { mutableStateOf(false) }
+    var expandedAppears by rememberSaveable(name) { mutableStateOf(false) }
+    val biosOn by vm.artistBiosEnabled.collectAsStateWithLifecycle()
+    val bio by produceState<ArtistBio?>(null, name, biosOn) { value = if (biosOn) vm.artistBio(name) else null }
     val tint by rememberArtColor(artist.songs.first(), MaterialTheme.colorScheme.surfaceContainerHigh)
     val background = MaterialTheme.colorScheme.background
 
@@ -377,7 +391,12 @@ private fun ArtistScreen(name: String, actions: SongActions, contentPadding: Pad
                 Column(Modifier.align(Alignment.BottomStart).padding(horizontal = 20.dp, vertical = 8.dp)) {
                     Text(artist.name, style = MaterialTheme.typography.displaySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     Text(
-                        "${if (artist.albumCount == 1) "1 album" else "${artist.albumCount} albums"} • ${songCount(artist.songs.size)}",
+                        "${if (artist.albumCount == 1) "1 album" else "${artist.albumCount} albums"} • ${songCount(artist.songs.size)}" +
+                            when (artist.appearsOn.size) {
+                                0 -> ""
+                                1 -> " • 1 collaboration"
+                                else -> " • ${artist.appearsOn.size} collaborations"
+                            },
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -385,11 +404,19 @@ private fun ArtistScreen(name: String, actions: SongActions, contentPadding: Pad
             }
             }
         }
-        item { PlayShuffleRow(artist.songs, actions, artist.name) }
+        item { PlayShuffleRow(everything, actions, artist.name) }
         item { SectionHeader("Songs", action = if (artist.songs.size > 5) (if (expanded) "Show less" else "See all") else null) { expanded = !expanded } }
         songItems(if (expanded) artist.songs else artist.songs.take(5), likedIds, actions, artist.name)
+        if (artist.appearsOn.isNotEmpty()) {
+            item {
+                SectionHeader("Appears on", action = if (artist.appearsOn.size > 5) (if (expandedAppears) "Show less" else "See all") else null) {
+                    expandedAppears = !expandedAppears
+                }
+            }
+            songItems(if (expandedAppears) artist.appearsOn else artist.appearsOn.take(5), likedIds, actions, artist.name)
+        }
         if (albums.isNotEmpty()) {
-            item { SectionHeader("Albums") }
+            item { SectionHeader("Discography") }
             item {
                 CardRow(albums, key = { it.id }) { album, m ->
                     AlbumCard(album, onClick = { vm.open(Destination.AlbumDetail(album.id)) }, modifier = m,
@@ -397,7 +424,47 @@ private fun ArtistScreen(name: String, actions: SongActions, contentPadding: Pad
                 }
             }
         }
+        bio?.let { item { AboutCard(it) } }
     }
+}
+
+/** "About": the artist's bio, a few lines at first, with a link to the full article. */
+@Composable
+private fun AboutCard(bio: ArtistBio) {
+    var open by rememberSaveable(bio.sourceUrl) { mutableStateOf(false) }
+    val uriHandler = LocalUriHandler.current
+    SectionHeader("About")
+    Column(
+        Modifier
+            .padding(horizontal = 16.dp)
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainer)
+            .clickable { open = !open }
+            .padding(16.dp),
+    ) {
+        Text(
+            bio.text,
+            style = MaterialTheme.typography.bodyMedium,
+            maxLines = if (open) Int.MAX_VALUE else 5,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                if (open) "Show less" else "Show more",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            Spacer(Modifier.weight(1f))
+            Text(
+                "From Wikipedia",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.clickable { runCatching { uriHandler.openUri(bio.sourceUrl) } }.padding(4.dp),
+            )
+        }
+    }
+    Spacer(Modifier.height(24.dp))
 }
 
 // ---------- Folder / Recently played / Liked ----------

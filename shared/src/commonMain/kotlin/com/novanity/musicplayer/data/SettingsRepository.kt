@@ -92,6 +92,15 @@ class SettingsRepository(private val prefs: KeyValueStore) {
         prefs.putString(KEY_LAST_PROMPTED, version)
     }
 
+    private val _artistBios = MutableStateFlow(prefs.getBoolean(KEY_ARTIST_BIOS, true))
+    /** Show a short Wikipedia bio on artist pages. */
+    val artistBios: StateFlow<Boolean> = _artistBios.asStateFlow()
+
+    fun setArtistBios(enabled: Boolean) {
+        _artistBios.value = enabled
+        prefs.putBoolean(KEY_ARTIST_BIOS, enabled)
+    }
+
     fun setDiscordPresence(enabled: Boolean) {
         _discordPresence.value = enabled
         prefs.putBoolean(KEY_DISCORD, enabled)
@@ -157,6 +166,7 @@ class SettingsRepository(private val prefs: KeyValueStore) {
         const val KEY_AUTO_UPDATE = "auto_update_check"
         const val KEY_LAST_PROMPTED = "last_prompted_version"
         const val KEY_DISCORD = "discord_presence"
+        const val KEY_ARTIST_BIOS = "artist_bios"
         const val KEY_EQ_PRESET = "eq_preset"
         const val KEY_EQ_BANDS = "eq_bands"
     }

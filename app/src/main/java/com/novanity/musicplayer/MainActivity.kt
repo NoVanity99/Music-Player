@@ -41,7 +41,7 @@ class MainActivity : ComponentActivity() {
         viewModelFactory {
             initializer {
                 val g = appContainer
-                LibraryViewModel(g.musicRepository, g.playlistRepository, g.historyRepository, g.favoritesRepository, g.settings)
+                LibraryViewModel(g.musicRepository, g.playlistRepository, g.historyRepository, g.favoritesRepository, g.settings, g.artistBios)
             }
         }
     }

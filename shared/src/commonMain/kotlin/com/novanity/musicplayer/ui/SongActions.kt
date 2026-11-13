@@ -1,5 +1,6 @@
 package com.novanity.musicplayer.ui
 
+import com.novanity.musicplayer.ui.components.artistMenuLabels
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
@@ -51,8 +52,13 @@ class SongActions(
         },
         MenuAction("Add to playlist", Icons.AutoMirrored.Rounded.PlaylistAdd) { library.requestAddToPlaylist(listOf(song)) },
         MenuAction("Go to album", Icons.Rounded.Album) { library.open(Destination.AlbumDetail(song.albumId)) },
-        MenuAction("Go to artist", Icons.Rounded.Person) { library.open(Destination.ArtistDetail(song.artist)) },
-    ) + extra
+    ) + artistMenu(song.artist) + extra
+
+    /** "Go to artist", or "Go to Drake" / "Go to Future" for a collaboration. */
+    fun artistMenu(credit: String, before: () -> Unit = {}): List<MenuAction> =
+        artistMenuLabels(library.artistParts(credit)).map { (label, part) ->
+            MenuAction(label, Icons.Rounded.Person) { before(); library.openArtist(part) }
+        }
 
     fun collectionMenu(songs: List<Song>, extra: List<MenuAction> = emptyList()): List<MenuAction> = listOf(
         MenuAction("Play next", Icons.Rounded.SkipNext) {

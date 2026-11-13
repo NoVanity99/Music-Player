@@ -41,6 +41,12 @@ class MusicApp : Application() {
             storeFactory = { name -> SharedPrefsStore(appContext, name) },
             librarySource = AndroidLibrarySource(appContext),
             appScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
+            httpGet = { url ->
+                kotlinx.coroutines.withContext(Dispatchers.IO) {
+                    val (status, body) = com.novanity.musicplayer.updatecore.UpdateCore.getText(url, BIO_USER_AGENT)
+                    com.novanity.musicplayer.data.HttpText(status, body)
+                }
+            },
         )
         ArtworkLoader.provider = AndroidArtworkProvider(appContext)
         LyricsLoader.provider = AndroidLyricsProvider(appContext)
@@ -50,3 +56,6 @@ class MusicApp : Application() {
 
 val Context.appContainer: AppGraph
     get() = (applicationContext as MusicApp).container
+
+/** Wikipedia asks API clients to identify themselves. */
+private const val BIO_USER_AGENT = "VanityPlayer/Android (https://github.com/NoVanity99/Music-Player)"

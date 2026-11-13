@@ -52,6 +52,28 @@ object UpdateCore {
         }
     }
 
+    /**
+     * GET [url] as UTF-8 text (JSON APIs such as Wikipedia's), following HTTPS redirects. Returns
+     * the status code and body for any HTTP answer; throws only when there's no answer at all.
+     */
+    fun getText(url: String, userAgent: String, maxBytes: Int = 512_000): Pair<Int, String> {
+        require(url.startsWith("https://")) { "HTTPS only" }
+        val c = URL(url).openConnection() as HttpURLConnection
+        try {
+            c.connectTimeout = 10_000
+            c.readTimeout = 15_000
+            c.setRequestProperty("User-Agent", userAgent)
+            c.setRequestProperty("Accept", "application/json")
+            val code = c.responseCode
+            val stream = (if (code in 200..299) c.inputStream else c.errorStream) ?: return code to ""
+            val bytes = stream.use { it.readNBytesCompat(maxBytes + 1) }
+            if (bytes.size > maxBytes) throw IOException("Response too large")
+            return code to bytes.toString(Charsets.UTF_8)
+        } finally {
+            c.disconnect()
+        }
+    }
+
     /** Downloads [url] to [dest] (via a temp file), reporting progress 0..1. */
     fun download(url: String, dest: File, expectedSize: Long, onProgress: (Float) -> Unit) {
         dest.parentFile?.mkdirs()
