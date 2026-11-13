@@ -78,6 +78,9 @@ abstract class HistoryDao {
     @Query("SELECT songId FROM play_history GROUP BY songId ORDER BY MAX(playedAt) DESC LIMIT :limit")
     abstract fun observeRecentSongIds(limit: Int): Flow<List<Long>>
 
+    @Query("SELECT songId, playedAt FROM play_history ORDER BY playedAt DESC")
+    abstract fun observeEvents(): Flow<List<PlayEvent>>
+
     @Query("SELECT songId, COUNT(*) AS plays FROM play_history GROUP BY songId")
     abstract fun observePlayCounts(): Flow<List<PlayCount>>
 

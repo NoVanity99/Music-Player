@@ -114,6 +114,8 @@ sealed interface Destination {
     data object MostPlayed : Destination
     data object Settings : Destination
     data object Equalizer : Destination
+    data object Stats : Destination
+    data class MixDetail(val kind: com.novanity.musicplayer.data.MixKind) : Destination
 }
 
 @OptIn(FlowPreview::class)
@@ -286,6 +288,25 @@ class LibraryViewModel(
 
     val likedIds: StateFlow<Set<Long>> = favorites.songIds.map { it.toSet() }
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
+
+    /** Every remembered play, newest first. */
+    private val playEvents = history.events.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    val statsRange = MutableStateFlow(com.novanity.musicplayer.data.StatsRange.MONTH)
+
+    /** Listening stats for [statsRange]; null until the library has loaded. */
+    val stats: StateFlow<com.novanity.musicplayer.data.ListeningStats?> = combine(grouped, playEvents, statsRange) { lib, events, range ->
+        lib?.let {
+            com.novanity.musicplayer.data.StatsCalculator.compute(
+                events, it.songs.associateBy { s -> s.id }, it.albumsById, it.artistIndex, range,
+            )
+        }
+    }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /** Today's automatic mixes ("Forgotten favorites", "Deep cuts", ...). */
+    val mixes: StateFlow<List<com.novanity.musicplayer.data.Mix>> = combine(grouped, playEvents, likedIds) { lib, events, liked ->
+        lib?.let { com.novanity.musicplayer.data.MixBuilder.build(it.songs, events, liked, it.artistIndex) }.orEmpty()
+    }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     val likedSongs: StateFlow<List<Song>> = combine(favorites.songIds, music.songs) { ids, _ ->
         val byId = music.songsById

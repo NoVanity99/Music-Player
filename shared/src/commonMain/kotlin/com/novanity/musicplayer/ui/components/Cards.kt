@@ -1,5 +1,6 @@
 package com.novanity.musicplayer.ui.components
 
+import com.novanity.musicplayer.data.Mix
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
@@ -224,6 +225,16 @@ fun ArtistCard(artist: Artist, onClick: () -> Unit, modifier: Modifier = Modifie
 @Composable
 fun PlaylistTile(playlist: PlaylistCard, onClick: () -> Unit, modifier: Modifier = Modifier.width(CardWidth), onPlay: (() -> Unit)? = null) =
     HoverCard(onClick, onPlay, modifier, art = { m -> PlaylistArt(playlist.covers, m, shape = RoundedCornerShape(8.dp)) }, title = playlist.name, subtitle = "Playlist \u2022 ${songCount(playlist.songCount)}")
+
+/** An automatic mix ("Deep cuts", ...): a gradient cover with the mix's icon. */
+@Composable
+fun MixCard(mix: Mix, icon: ImageVector, onClick: () -> Unit, modifier: Modifier = Modifier.width(CardWidth), onPlay: (() -> Unit)? = null) =
+    HoverCard(
+        onClick, onPlay, modifier,
+        art = { m -> GradientArt(mix.kind.colors, icon, m, RoundedCornerShape(8.dp), iconFraction = 0.36f) },
+        title = mix.kind.title,
+        subtitle = "Mix \u2022 ${songCount(mix.songs.size)}",
+    )
 
 /** Compact "quick pick" tile used in the Home grid (art on the left, title on the right). */
 @Composable

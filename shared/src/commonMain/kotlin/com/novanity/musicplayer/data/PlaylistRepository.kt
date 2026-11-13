@@ -33,6 +33,9 @@ class HistoryRepository(private val dao: HistoryDao) {
     /** How many times each song was played (from the last few thousand plays). */
     val playCounts: Flow<Map<Long, Int>> = dao.observePlayCounts().map { rows -> rows.associate { it.songId to it.plays } }
 
+    /** Every remembered play, newest first (the last 5,000). */
+    val events: Flow<List<com.novanity.musicplayer.data.db.PlayEvent>> = dao.observeEvents()
+
     suspend fun record(songId: Long) {
         dao.insert(PlayHistoryEntity(songId = songId, playedAt = nowMillis()))
         dao.prune(keep = 5_000)

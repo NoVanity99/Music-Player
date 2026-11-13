@@ -1,5 +1,6 @@
 package com.novanity.musicplayer.ui
 
+import androidx.compose.material.icons.rounded.Insights
 import com.novanity.musicplayer.ui.components.ArtistLinks
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.animateFloat
@@ -228,6 +229,7 @@ private fun Sidebar(library: LibraryViewModel, actions: SongActions, uiState: Ro
                 ) { library.open(Destination.PlaylistDetail(p.id)) }
             }
         }
+        NavRow(Icons.Rounded.Insights, Icons.Rounded.Insights, "Your stats", top == Destination.Stats) { library.open(Destination.Stats) }
         NavRow(Icons.Rounded.Keyboard, Icons.Rounded.Keyboard, "Shortcuts", false) { uiState.showShortcuts = true }
         NavRow(Icons.Rounded.Settings, Icons.Rounded.Settings, "Settings", top == Destination.Settings) { library.open(Destination.Settings) }
     }

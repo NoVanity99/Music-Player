@@ -1,5 +1,7 @@
 package com.novanity.musicplayer.ui.screens
 
+import com.novanity.musicplayer.ui.components.MixCard
+import androidx.compose.material.icons.rounded.Insights
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -73,6 +75,7 @@ fun HomeScreen(actions: SongActions, contentPadding: PaddingValues) {
     val grouped by vm.grouped.collectAsStateWithLifecycle()
     val syncing by vm.syncing.collectAsStateWithLifecycle()
     val mostPlayed by vm.mostPlayed.collectAsStateWithLifecycle()
+    val mixes by vm.mixes.collectAsStateWithLifecycle()
     val accentWash = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
 
     Box(Modifier.fillMaxSize()) {
@@ -86,7 +89,7 @@ fun HomeScreen(actions: SongActions, contentPadding: PaddingValues) {
         when {
             home.loading -> CircularProgressIndicator(Modifier.align(Alignment.Center))
             home.isEmpty -> Column(Modifier.statusBarsPadding()) {
-                HomeHeader(onSettings = { vm.open(Destination.Settings) })
+                HomeHeader(onSettings = { vm.open(Destination.Settings) }, onStats = { vm.open(Destination.Stats) })
                 EmptyState(
                     icon = Icons.Rounded.LibraryMusic,
                     title = "No music yet",
@@ -102,7 +105,7 @@ fun HomeScreen(actions: SongActions, contentPadding: PaddingValues) {
             }
             else -> LazyColumn(Modifier.fillMaxSize(), contentPadding = contentPadding) {
                 item { Spacer(Modifier.statusBarsPadding()) }
-                item { HomeHeader(onSettings = { vm.open(Destination.Settings) }) }
+                item { HomeHeader(onSettings = { vm.open(Destination.Settings) }, onStats = { vm.open(Destination.Stats) }) }
                 if (syncing) item { SyncingBanner() }
                 item {
                     QuickPicksGrid(home.quickPicks) { pick ->
@@ -111,6 +114,15 @@ fun HomeScreen(actions: SongActions, contentPadding: PaddingValues) {
                             is QuickPick.ShuffleAll -> grouped?.songs?.let { actions.shuffle(it, "Your library") }
                             is QuickPick.AlbumPick -> vm.open(Destination.AlbumDetail(pick.album.id))
                             is QuickPick.PlaylistPick -> vm.open(Destination.PlaylistDetail(pick.playlist.id))
+                        }
+                    }
+                }
+                if (mixes.isNotEmpty()) {
+                    item { SectionHeader("Made for you") }
+                    item {
+                        CardRow(mixes, key = { it.kind }) { mix, m ->
+                            MixCard(mix, mixIcon(mix.kind), onClick = { vm.open(Destination.MixDetail(mix.kind)) }, modifier = m,
+                                onPlay = { actions.shuffle(mix.songs, mix.kind.title) })
                         }
                     }
                 }
@@ -173,7 +185,7 @@ fun HomeScreen(actions: SongActions, contentPadding: PaddingValues) {
 }
 
 @Composable
-private fun HomeHeader(onSettings: () -> Unit) {
+private fun HomeHeader(onSettings: () -> Unit, onStats: () -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
@@ -181,6 +193,7 @@ private fun HomeHeader(onSettings: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(greeting(), style = MaterialTheme.typography.headlineLarge, modifier = Modifier.weight(1f))
+        IconButton(onClick = onStats) { Icon(Icons.Rounded.Insights, contentDescription = "Your stats") }
         IconButton(onClick = onSettings) { Icon(Icons.Rounded.Settings, contentDescription = "Settings") }
     }
 }

@@ -57,3 +57,6 @@ data class PlaylistCoverEntry(
 )
 
 data class PlayCount(val songId: Long, val plays: Int)
+
+/** One play from the history: which song and when (unix ms). */
+data class PlayEvent(val songId: Long, val playedAt: Long)

@@ -113,6 +113,8 @@ fun DetailScreen(destination: Destination, actions: SongActions, contentPadding:
         Destination.Settings -> SettingsScreen(actions, contentPadding)
         Destination.MostPlayed -> MostPlayedScreen(actions, contentPadding)
         Destination.Equalizer -> EqualizerScreen(actions, contentPadding)
+        Destination.Stats -> StatsScreen(actions, contentPadding)
+        is Destination.MixDetail -> MixScreen(destination.kind, actions, contentPadding)
     }
 }
 
@@ -122,7 +124,7 @@ fun DetailScreen(destination: Destination, actions: SongActions, contentPadding:
  * Scrolling page with a tinted hero header and a top bar that fades in once the hero scrolls away.
  */
 @Composable
-private fun CollectionScaffold(
+internal fun CollectionScaffold(
     title: String,
     tint: Color,
     onBack: () -> Unit,
@@ -181,7 +183,7 @@ private fun CollectionScaffold(
  * style), side by side on wide windows (desktop style).
  */
 @Composable
-private fun Hero(
+internal fun Hero(
     tint: Color,
     art: @Composable (Modifier) -> Unit,
     title: String,
@@ -254,7 +256,7 @@ private fun Hero(
 
 /** Play + Shuffle: full-width pills on phones, compact buttons on wide windows. */
 @Composable
-private fun PlayShuffleRow(songs: List<Song>, actions: SongActions, source: String) {
+internal fun PlayShuffleRow(songs: List<Song>, actions: SongActions, source: String) {
     androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth()) {
         val wide = maxWidth >= 600.dp
         Row(
@@ -294,7 +296,7 @@ private fun PlayShuffleRow(songs: List<Song>, actions: SongActions, source: Stri
     }
 }
 
-private fun meta(kind: String, songs: List<Song>) =
+internal fun meta(kind: String, songs: List<Song>) =
     "$kind • ${songCount(songs.size)} • ${formatTotal(songs.sumOf { it.durationMs })}"
 
 @Composable
@@ -309,7 +311,7 @@ private fun Missing(contentPadding: PaddingValues, loading: Boolean, onBack: () 
 }
 
 /** Generic song list body used by most collection pages. */
-private fun LazyListScope.songItems(
+internal fun LazyListScope.songItems(
     songs: List<Song>,
     likedIds: Set<Long>,
     actions: SongActions,
@@ -631,7 +633,7 @@ private fun LikedScreen(actions: SongActions, contentPadding: PaddingValues) {
 }
 
 @Composable
-private fun EmptyHint(text: String) {
+internal fun EmptyHint(text: String) {
     Text(
         text,
         style = MaterialTheme.typography.bodyMedium,
