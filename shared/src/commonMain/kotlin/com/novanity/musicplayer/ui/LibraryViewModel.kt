@@ -163,6 +163,10 @@ class LibraryViewModel(
     suspend fun artistBio(artist: String): ArtistBio? =
         if (settings.artistBios.value) bios?.bio(artist) else null
 
+    /** The artist's real studio albums (MusicBrainz), or null/empty when unknown or turned off. */
+    suspend fun artistAlbums(artist: String): List<com.novanity.musicplayer.data.RealAlbum>? =
+        if (settings.artistBios.value) bios?.albums(artist) else null
+
     /** Returns false when there was nothing to go back to. */
     fun back(): Boolean {
         if (backStack.isNotEmpty()) {

@@ -1,5 +1,7 @@
 package com.novanity.musicplayer.ui.screens
 
+import com.novanity.musicplayer.data.Album
+import com.novanity.musicplayer.data.RealAlbum
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.runtime.produceState
@@ -373,6 +375,9 @@ private fun ArtistScreen(name: String, actions: SongActions, contentPadding: Pad
     var expandedAppears by rememberSaveable(name) { mutableStateOf(false) }
     val biosOn by vm.artistBiosEnabled.collectAsStateWithLifecycle()
     val bio by produceState<ArtistBio?>(null, name, biosOn) { value = if (biosOn) vm.artistBio(name) else null }
+    val realAlbums by produceState<List<RealAlbum>?>(null, name, biosOn, bio) {
+        value = if (biosOn && bio != null) vm.artistAlbums(name) else null
+    }
     val tint by rememberArtColor(artist.songs.first(), MaterialTheme.colorScheme.surfaceContainerHigh)
     val background = MaterialTheme.colorScheme.background
 
@@ -425,6 +430,63 @@ private fun ArtistScreen(name: String, actions: SongActions, contentPadding: Pad
             }
         }
         bio?.let { item { AboutCard(it) } }
+        realAlbums?.takeIf { it.isNotEmpty() }?.let { list ->
+            // Their real studio albums, with the ones in your library marked and playable.
+            val owned = albums.associateBy { albumKey(it.title) }
+            item { SectionHeader("Albums") }
+            items(list, key = { "real-${it.musicBrainzId}" }) { real ->
+                RealAlbumRow(real, owned[albumKey(real.title)], onOpen = { vm.open(Destination.AlbumDetail(it.id)) })
+            }
+            item {
+                Text(
+                    "Albums from MusicBrainz",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+                )
+                Spacer(Modifier.height(24.dp))
+            }
+        }
+    }
+}
+
+/** "Random Access Memories (Deluxe)" and "random access memories" are the same album. */
+private fun albumKey(title: String) = title.lowercase()
+    .replace(Regex("""\s*[(\[][^)\]]*[)\]]"""), "")
+    .replace("&", "and")
+    .replace(Regex("""[^\p{L}\p{N}]+"""), " ")
+    .trim()
+
+@Composable
+private fun RealAlbumRow(real: RealAlbum, inLibrary: Album?, onOpen: (Album) -> Unit) {
+    val uriHandler = LocalUriHandler.current
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clickable {
+                if (inLibrary != null) onOpen(inLibrary) else runCatching { uriHandler.openUri(real.url) }
+            }
+            .padding(horizontal = 20.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            real.year ?: "—",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.width(52.dp),
+        )
+        Text(real.title, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        if (inLibrary != null) {
+            Text(
+                "In your library",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(50))
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f))
+                    .padding(horizontal = 10.dp, vertical = 4.dp),
+            )
+        }
     }
 }
 
