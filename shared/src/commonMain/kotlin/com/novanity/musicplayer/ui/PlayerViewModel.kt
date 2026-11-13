@@ -24,6 +24,7 @@ class PlayerViewModel(
 
     val state: StateFlow<PlayerUiState> = controller.state
     val upNext: StateFlow<List<QueueEntry>> = controller.upNext
+    val spectrum: StateFlow<FloatArray>? = controller.spectrum
 
     /** "Playing from" label for the Now Playing header (e.g. an album or playlist name). */
     private val _playingFrom = MutableStateFlow<String?>(null)

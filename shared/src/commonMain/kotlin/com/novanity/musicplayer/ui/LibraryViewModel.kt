@@ -157,6 +157,9 @@ class LibraryViewModel(
         }
     }
 
+    val visualizerEnabled: StateFlow<Boolean> = settings.visualizer
+    fun setVisualizerEnabled(enabled: Boolean) = settings.setVisualizer(enabled)
+
     val artistBiosEnabled: StateFlow<Boolean> = settings.artistBios
     fun setArtistBiosEnabled(enabled: Boolean) = settings.setArtistBios(enabled)
     val canShowBios: Boolean get() = bios != null

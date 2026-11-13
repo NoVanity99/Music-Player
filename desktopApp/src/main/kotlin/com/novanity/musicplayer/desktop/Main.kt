@@ -1,5 +1,7 @@
 package com.novanity.musicplayer.desktop
 
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
 import com.novanity.musicplayer.data.Song
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
@@ -83,6 +85,9 @@ class DesktopApp {
     val player = PlayerViewModel(FfmpegPlayerController(graph, scope) { message -> library.notify(message) }, graph.settings)
     val rootUi = RootUiState()
     private val artwork = DesktopArtworkProvider()
+
+    /** The mini player is open (the main window is hidden meanwhile). */
+    var miniPlayer by mutableStateOf(false)
 
     /** Set by main(): closes the window so the updater can replace the app's files. */
     var exitApp: () -> Unit = {}
@@ -170,7 +175,7 @@ class DesktopApp {
             Key.DirectionLeft -> if (ctrl) player.previousTrack() else player.seekBy(if (shift) -30_000 else -5_000)
             Key.DirectionUp -> player.changeVolume(+0.05f)
             Key.DirectionDown -> player.changeVolume(-0.05f)
-            Key.M -> player.toggleMute()
+            Key.M -> if (ctrl) miniPlayer = true else player.toggleMute()
             Key.S -> if (!ctrl) player.toggleShuffle() else return false
             Key.R -> player.cycleRepeat()
             Key.L -> library.currentLikeToggle(player)
@@ -222,12 +227,13 @@ fun main() {
             state = windowState,
             title = "Vanity Player",
             icon = icon,
+            visible = !app.miniPlayer,
             undecorated = true, // the app draws its own title bar
             onKeyEvent = app::onKey,
         ) {
             window.minimumSize = Dimension(400, 640)
             val frame = remember { WindowFrame(window) }
-            val platform = remember { DesktopPlatformUi(window, app.presence?.status) }
+            val platform = remember { DesktopPlatformUi(window, app.presence?.status, openMiniPlayer = { app.miniPlayer = true }) }
             val themeMode by app.graph.settings.themeMode.collectAsStateWithLifecycle()
             val dark = when (themeMode) {
                 ThemeMode.DARK -> true
@@ -247,6 +253,7 @@ fun main() {
                 }
             }
         }
+        if (app.miniPlayer) MiniPlayerWindow(app, icon, onExpand = { app.miniPlayer = false })
     }
 }
 

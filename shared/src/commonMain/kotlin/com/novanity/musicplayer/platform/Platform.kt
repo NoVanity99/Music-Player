@@ -63,6 +63,9 @@ interface PlatformUi {
     val supportsDiscordPresence: Boolean
     val supportsEqualizer: Boolean
 
+    /** Switches to the compact always-on-top player window, where there is one (desktop). */
+    val openMiniPlayer: (() -> Unit)? get() = null
+
     /** What Discord Rich Presence is doing right now, for Settings; null where it isn't supported. */
     val discordStatus: kotlinx.coroutines.flow.StateFlow<String>? get() = null
 

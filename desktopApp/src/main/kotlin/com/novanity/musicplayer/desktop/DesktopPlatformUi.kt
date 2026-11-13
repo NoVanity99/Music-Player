@@ -17,6 +17,7 @@ import javax.swing.filechooser.FileSystemView
 class DesktopPlatformUi(
     private val parent: java.awt.Component?,
     override val discordStatus: kotlinx.coroutines.flow.StateFlow<String>? = null,
+    override val openMiniPlayer: (() -> Unit)? = null,
 ) : PlatformUi {
     override val isDesktop = true
     override val supportsDynamicColor = false

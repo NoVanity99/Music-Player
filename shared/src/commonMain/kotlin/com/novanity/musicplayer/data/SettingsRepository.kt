@@ -92,6 +92,15 @@ class SettingsRepository(private val prefs: KeyValueStore) {
         prefs.putString(KEY_LAST_PROMPTED, version)
     }
 
+    private val _visualizer = MutableStateFlow(prefs.getBoolean(KEY_VISUALIZER, true))
+    /** Spectrum bars in the full-screen player (desktop). */
+    val visualizer: StateFlow<Boolean> = _visualizer.asStateFlow()
+
+    fun setVisualizer(enabled: Boolean) {
+        _visualizer.value = enabled
+        prefs.putBoolean(KEY_VISUALIZER, enabled)
+    }
+
     private val _artistBios = MutableStateFlow(prefs.getBoolean(KEY_ARTIST_BIOS, true))
     /** Show a short Wikipedia bio on artist pages. */
     val artistBios: StateFlow<Boolean> = _artistBios.asStateFlow()
@@ -167,6 +176,7 @@ class SettingsRepository(private val prefs: KeyValueStore) {
         const val KEY_LAST_PROMPTED = "last_prompted_version"
         const val KEY_DISCORD = "discord_presence"
         const val KEY_ARTIST_BIOS = "artist_bios"
+        const val KEY_VISUALIZER = "visualizer"
         const val KEY_EQ_PRESET = "eq_preset"
         const val KEY_EQ_BANDS = "eq_bands"
     }

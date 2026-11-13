@@ -48,6 +48,9 @@ data class PlayerUiState(
 interface PlayerController {
     val state: StateFlow<PlayerUiState>
 
+    /** Bar heights (0..1, low to high frequencies) of what's playing, where the engine can provide them. */
+    val spectrum: StateFlow<FloatArray>? get() = null
+
     /** Upcoming entries in actual play order (accounts for shuffle). */
     val upNext: StateFlow<List<QueueEntry>>
 

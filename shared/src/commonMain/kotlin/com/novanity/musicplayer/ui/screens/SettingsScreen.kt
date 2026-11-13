@@ -235,6 +235,21 @@ fun SettingsScreen(actions: SongActions, contentPadding: PaddingValues) {
             }
         }
 
+        if (actions.player.spectrum != null) {
+            item {
+                val on by vm.visualizerEnabled.collectAsStateWithLifecycle()
+                SettingsCard {
+                    SettingRow(
+                        icon = Icons.Rounded.GraphicEq,
+                        title = "Visualizer",
+                        subtitle = "Animated spectrum bars in the full-screen player",
+                        onClick = { vm.setVisualizerEnabled(!on) },
+                        trailing = { Switch(checked = on, onCheckedChange = vm::setVisualizerEnabled) },
+                    )
+                }
+            }
+        }
+
         // ---- Updates ----
         actions.updates?.let { updates ->
             item { GroupLabel("Updates") }
@@ -314,8 +329,8 @@ fun SettingsScreen(actions: SongActions, contentPadding: PaddingValues) {
                     val bios by vm.artistBiosEnabled.collectAsStateWithLifecycle()
                     SettingRow(
                         icon = Icons.Rounded.Person,
-                        title = "Artist bios",
-                        subtitle = "Show a short bio from Wikipedia on artist pages (looked up by artist name)",
+                        title = "Artist bios & albums",
+                        subtitle = "Show a short bio from Wikipedia and the artist's albums from MusicBrainz on artist pages",
                         onClick = { vm.setArtistBiosEnabled(!bios) },
                         trailing = { Switch(checked = bios, onCheckedChange = vm::setArtistBiosEnabled) },
                     )

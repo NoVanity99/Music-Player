@@ -1,5 +1,7 @@
 package com.novanity.musicplayer.ui
 
+import com.novanity.musicplayer.platform.LocalPlatform
+import androidx.compose.material.icons.rounded.PictureInPictureAlt
 import androidx.compose.material.icons.rounded.Insights
 import com.novanity.musicplayer.ui.components.ArtistLinks
 import androidx.compose.animation.core.rememberInfiniteTransition
@@ -429,6 +431,13 @@ private fun NowPlayingBar(
             }
             SlimSlider(volume, player::setVolume, color = onBar, trackColor = onBar.copy(alpha = 0.2f), modifier = Modifier.width(110.dp))
             Spacer(Modifier.width(4.dp))
+            LocalPlatform.current.openMiniPlayer?.let { openMini ->
+                Tip("Mini player (Ctrl+M)") {
+                    IconButton(onClick = openMini, enabled = current != null) {
+                        Icon(Icons.Rounded.PictureInPictureAlt, contentDescription = "Mini player", tint = muted)
+                    }
+                }
+            }
             Tip("Full-screen player") {
                 IconButton(onClick = { uiState.nowPlayingOpen = true }, enabled = current != null) {
                     Icon(Icons.Rounded.OpenInFull, contentDescription = "Open player", tint = muted)
@@ -452,6 +461,7 @@ fun ShortcutsDialog(onDismiss: () -> Unit) {
         "R" to "Repeat mode",
         "L" to "Like the current song",
         "Ctrl + F" to "Search",
+        "Ctrl + M" to "Mini player",
         "Esc" to "Close player / go back",
         "Media keys" to "Play/pause, next, previous (also in the background)",
         "Right-click" to "Song and playlist menus",

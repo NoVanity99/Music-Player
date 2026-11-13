@@ -1,5 +1,6 @@
 package com.novanity.musicplayer.ui.screens
 
+import com.novanity.musicplayer.ui.components.Visualizer
 import com.novanity.musicplayer.ui.components.ArtistLinks
 import androidx.compose.material.icons.automirrored.rounded.VolumeDown
 import androidx.compose.material.icons.automirrored.rounded.VolumeOff
@@ -231,6 +232,8 @@ fun NowPlayingScreen(
     val sleepTimer by player.sleepTimer.collectAsStateWithLifecycle()
     val sleepLabel = rememberSleepLabel(sleepTimer)
     val isDesktop = LocalPlatform.current.isDesktop
+    val spectrum = player.spectrum
+    val visualizerOn by actions.library.visualizerEnabled.collectAsStateWithLifecycle()
 
     // Drag the whole sheet down to dismiss (distance or flick), else spring back.
     val dismiss = rememberDismissDragState()
@@ -404,7 +407,12 @@ fun NowPlayingScreen(
                                 Modifier.weight(1f).fillMaxHeight().padding(vertical = 20.dp),
                                 verticalArrangement = Arrangement.Center,
                             ) {
-                                if (showLyrics) LyricsView(song, player, Modifier.weight(1f).fillMaxWidth(), Color.White, Muted)
+                                if (showLyrics) {
+                                    LyricsView(song, player, Modifier.weight(1f).fillMaxWidth(), Color.White, Muted)
+                                } else if (spectrum != null && visualizerOn) {
+                                    Visualizer(spectrum, state.isPlaying, MaterialTheme.colorScheme.primary, Color.White,
+                                        Modifier.fillMaxWidth().height(150.dp).padding(bottom = 28.dp))
+                                }
                                 details()
                             }
                         }
@@ -416,6 +424,10 @@ fun NowPlayingScreen(
                             artwork(Modifier.weight(1f).fillMaxWidth())
                         }
                         details()
+                        if (!showLyrics && spectrum != null && visualizerOn) {
+                            Visualizer(spectrum, state.isPlaying, MaterialTheme.colorScheme.primary, Color.White,
+                                Modifier.fillMaxWidth().height(56.dp).padding(bottom = 8.dp))
+                        }
                         bottomButtons()
                     }
                 }

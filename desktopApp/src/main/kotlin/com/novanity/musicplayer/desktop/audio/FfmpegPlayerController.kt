@@ -35,6 +35,9 @@ class FfmpegPlayerController(
 
     private val _state = MutableStateFlow(PlayerUiState(connected = true))
     override val state: StateFlow<PlayerUiState> = _state.asStateFlow()
+
+    private val analyzer = SpectrumAnalyzer()
+    override val spectrum: StateFlow<FloatArray> = analyzer.spectrum
     private val _upNext = MutableStateFlow<List<QueueEntry>>(emptyList())
     override val upNext: StateFlow<List<QueueEntry>> = _upNext.asStateFlow()
 
@@ -257,6 +260,7 @@ class FfmpegPlayerController(
         } else if (gain != 1f) {
             for (i in 0 until n) buffer[i] = clip(buffer[i] * gain.toDouble())
         }
+        analyzer.feed(buffer, n, gain.toDouble())
         for (i in 0 until n) {
             val s = buffer[i].toInt()
             bytes[i * 2] = (s and 0xFF).toByte()
