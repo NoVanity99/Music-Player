@@ -79,6 +79,9 @@ import androidx.compose.ui.graphics.graphicsLayer
 import com.novanity.musicplayer.ui.components.ArtworkLoader
 import androidx.compose.foundation.lazy.rememberLazyListState
 import com.novanity.musicplayer.ui.components.mouseDragScroll
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
@@ -114,7 +117,17 @@ internal fun ArtistScreen(name: String, actions: SongActions, contentPadding: Pa
     // Your own plays of this artist, for the line under the name and the "Your top" button.
     val plays by vm.playCounts.collectAsStateWithLifecycle()
     val yourTop = remember(everything, plays) {
-        everything.filter { (plays[it.id] ?: 0) > 0 }.sortedByDescending { plays[it.id] ?: 0 }.take(25)
+        everything.filter { (plays[it.id] ?: 0) > 0 }.sortedByDescending { plays[it.id] ?: 0 }.take(10)
+    }
+    // Where this artist stands among the artists you've played the most (1 to 10), or null.
+    val rank = remember(lib, plays, name) {
+        lib?.artists.orEmpty()
+            .map { a -> a.name to (a.songs + a.appearsOn).sumOf { plays[it.id] ?: 0 } }
+            .filter { it.second > 0 }
+            .sortedWith(compareByDescending<Pair<String, Int>> { it.second }.thenBy { it.first.lowercase() })
+            .take(10)
+            .indexOfFirst { it.first == artist.name }
+            .takeIf { it >= 0 }?.plus(1)
     }
     val yourPlays = remember(everything, plays) { everything.sumOf { plays[it.id] ?: 0 } }
 
@@ -166,7 +179,7 @@ internal fun ArtistScreen(name: String, actions: SongActions, contentPadding: Pa
                 }
             }
         }
-        item { Box(fade) { PlayAndAbout(everything, yourTop, bio, actions, artist.name) } }
+        item { Box(fade) { PlayAndAbout(everything, yourTop, rank, bio, actions, artist.name) } }
         AlbumKind.entries.forEach { kind ->
             item(key = "row-$kind") {
                 Box(fade) {
@@ -181,7 +194,7 @@ internal fun ArtistScreen(name: String, actions: SongActions, contentPadding: Pa
 
 /** Play and Shuffle, with the artist's bio beside them on wide windows and below them on phones. */
 @Composable
-private fun PlayAndAbout(songs: List<Song>, yourTop: List<Song>, bio: ArtistBio?, actions: SongActions, source: String) {
+private fun PlayAndAbout(songs: List<Song>, yourTop: List<Song>, rank: Int?, bio: ArtistBio?, actions: SongActions, source: String) {
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         val wide = maxWidth >= 720.dp
         val side = if (maxWidth >= 600.dp) 32.dp else 24.dp
@@ -213,18 +226,28 @@ private fun PlayAndAbout(songs: List<Song>, yourTop: List<Song>, bio: ArtistBio?
                 Text("Shuffle", style = MaterialTheme.typography.titleSmall)
             }
         }
-        // The songs by this artist you play the most, most played first.
+        // Your ten most played songs by this artist, shuffled. Greyed out until there are ten.
         val top: @Composable (Modifier) -> Unit = { m ->
-            if (yourTop.size >= 3) {
-                OutlinedButton(
-                    onClick = { actions.play(yourTop, 0, "Your top $source") },
-                    shape = RoundedCornerShape(12.dp),
-                    contentPadding = PaddingValues(vertical = 14.dp, horizontal = 14.dp),
-                    modifier = m,
+            OutlinedButton(
+                onClick = { actions.shuffle(yourTop, "Your top 10 $source") },
+                enabled = yourTop.size >= 10,
+                shape = RoundedCornerShape(12.dp),
+                contentPadding = PaddingValues(vertical = 14.dp, horizontal = 14.dp),
+                modifier = m,
+            ) {
+                Icon(Icons.Rounded.Favorite, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("Your top 10 songs", style = MaterialTheme.typography.titleSmall, maxLines = 1)
+            }
+        }
+        // "#3": this artist's place among your ten most played artists.
+        val rankBadge: @Composable () -> Unit = {
+            if (rank != null) {
+                Box(
+                    Modifier.size(48.dp).background(MaterialTheme.colorScheme.primary, CircleShape).semantics { contentDescription = "Number $rank of your most played artists" },
+                    contentAlignment = Alignment.Center,
                 ) {
-                    Icon(Icons.Rounded.Favorite, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text("Your top ${yourTop.size}", style = MaterialTheme.typography.titleSmall, maxLines = 1)
+                    Text("$rank", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.onPrimary)
                 }
             }
         }
@@ -236,6 +259,7 @@ private fun PlayAndAbout(songs: List<Song>, yourTop: List<Song>, bio: ArtistBio?
             ) {
                 buttons(Modifier.width(150.dp))
                 top(Modifier)
+                rankBadge()
                 if (bio != null) {
                     Spacer(Modifier.width(12.dp))
                     About(bio, Modifier.weight(1f), collapsedLines = 3)
@@ -244,9 +268,10 @@ private fun PlayAndAbout(songs: List<Song>, yourTop: List<Song>, bio: ArtistBio?
         } else {
             Column(Modifier.fillMaxWidth().padding(horizontal = side, vertical = 16.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) { buttons(Modifier.weight(1f)) }
-                if (yourTop.size >= 3) {
-                    Spacer(Modifier.height(10.dp))
-                    top(Modifier.fillMaxWidth())
+                Spacer(Modifier.height(10.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    top(Modifier.weight(1f))
+                    rankBadge()
                 }
                 if (bio != null) {
                     Spacer(Modifier.height(14.dp))

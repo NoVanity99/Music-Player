@@ -125,7 +125,14 @@ class ScreenshotTest {
     private val rootUi = RootUiState()
 
     private fun settle() {
-        compose.waitUntil(120_000) { !library.home.value.loading } // generous: the first run after a build is slow
+        // The clock is paused (autoAdvance = false), and the Home state is delivered through the
+        // UI's own coroutines: step frames and the main thread's queue while waiting, or now and
+        // then the loaded library never reaches the screen and this waits forever.
+        compose.waitUntil(60_000) {
+            compose.mainClock.advanceTimeByFrame()
+            org.robolectric.shadows.ShadowLooper.idleMainLooper()
+            !library.home.value.loading
+        }
         repeat(6) {
             compose.mainClock.advanceTimeBy(400)
             Thread.sleep(150) // let art colors / Room flows land
