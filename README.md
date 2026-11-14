@@ -1,6 +1,6 @@
 # Vanity Player
 
-A local music player for **Android** and **Windows**, built from one Kotlin Multiplatform codebase:
+A music player for your own cloud library, for **Android** and **Windows**, built from one Kotlin Multiplatform codebase:
 Compose Multiplatform (Material 3) UI, Room database, Media3 playback on Android, FFmpeg (via
 JavaCV) playback on desktop. No ads and no analytics. The only network access is checking GitHub
 for updates and, with Discord Rich Presence on, uploading the playing song's own cover art (from the
