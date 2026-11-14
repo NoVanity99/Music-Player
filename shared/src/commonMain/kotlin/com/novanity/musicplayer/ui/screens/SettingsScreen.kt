@@ -1,5 +1,10 @@
 package com.novanity.musicplayer.ui.screens
 
+import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.border
+import androidx.compose.animation.core.animateDpAsState
+import com.novanity.musicplayer.data.AccentColor
 import com.novanity.musicplayer.data.CloudStatus
 import androidx.compose.material.icons.rounded.Person
 import com.novanity.musicplayer.platform.LocalPlatform
@@ -192,6 +197,35 @@ fun SettingsScreen(actions: SongActions, contentPadding: PaddingValues) {
                         }
                     }
                 }
+                // Accent colour: a row of swatches, the chosen one ringed.
+                val accent by vm.accent.collectAsStateWithLifecycle()
+                Column(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp)) {
+                    Text("Accent colour", style = MaterialTheme.typography.titleSmall)
+                    Spacer(Modifier.height(12.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                        AccentColor.entries.forEach { option ->
+                            val selected = option == accent
+                            val ring by animateDpAsState(if (selected) 3.dp else 0.dp, label = "ring")
+                            Box(
+                                Modifier
+                                    .size(38.dp)
+                                    .border(ring, MaterialTheme.colorScheme.onSurface, CircleShape)
+                                    .padding(5.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(option.argb))
+                                    .clickable(onClickLabel = option.label) { vm.setAccent(option) },
+                            )
+                        }
+                    }
+                }
+                val pureBlack by vm.pureBlack.collectAsStateWithLifecycle()
+                SettingRow(
+                    icon = Icons.Rounded.DarkMode,
+                    title = "Pure black",
+                    subtitle = "True-black backgrounds in the dark theme",
+                    onClick = { vm.setPureBlack(!pureBlack) },
+                    trailing = { Switch(checked = pureBlack, onCheckedChange = vm::setPureBlack) },
+                )
                 if (LocalPlatform.current.supportsDynamicColor) {
                     SettingRow(
                         icon = Icons.Rounded.Palette,

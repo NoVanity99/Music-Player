@@ -95,7 +95,9 @@ class MainActivity : ComponentActivity() {
                 enableEdgeToEdge(statusBarStyle = style, navigationBarStyle = style)
             }
             CompositionLocalProvider(LocalPlatform provides platform) {
-                MusicPlayerTheme(darkTheme = dark, dynamicColor = dynamicColor) {
+                val accent by container.settings.accent.collectAsStateWithLifecycle()
+                val pureBlack by container.settings.pureBlack.collectAsStateWithLifecycle()
+                MusicPlayerTheme(darkTheme = dark, dynamicColor = dynamicColor, accent = accent, pureBlack = pureBlack) {
                     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                         MusicPlayerRoot(libraryViewModel, playerViewModel, rootUiState, updates)
                     }

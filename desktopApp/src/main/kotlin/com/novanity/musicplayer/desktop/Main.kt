@@ -276,7 +276,9 @@ fun main() {
                 ThemeMode.SYSTEM -> isSystemInDarkTheme()
             }
             CompositionLocalProvider(LocalPlatform provides platform) {
-                MusicPlayerTheme(darkTheme = dark, dynamicColor = false) {
+                val accent by app.graph.settings.accent.collectAsStateWithLifecycle()
+                val pureBlack by app.graph.settings.pureBlack.collectAsStateWithLifecycle()
+                MusicPlayerTheme(darkTheme = dark, dynamicColor = false, accent = accent, pureBlack = pureBlack) {
                     val playerState by app.player.state.collectAsStateWithLifecycle()
                     // White controls over the full-screen player, theme colours elsewhere.
                     val overPlayer = app.rootUi.nowPlayingOpen && playerState.hasMedia

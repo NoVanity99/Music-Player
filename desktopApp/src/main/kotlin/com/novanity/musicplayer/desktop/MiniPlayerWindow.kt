@@ -83,7 +83,8 @@ fun MiniPlayerWindow(app: DesktopApp, icon: Painter?, onExpand: () -> Unit) {
     ) {
         val platform = remember { DesktopPlatformUi(window) }
         CompositionLocalProvider(LocalPlatform provides platform) {
-            MusicPlayerTheme(darkTheme = true, dynamicColor = false) {
+            val accent by app.graph.settings.accent.collectAsStateWithLifecycle()
+            MusicPlayerTheme(darkTheme = true, dynamicColor = false, accent = accent) {
                 WindowDraggableArea {
                     MiniPlayerContent(app, onExpand)
                 }

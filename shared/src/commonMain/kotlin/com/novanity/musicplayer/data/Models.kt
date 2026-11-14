@@ -34,6 +34,7 @@ data class Song(
 /** The four kinds of release an artist page is organised by. */
 enum class AlbumKind(val title: String, val empty: String) {
     CUSTOM("Custom albums", "No custom albums yet"),
+    UNRELEASED("Unreleased songs", "No unreleased songs yet"),
     RELEASED("Released albums", "No released albums yet"),
     EP("EPs", "No EPs yet"),
     SINGLE("Singles", "No singles yet"),
@@ -43,6 +44,7 @@ enum class AlbumKind(val title: String, val empty: String) {
         /** From the server's "albumType"; anything unknown is a custom album. */
         fun parse(value: String?): AlbumKind = when (value?.lowercase()) {
             "released", "album" -> RELEASED
+            "unreleased" -> UNRELEASED
             "ep" -> EP
             "single" -> SINGLE
             else -> CUSTOM
@@ -90,6 +92,16 @@ enum class SortOrder(val label: String) {
     DATE_ADDED("Recently added"),
     DURATION("Duration"),
     MOST_PLAYED("Most played"),
+}
+
+/** The app's highlight colour (buttons, the playing song, switches). */
+enum class AccentColor(val label: String, val argb: Long) {
+    ROSE("Rose", 0xFFFF375F),
+    ORANGE("Orange", 0xFFFF9F0A),
+    GREEN("Green", 0xFF30D158),
+    TEAL("Teal", 0xFF40C8E0),
+    BLUE("Blue", 0xFF0A84FF),
+    PURPLE("Purple", 0xFFBF5AF2),
 }
 
 enum class ThemeMode(val label: String) {

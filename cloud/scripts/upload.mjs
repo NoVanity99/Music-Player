@@ -31,6 +31,7 @@ const AUDIO = { ".mp3": "audio/mpeg", ".flac": "audio/flac", ".m4a": "audio/mp4"
  */
 const ALBUM_TYPES = [
   [/^(released|released albums?|albums?|studio albums?)$/i, "released"],
+  [/^(unreleased|unreleased songs?|leaks?)$/i, "unreleased"],
   [/^(eps?|e\.p\.s?)$/i, "ep"],
   [/^(singles?)$/i, "single"],
 ];

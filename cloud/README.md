@@ -43,9 +43,9 @@ npm run upload -- "C:\Users\you\Music"
 
 - Reads tags (title, artist, album, track, duration, embedded cover or `cover.jpg`).
 - Each song's id is the SHA-256 of its file. Re-running uploads only new or changed files.
-- Artist pages have four rows: custom albums, released albums, EPs and singles. A release goes
-  in a row when it's inside a folder named `Released Albums` (or `Albums`), `EPs` or `Singles`,
-  at any level; everything else is a custom album. Re-run the upload after moving folders.
+- Artist pages have five rows: custom albums, unreleased songs, released albums, EPs and singles.
+  Music goes in a row when it's inside a folder named `Unreleased`, `Released Albums` (or
+  `Albums`), `EPs` or `Singles`, at any level; everything else is a custom album. Re-run the upload after moving folders.
 - Add `--prune` to also remove songs from the cloud that are no longer in the folder.
 - Add `--dry-run` to see what would happen.
 

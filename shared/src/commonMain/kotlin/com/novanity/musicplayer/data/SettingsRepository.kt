@@ -139,6 +139,23 @@ class SettingsRepository(private val prefs: KeyValueStore) {
         prefs.putInt(KEY_CROSSFADE, _crossfadeSeconds.value)
     }
 
+    private val _accent = MutableStateFlow(enumValueOr(prefs.getString(KEY_ACCENT), AccentColor.ROSE))
+    val accent: StateFlow<AccentColor> = _accent.asStateFlow()
+
+    fun setAccent(color: AccentColor) {
+        _accent.value = color
+        prefs.putString(KEY_ACCENT, color.name)
+    }
+
+    private val _pureBlack = MutableStateFlow(prefs.getBoolean(KEY_PURE_BLACK, false))
+    /** Dark theme with true-black backgrounds (saves power on OLED screens). */
+    val pureBlack: StateFlow<Boolean> = _pureBlack.asStateFlow()
+
+    fun setPureBlack(enabled: Boolean) {
+        _pureBlack.value = enabled
+        prefs.putBoolean(KEY_PURE_BLACK, enabled)
+    }
+
     fun setThemeMode(mode: ThemeMode) {
         _themeMode.value = mode
         prefs.putString(KEY_THEME, mode.name)
@@ -173,6 +190,8 @@ class SettingsRepository(private val prefs: KeyValueStore) {
 
     private companion object {
         const val KEY_THEME = "theme_mode"
+        const val KEY_ACCENT = "accent_color"
+        const val KEY_PURE_BLACK = "pure_black"
         const val KEY_DYNAMIC = "dynamic_color"
         const val KEY_SORT = "sort_order"
         const val KEY_FOLDERS = "included_folders"

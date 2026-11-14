@@ -1,5 +1,10 @@
 package com.novanity.musicplayer.ui.theme
 
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.material3.ColorScheme
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.animateColorAsState
+import com.novanity.musicplayer.data.AccentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.Typography
@@ -125,6 +130,8 @@ private val AppShapes = Shapes(
 fun MusicPlayerTheme(
     darkTheme: Boolean,
     dynamicColor: Boolean,
+    accent: AccentColor = AccentColor.ROSE,
+    pureBlack: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     val platform = LocalPlatform.current
@@ -133,8 +140,47 @@ fun MusicPlayerTheme(
         // Keep the deep, high-contrast backgrounds even with wallpaper colors.
         dynamic != null && darkTheme -> dynamic.copy(background = DarkColors.background, surface = DarkColors.surface)
         dynamic != null -> dynamic
-        darkTheme -> DarkColors
-        else -> LightColors
-    }
-    MaterialTheme(colorScheme = colors, typography = appTypography(), shapes = AppShapes, content = content)
+        darkTheme -> DarkColors.withAccent(Color(accent.argb), dark = true)
+        else -> LightColors.withAccent(Color(accent.argb), dark = false)
+    }.let { if (darkTheme && pureBlack) it.pureBlack() else it }
+    val animated = colors.copy(
+        // Theme changes ease in instead of snapping.
+        primary = animateColorAsState(colors.primary, tween(350), label = "primary").value,
+        background = animateColorAsState(colors.background, tween(350), label = "background").value,
+        surface = animateColorAsState(colors.surface, tween(350), label = "surface").value,
+    )
+    MaterialTheme(colorScheme = animated, typography = appTypography(), shapes = AppShapes, content = content)
 }
+
+/** The same scheme with a different highlight colour (the default scheme is rose). */
+private fun ColorScheme.withAccent(accent: Color, dark: Boolean): ColorScheme {
+    if (accent == Accent) return this
+    return if (dark) {
+        copy(
+            primary = accent,
+            primaryContainer = lerp(accent, Color.Black, 0.72f),
+            onPrimaryContainer = lerp(accent, Color.White, 0.8f),
+            secondary = lerp(accent, Color.White, 0.4f),
+        )
+    } else {
+        // A little deeper on white, so text and icons in the accent stay readable.
+        val deep = lerp(accent, Color.Black, 0.18f)
+        copy(
+            primary = deep,
+            primaryContainer = lerp(accent, Color.White, 0.8f),
+            onPrimaryContainer = lerp(accent, Color.Black, 0.7f),
+            secondary = lerp(accent, Color.Black, 0.35f),
+        )
+    }
+}
+
+/** True-black backgrounds with slightly darker panels. */
+private fun ColorScheme.pureBlack(): ColorScheme = copy(
+    background = Color.Black,
+    surface = Color.Black,
+    surfaceContainerLowest = Color.Black,
+    surfaceContainerLow = Color(0xFF0A0A0B),
+    surfaceContainer = Color(0xFF101012),
+    surfaceContainerHigh = Color(0xFF17171A),
+    surfaceContainerHighest = Color(0xFF202024),
+)

@@ -1,5 +1,6 @@
 package com.novanity.musicplayer.ui.screens
 
+import com.novanity.musicplayer.ui.components.SongCard
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.tween
@@ -24,7 +25,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Album
@@ -78,24 +78,26 @@ import kotlinx.coroutines.delay
 private fun Album.sortYear(): Int = if (year > 0) year else 1970 + (dateAdded / 31_556_952L).toInt()
 
 /**
- * An artist: banner, Play/Shuffle with the bio beside them, then four rows of releases (custom
- * albums, released albums, EPs, singles; each oldest to newest, so the newest is on the right),
- * and their songs.
+ * An artist: banner, Play/Shuffle with the bio beside them, then five rows (custom albums,
+ * unreleased songs, released albums, EPs, singles), each with the newest on the left.
  */
 @Composable
 internal fun ArtistScreen(name: String, actions: SongActions, contentPadding: PaddingValues) {
     val vm = actions.library
     val lib by vm.grouped.collectAsStateWithLifecycle()
-    val likedIds by vm.likedIds.collectAsStateWithLifecycle()
     val artist = lib?.artistsByName?.get(name) ?: return Missing(contentPadding, lib == null, { vm.back() })
     val everything = remember(artist) { artist.songs + artist.appearsOn }
-    // Their own releases plus the ones they appear on, sorted so the newest ends up on the right.
+    // Their own releases plus the ones they appear on, newest first (so the newest is on the left).
     val byKind = remember(artist, lib) {
         everything.map { it.albumId }.distinct().mapNotNull { lib?.albumsById?.get(it) }
-            .sortedWith(compareBy<Album> { it.sortYear() }.thenBy { it.dateAdded }.thenBy { it.title.lowercase() })
+            .sortedWith(compareByDescending<Album> { it.sortYear() }.thenByDescending { it.dateAdded }.thenBy { it.title.lowercase() })
             .groupBy { it.kind }
     }
-    var expanded by rememberSaveable(name) { mutableStateOf(false) }
+    // Unreleased songs are shown one by one, newest first.
+    val unreleased = remember(everything) {
+        everything.filter { it.albumKind == AlbumKind.UNRELEASED }
+            .sortedWith(compareByDescending<Song> { it.year }.thenByDescending { it.dateAdded }.thenBy { it.title.lowercase() })
+    }
     val biosOn by vm.artistBiosEnabled.collectAsStateWithLifecycle()
     val bio by produceState<ArtistBio?>(null, name, biosOn) { value = if (biosOn) vm.artistBio(name) else null }
     val tint by rememberArtColor(artist.songs.first(), MaterialTheme.colorScheme.surfaceContainerHigh)
@@ -110,7 +112,7 @@ internal fun ArtistScreen(name: String, actions: SongActions, contentPadding: Pa
                     Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.3f to Color.Transparent, 1f to background)))
                     Column(Modifier.align(Alignment.BottomStart).padding(horizontal = 24.dp, vertical = 8.dp)) {
                         Text(artist.name, style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                        val releases = byKind.values.sumOf { it.size }
+                        val releases = byKind.filterKeys { it != AlbumKind.UNRELEASED }.values.sumOf { it.size }
                         Text(
                             "${if (releases == 1) "1 release" else "$releases releases"} • ${songCount(everything.size)}",
                             style = MaterialTheme.typography.bodyMedium,
@@ -124,14 +126,11 @@ internal fun ArtistScreen(name: String, actions: SongActions, contentPadding: Pa
         AlbumKind.entries.forEachIndexed { index, kind ->
             item(key = "row-$kind") {
                 Appear(delayMs = 60 * index) {
-                    ReleaseRow(kind, byKind[kind].orEmpty(), actions)
+                    if (kind == AlbumKind.UNRELEASED) UnreleasedRow(unreleased, actions, artist.name)
+                    else ReleaseRow(kind, byKind[kind].orEmpty(), actions)
                 }
             }
         }
-        item {
-            SectionHeader("Songs", action = if (everything.size > 5) (if (expanded) "Show less" else "See all") else null) { expanded = !expanded }
-        }
-        songItems(if (expanded) everything else everything.take(5), likedIds, actions, artist.name)
         item { Spacer(Modifier.height(24.dp)) }
     }
 }
@@ -237,7 +236,25 @@ private fun About(bio: ArtistBio, modifier: Modifier, collapsedLines: Int) {
     }
 }
 
-/** One row of releases, scrolled so the newest (rightmost) is in view; a quiet placeholder when empty. */
+/** The unreleased songs as a row of song cards (tap to play); a quiet placeholder when empty. */
+@Composable
+private fun UnreleasedRow(songs: List<Song>, actions: SongActions, source: String) {
+    Column {
+        SectionHeader(if (songs.isEmpty()) AlbumKind.UNRELEASED.title else "${AlbumKind.UNRELEASED.title}  \u2022  ${songs.size}")
+        if (songs.isEmpty()) {
+            EmptyRow(AlbumKind.UNRELEASED.empty)
+        } else {
+            LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                items(songs, key = { it.id }) { song ->
+                    SongCard(song, onClick = { actions.play(songs, songs.indexOf(song), source) }, modifier = Modifier.width(CardWidth).animateItem())
+                }
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+    }
+}
+
+/** One row of releases, newest on the left; a quiet placeholder when empty. */
 @Composable
 private fun ReleaseRow(kind: AlbumKind, albums: List<Album>, actions: SongActions) {
     val vm = actions.library
@@ -246,9 +263,7 @@ private fun ReleaseRow(kind: AlbumKind, albums: List<Album>, actions: SongAction
         if (albums.isEmpty()) {
             EmptyRow(kind.empty)
         } else {
-            val state = rememberLazyListState(initialFirstVisibleItemIndex = (albums.size - 1).coerceAtLeast(0))
             LazyRow(
-                state = state,
                 contentPadding = PaddingValues(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(14.dp),
             ) {

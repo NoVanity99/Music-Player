@@ -1,5 +1,6 @@
 package com.novanity.musicplayer.ui
 
+import com.novanity.musicplayer.data.AccentColor
 import com.novanity.musicplayer.data.AccountState
 import com.novanity.musicplayer.data.AccountRepository
 import com.novanity.musicplayer.data.SongSource
@@ -274,6 +275,10 @@ class LibraryViewModel(
     fun setEqPreset(index: Int) = settings.setEqPreset(index)
     fun setEqBands(levels: List<Int>) = settings.setEqBands(levels)
     fun setThemeMode(mode: ThemeMode) = settings.setThemeMode(mode)
+    val accent: StateFlow<AccentColor> = settings.accent
+    fun setAccent(color: AccentColor) = settings.setAccent(color)
+    val pureBlack: StateFlow<Boolean> = settings.pureBlack
+    fun setPureBlack(enabled: Boolean) = settings.setPureBlack(enabled)
     fun setDynamicColor(enabled: Boolean) = settings.setDynamicColor(enabled)
 
     /** Start pulling music from [path] (and check it for new files right away). */
