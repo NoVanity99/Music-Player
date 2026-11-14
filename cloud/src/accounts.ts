@@ -10,7 +10,7 @@
  *   POST   /me/ops        {ops: [{type, songId, at}]}   type: like | unlike | play
  *   PUT    /me/playlists  {playlists: [...]}
  *   PUT    /me/artists    {artists: [names]}   favourite artists
- *   PUT    /me/profile    {bio, private: {bio, likes, playlists, artists}}
+ *   PUT    /me/profile    {bio, private: {bio, likes, playlists, artists, stats}}
  *   GET    /users/:username                     -> that account's public profile
  *   DELETE /me                                       deletes the account and its data
  */
@@ -31,8 +31,9 @@ const MAX_PLAYS_RETURNED = 5000;
 const MAX_PLAYLISTS_BYTES = 512 * 1024;
 
 /** Which parts of a profile are private; anything not set is public. */
-function privacy(raw: any): { bio: boolean; likes: boolean; playlists: boolean; artists: boolean } {
-  return { bio: raw?.bio === true, likes: raw?.likes === true, playlists: raw?.playlists === true, artists: raw?.artists === true };
+function privacy(raw: any): { bio: boolean; likes: boolean; playlists: boolean; artists: boolean; stats: boolean } {
+  // Listening stats are the exception: private until the owner makes them public.
+  return { bio: raw?.bio === true, likes: raw?.likes === true, playlists: raw?.playlists === true, artists: raw?.artists === true, stats: raw?.stats !== false };
 }
 
 /** How long "what they're playing" stays shown after the last report. */
@@ -432,8 +433,18 @@ export async function accounts(request: Request, env: AccountsEnv, path: string,
     const u = rows[0];
     const hidden = privacy(u.private);
     const likes = hidden.likes ? null : await sql`SELECT song_id FROM vp_likes WHERE user_id = ${u.id} ORDER BY liked_at DESC LIMIT 2000`;
+    // Stats: how often each song was played; the app works out top songs and artists from it.
+    let stats: unknown = null;
+    if (!hidden.stats) {
+      const [total, top] = await Promise.all([
+        sql`SELECT count(*)::int AS n FROM vp_plays WHERE user_id = ${u.id}`,
+        sql`SELECT song_id, count(*)::int AS n FROM vp_plays WHERE user_id = ${u.id} GROUP BY song_id ORDER BY n DESC LIMIT 300`,
+      ]);
+      stats = { plays: total[0].n, songs: top.map((r) => ({ songId: r.song_id, plays: r.n })) };
+    }
     return json({
       username: u.display_name,
+      stats,
       bio: hidden.bio ? null : u.bio,
       likes: likes ? likes.map((r) => r.song_id) : null,
       playlists: hidden.playlists ? null : u.playlists,

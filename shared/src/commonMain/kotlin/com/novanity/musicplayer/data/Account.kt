@@ -77,11 +77,25 @@ private data class ArtistsBody(val artists: List<String>)
 
 /** Which parts of your profile other people can't see. Everything is public unless switched off. */
 @Serializable
-data class ProfilePrivacy(val bio: Boolean = false, val likes: Boolean = false, val playlists: Boolean = false, val artists: Boolean = false)
+data class ProfilePrivacy(
+    val bio: Boolean = false,
+    val likes: Boolean = false,
+    val playlists: Boolean = false,
+    val artists: Boolean = false,
+    /** Listening stats start private. */
+    val stats: Boolean = true,
+)
 
 /** Your own profile settings: an optional bio and what's private. */
 @Serializable
 data class AccountProfile(val bio: String = "", val private: ProfilePrivacy = ProfilePrivacy())
+
+@Serializable
+data class PublicSongPlays(val songId: String = "", val plays: Int = 0)
+
+/** Someone's listening stats: total plays and how often each song was played (most played first). */
+@Serializable
+data class PublicStats(val plays: Int = 0, val songs: List<PublicSongPlays> = emptyList())
 
 @Serializable
 data class PublicPlaylist(val name: String = "", val songs: List<String> = emptyList())
@@ -94,6 +108,7 @@ data class PublicProfile(
     val likes: List<String>? = null,
     val playlists: List<PublicPlaylist>? = null,
     val artists: List<String>? = null,
+    val stats: PublicStats? = null,
 )
 
 /**

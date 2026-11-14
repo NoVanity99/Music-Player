@@ -193,12 +193,12 @@ internal fun AccountPage(actions: SongActions, contentPadding: PaddingValues) {
             }
         }
         item {
-            AccountRow(Icons.AutoMirrored.Rounded.QueueMusic, "Playlists", if (playlists.size == 1) "1 playlist" else "${playlists.size} playlists", { vm.showLibrary(LibraryFilter.PLAYLISTS) }) {
+            AccountRow(Icons.AutoMirrored.Rounded.QueueMusic, "Playlists", if (playlists.size == 1) "1 playlist" else "${playlists.size} playlists", { vm.open(Destination.MyPlaylists) }) {
                 VisibilityChip(profile.private.playlists) { update { it.copy(private = it.private.copy(playlists = !it.private.playlists)) } }
             }
         }
         item {
-            AccountRow(Icons.Rounded.Person, "Your artists", if (artists.size == 1) "1 artist" else "${artists.size} artists", { vm.showFavoriteArtists() }) {
+            AccountRow(Icons.Rounded.Person, "Your artists", if (artists.size == 1) "1 artist" else "${artists.size} artists", { vm.open(Destination.MyArtists) }) {
                 VisibilityChip(profile.private.artists) { update { it.copy(private = it.private.copy(artists = !it.private.artists)) } }
             }
         }
@@ -242,7 +242,9 @@ internal fun AccountPage(actions: SongActions, contentPadding: PaddingValues) {
         }
         item {
             val total = plays.values.sum()
-            AccountRow(Icons.Rounded.Insights, "Your stats", if (total == 1) "1 play" else "$total plays • only you can see these", { vm.open(Destination.Stats) })
+            AccountRow(Icons.Rounded.Insights, "Your stats", if (total == 1) "1 play" else "$total plays", { vm.open(Destination.Stats) }) {
+                VisibilityChip(profile.private.stats) { update { it.copy(private = it.private.copy(stats = !it.private.stats)) } }
+            }
         }
         item {
             Text(
@@ -326,6 +328,37 @@ internal fun ProfilePage(username: String, actions: SongActions, contentPadding:
                 val songs = remember(p, lib) { vm.songsForCloudIds(p.songs) }
                 AccountRow(Icons.AutoMirrored.Rounded.QueueMusic, p.name, songCount(songs.size) + " • tap to play", { if (songs.isNotEmpty()) actions.play(songs, 0, p.name) })
             }
+        }
+
+        item { SectionHeader("Stats") }
+        val stats = profile.stats
+        if (stats == null) {
+            item { hidden("Their stats") }
+        } else {
+            val played = stats.songs.mapNotNull { sp -> vm.songForCloudId(sp.songId)?.let { it to sp.plays } }
+            val topArtists = played.groupBy { it.first.artist }.mapValues { e -> e.value.sumOf { it.second } }.entries.sortedByDescending { it.value }.take(5)
+            item {
+                Column(Modifier.padding(horizontal = 24.dp)) {
+                    Text(if (stats.plays == 1) "1 play" else "${stats.plays} plays", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                    if (topArtists.isNotEmpty()) {
+                        Spacer(Modifier.height(10.dp))
+                        Text("TOP ARTISTS", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        topArtists.forEachIndexed { i, (artist, n) ->
+                            Row(Modifier.fillMaxWidth().clickable { vm.open(Destination.ArtistDetail(artist)) }.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Text("${i + 1}", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary, modifier = Modifier.width(28.dp))
+                                Text(artist, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(if (n == 1) "1 play" else "$n plays", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                    }
+                    if (played.isNotEmpty()) {
+                        Spacer(Modifier.height(10.dp))
+                        Text("TOP SONGS", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+            val topSongs = played.take(5).map { it.first }
+            if (topSongs.isNotEmpty()) songItems(topSongs, likedIds, actions, "${profile.username}'s top songs")
         }
 
         val likes = profile.likes
@@ -529,5 +562,67 @@ fun SocialOverlay(vm: com.novanity.musicplayer.ui.LibraryViewModel, modifier: Mo
                 }
             }
         }
+    }
+}
+
+
+// ---------- Pages opened from Account (each with its own back button to the account page) ----------
+
+@Composable
+private fun PageTitle(title: String, caption: String) {
+    Column(
+        Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(ProfileTint.copy(alpha = 0.55f), Color.Transparent)))
+            .padding(start = 24.dp, end = 24.dp, top = 76.dp, bottom = 12.dp),
+    ) {
+        Text(title, style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold)
+        Text(caption, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+/** All your playlists on one page. */
+@Composable
+internal fun MyPlaylistsPage(actions: SongActions, contentPadding: PaddingValues) {
+    val vm = actions.library
+    val playlists by vm.playlists.collectAsStateWithLifecycle()
+    CollectionScaffold("Your playlists", ProfileTint, { vm.back() }, emptyList(), contentPadding) {
+        item { PageTitle("Your playlists", if (playlists.size == 1) "1 playlist" else "${playlists.size} playlists") }
+        if (playlists.isEmpty()) {
+            item { Text("No playlists yet. Create one from Your Library.", modifier = Modifier.padding(24.dp), color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        }
+        items(playlists, key = { it.id }) { p ->
+            com.novanity.musicplayer.ui.components.CollectionRow(
+                title = p.name,
+                subtitle = "Playlist \u2022 ${songCount(p.songCount)}",
+                art = { m -> com.novanity.musicplayer.ui.components.PlaylistArt(p.covers, m) },
+                onClick = { vm.open(Destination.PlaylistDetail(p.id)) },
+            )
+        }
+        item { Spacer(Modifier.height(32.dp)) }
+    }
+}
+
+/** The artists you've hearted on one page. */
+@Composable
+internal fun MyArtistsPage(actions: SongActions, contentPadding: PaddingValues) {
+    val vm = actions.library
+    val lib by vm.grouped.collectAsStateWithLifecycle()
+    val favorites by vm.favoriteArtists.collectAsStateWithLifecycle()
+    val artists = remember(lib, favorites) { lib?.artists.orEmpty().filter { it.name in favorites }.sortedBy { it.name.lowercase() } }
+    CollectionScaffold("Your artists", ProfileTint, { vm.back() }, emptyList(), contentPadding) {
+        item { PageTitle("Your artists", if (artists.size == 1) "1 artist" else "${artists.size} artists") }
+        if (artists.isEmpty()) {
+            item { Text("Tap the heart on an artist's page to keep them here.", modifier = Modifier.padding(24.dp), color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        }
+        items(artists, key = { it.name }) { artist ->
+            com.novanity.musicplayer.ui.components.CollectionRow(
+                title = artist.name,
+                subtitle = "${if (artist.albumCount == 1) "1 album" else "${artist.albumCount} albums"} \u2022 ${songCount(artist.songs.size)}",
+                art = { m -> com.novanity.musicplayer.ui.components.AlbumArt(artist.songs.first(), m, shape = CircleShape) },
+                onClick = { vm.open(Destination.ArtistDetail(artist.name)) },
+                menu = actions.collectionMenu(artist.songs),
+                heart = true,
+            )
+        }
+        item { Spacer(Modifier.height(32.dp)) }
     }
 }

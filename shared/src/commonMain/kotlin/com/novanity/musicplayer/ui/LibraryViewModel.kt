@@ -128,6 +128,9 @@ sealed interface Destination {
     /** Your own account page. */
     data object Account : Destination
     data object Friends : Destination
+    /** Your playlists and your hearted artists, as pages of their own (opened from Account). */
+    data object MyPlaylists : Destination
+    data object MyArtists : Destination
     /** Someone else's public profile. */
     data class Profile(val username: String) : Destination
     data class MixDetail(val kind: com.novanity.musicplayer.data.MixKind) : Destination
