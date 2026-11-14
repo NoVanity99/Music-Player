@@ -46,6 +46,8 @@ npm run upload -- "C:\Users\you\Music"
 - Artist pages have five rows: custom albums, unreleased songs, released albums, EPs and singles.
   Music goes in a row when it's inside a folder named `Unreleased`, `Released Albums` (or
   `Albums`), `EPs` or `Singles`, at any level; everything else is a custom album. Re-run the upload after moving folders.
+- Add `--order "First album,Second album,..."` (oldest first) to set the order of albums on the
+  artist page, matched against the album tag or folder name. It's saved, so later uploads keep it.
 - Add `--prune` to also remove songs from the cloud that are no longer in the folder.
 - Add `--dry-run` to see what would happen.
 

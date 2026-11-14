@@ -2,13 +2,16 @@
 /**
  * Uploads a folder of music to the R2 bucket and rewrites library.json.
  *
- *   npm run upload -- "<path to music folder>" [--prune] [--local] [--dry-run]
+ *   npm run upload -- "<path to music folder>" [--order "A,B,C"] [--prune] [--local] [--dry-run]
  *
  * - Each song's id is the SHA-256 of its file, so re-running only uploads new or changed files.
  * - A changed file (same path, new contents) replaces its old upload.
  * - --prune    also removes songs from the cloud whose files are no longer in the folder.
  * - --local    writes to Wrangler's local R2 simulator (for `npm run dev`), not Cloudflare.
  * - --dry-run  shows what would happen without uploading anything.
+ * - --order    album names, oldest first, comma-separated. Sets their order on the artist page
+ *              (matched against the album tag or a folder name). It's saved in library.json, so
+ *              later uploads keep it; pass it again to change it.
  *
  * Uses `wrangler r2 object`, so it needs `npx wrangler login` (or CLOUDFLARE_API_TOKEN) first.
  */
@@ -46,6 +49,12 @@ const COVER_NAMES = ["cover", "folder", "front", "album", "albumart"];
 const CONCURRENCY = 4;
 
 const args = process.argv.slice(2);
+const orderAt = args.indexOf("--order");
+const ORDER_ARG = orderAt >= 0 ? args.splice(orderAt, 2)[1] : undefined;
+if (orderAt >= 0 && !ORDER_ARG) {
+  console.error('--order needs a list of album names, oldest first: --order "First album,Second album"');
+  process.exit(1);
+}
 const flags = new Set(args.filter((a) => a.startsWith("--")));
 const folderArg = args.find((a) => !a.startsWith("--"));
 const LOCAL = flags.has("--local");
@@ -53,7 +62,7 @@ const DRY = flags.has("--dry-run");
 const PRUNE = flags.has("--prune");
 
 if (!folderArg) {
-  console.error('Usage: npm run upload -- "<path to music folder>" [--prune] [--local] [--dry-run]');
+  console.error('Usage: npm run upload -- "<path to music folder>" [--order "A,B,C"] [--prune] [--local] [--dry-run]');
   process.exit(1);
 }
 const ROOT = path.resolve(folderArg);
@@ -101,6 +110,44 @@ async function currentLibrary(tmp) {
   } catch {
     return { version: 1, songs: [] };
   }
+}
+
+/** "Gaia 2!" and "gaia_2" are the same name. */
+const norm = (name) => name.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
+
+/**
+ * Puts the albums in `order` (oldest first) in that order on the artist page. The app sorts by
+ * year tag, then by when a song was added, so the albums get added times a minute apart. Their year
+ * tags are kept only if every one has a year and the years agree with the order; otherwise the years
+ * would override the order, so they're cleared.
+ */
+function applyOrder(songs, order, now) {
+  const matched = order.map(() => []);
+  for (const s of songs) {
+    const names = [s.album, ...s.path.split("/").slice(0, -1)].map(norm);
+    const i = order.findIndex((o) => names.includes(norm(o)));
+    if (i >= 0) matched[i].push(s);
+  }
+  const missing = order.filter((_, i) => matched[i].length === 0);
+  if (missing.length) {
+    const albums = [...new Set(songs.map((s) => s.album))].sort().join(", ");
+    console.warn(`  --order: no songs found for ${missing.map((m) => `"${m}"`).join(", ")}. Albums in the folder: ${albums}`);
+  }
+  const all = matched.flat();
+  if (!all.length) return;
+  const years = matched.filter((m) => m.length).map((m) => Math.max(...m.map((s) => s.year || 0)));
+  const yearsAgree = years.every((y, i) => y > 0 && (i === 0 || y >= years[i - 1]));
+  if (!yearsAgree) console.log("  --order: the year tags are missing or out of order, so they're ignored for these albums.");
+  const MINUTE = 60_000;
+  // Stays put on later runs, so re-uploading doesn't shift the albums.
+  const base = Math.min(now - order.length * MINUTE, ...all.map((s) => s.addedAt));
+  matched.forEach((m, i) => {
+    for (const s of m) {
+      s.addedAt = base + i * MINUTE;
+      if (!yearsAgree) s.year = 0;
+    }
+  });
+  console.log(`  Album order (oldest first): ${order.filter((_, i) => matched[i].length).join(" → ")}`);
 }
 
 async function walk(dir, out = []) {
@@ -223,6 +270,11 @@ async function main() {
       }
     });
 
+    const order = ORDER_ARG !== undefined
+      ? ORDER_ARG.split(",").map((a) => a.trim()).filter(Boolean)
+      : (library.albumOrder ?? []);
+    if (order.length) applyOrder(songs, order, now);
+
     // The same file twice in the folder is one song.
     const byId = new Map();
     for (const s of songs) if (!byId.has(s.id)) byId.set(s.id, s);
@@ -254,7 +306,7 @@ async function main() {
       .map(({ file, ...s }) => s)
       .sort((a, b) => (a.albumArtist || a.artist).localeCompare(b.albumArtist || b.artist) || a.album.localeCompare(b.album) || a.disc - b.disc || a.track - b.track || a.title.localeCompare(b.title));
     const out = path.join(tmp, "library.out.json");
-    await writeFile(out, JSON.stringify({ version: 1, updatedAt: new Date().toISOString(), songs: finalSongs }));
+    await writeFile(out, JSON.stringify({ version: 1, updatedAt: new Date().toISOString(), albumOrder: order, songs: finalSongs }));
     await put("library.json", out, "application/json");
 
     // Delete old objects only after the new library is live. Covers still in use are kept.
