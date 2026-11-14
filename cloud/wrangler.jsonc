@@ -1,0 +1,11 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "vanity-music",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-01-01",
+  "r2_buckets": [
+    { "binding": "MUSIC", "bucket_name": "vanity-music" }
+  ],
+  "observability": { "enabled": true }
+  // The access key is a secret, never a var: `npx wrangler secret put APP_KEY`.
+}
