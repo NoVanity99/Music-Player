@@ -160,6 +160,7 @@ class LibraryViewModel(
     fun answerFriend(username: String, accept: Boolean) { social?.answerFriend(username, accept) }
     fun removeFriend(username: String) { social?.removeFriend(username) }
     fun askToListen(username: String) { social?.askToListen(username) }
+    fun inviteToListen(username: String) { social?.invite(username) }
     fun answerListen(request: com.novanity.musicplayer.data.ListenRequest, accept: Boolean) { social?.answerListen(request, accept) }
     fun leaveSession() { social?.leave() }
     fun refreshSocial() { viewModelScope.launch { runCatching { social?.pulse() } } }
@@ -209,13 +210,21 @@ class LibraryViewModel(
     /** The library's songs for a list of the server's song ids (ones no longer in the library are left out). */
     fun songsForCloudIds(ids: List<String>): List<Song> = ids.mapNotNull { music.songsById[com.novanity.musicplayer.data.CloudRepository.songIdFor(it)] }
 
-    /** The Artists list shows only hearted artists when opened from Home's "Your artists". */
-    var artistsFavoritesOnly by mutableStateOf(false)
-    fun showFavoriteArtists() {
-        showLibrary(LibraryFilter.ARTISTS)
-        artistsFavoritesOnly = favoriteArtistsNow().isNotEmpty()
+    /**
+     * Your Library shows what you've liked: liked songs, hearted albums and hearted artists
+     * (playlists are always all yours). Browsing from Search shows everything instead.
+     */
+    var libraryLikedOnly by mutableStateOf(true)
+    fun showFavoriteArtists() = showLibrary(LibraryFilter.ARTISTS)
+
+    /** Albums this account has hearted (by album id). */
+    private val localFavoriteAlbums = MutableStateFlow<Set<Long>>(emptySet())
+    val favoriteAlbums: StateFlow<Set<Long>> = account?.favoriteAlbums ?: localFavoriteAlbums
+    fun setFavoriteAlbum(album: Album, favorite: Boolean) {
+        if (account != null) account.setFavoriteAlbum(album.id, favorite)
+        else localFavoriteAlbums.value = if (favorite) localFavoriteAlbums.value + album.id else localFavoriteAlbums.value - album.id
+        notify(if (favorite) "Added to your albums" else "Removed from your albums")
     }
-    private fun favoriteArtistsNow(): Set<String> = account?.favoriteArtists?.value ?: localFavoriteArtists.value
 
     /** Artists this account has hearted; without accounts (tests) they're kept for the session. */
     private val localFavoriteArtists = MutableStateFlow<Set<String>>(emptySet())
@@ -324,8 +333,8 @@ class LibraryViewModel(
         return false
     }
 
-    fun showLibrary(filter: LibraryFilter) {
-        artistsFavoritesOnly = false
+    fun showLibrary(filter: LibraryFilter, everything: Boolean = false) {
+        libraryLikedOnly = !everything
         libraryFilter = filter
         stacks.getValue(Tab.LIBRARY).clear()
         tab = Tab.LIBRARY

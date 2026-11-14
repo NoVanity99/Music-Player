@@ -505,6 +505,11 @@ internal fun FriendsPage(actions: SongActions, contentPadding: PaddingValues) {
                     Button(onClick = { vm.askToListen(friend.username) }) { Text("Listen along") }
                     Spacer(Modifier.width(4.dp))
                 }
+                // Bring a friend into your session (not while you're a guest in someone else's).
+                if (friend.online && social.session?.isGuest != true && friend.username !in social.session?.members.orEmpty()) {
+                    androidx.compose.material3.OutlinedButton(onClick = { vm.inviteToListen(friend.username) }) { Text("Invite") }
+                    Spacer(Modifier.width(4.dp))
+                }
                 TextButton(onClick = { vm.removeFriend(friend.username) }) { Text("Remove", color = MaterialTheme.colorScheme.onSurfaceVariant) }
             }
         }
@@ -583,11 +588,11 @@ fun SocialOverlay(vm: com.novanity.musicplayer.ui.LibraryViewModel, modifier: Mo
                         Spacer(Modifier.width(12.dp))
                         Column {
                             Text(request.from, style = MaterialTheme.typography.titleSmall)
-                            Text("wants to listen along with you", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(if (request.isInvite) "invited you to listen along with them" else "wants to listen along with you", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         Spacer(Modifier.width(16.dp))
                         TextButton(onClick = { vm.answerListen(request, false) }) { Text("Decline") }
-                        Button(onClick = { vm.answerListen(request, true) }) { Text("Accept") }
+                        Button(onClick = { vm.answerListen(request, true) }) { Text(if (request.isInvite) "Join" else "Accept") }
                     }
                 }
             }

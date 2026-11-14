@@ -185,6 +185,21 @@ class SocialFlowTest {
             waitFor("the session is over for both") { runBlocking { host.pulse(); guest.pulse() }; host.state.value.session == null && !guest.isGuest }
             guestUi.next()
             assertEquals(songs[5].id, guestPlayer.current?.id, "their own controls work again")
+
+            // The other way round: the host invites the friend, who joins by accepting.
+            hostPlayer.setQueue(listOf(songs[2]), 0, false)
+            host.invite(guestName)
+            waitFor("the invitation arrives") { runBlocking { host.pulse(); guest.pulse() }; guest.state.value.listenRequests.any { it.from == hostName && it.isInvite } }
+            guest.answerListen(guest.state.value.listenRequests.first(), true)
+            waitFor("the invited friend follows the host") { runBlocking { host.pulse(); guest.pulse() }; guest.isGuest && guestPlayer.current?.id == songs[2].id }
+            guest.leave()
+            waitFor("back on their own music again") { guestPlayer.current?.id == songs[5].id || guestPlayer.current?.id == songs[4].id }
+
+            // Hearted albums and artists travel with the account, separately.
+            guestDevice.account!!.setFavoriteArtist("slayr", true)
+            guestDevice.account!!.setFavoriteAlbum(songs[0].albumId, true)
+            assertEquals(setOf("slayr"), guestDevice.account!!.favoriteArtists.value)
+            assertEquals(setOf(songs[0].albumId), guestDevice.account!!.favoriteAlbums.value)
         } finally {
             hostDevice.account?.deleteAccount()
             guestDevice.account?.deleteAccount()

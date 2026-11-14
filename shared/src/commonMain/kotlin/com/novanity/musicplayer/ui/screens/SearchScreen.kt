@@ -94,9 +94,9 @@ fun SearchScreen(actions: SongActions, contentPadding: PaddingValues) {
         if (query.isBlank()) {
             item { SectionHeader("Browse your library") }
             val tiles = listOf(
-                BrowseTile("Songs", listOf(Color(0xFFFF375F), Color(0xFFB0124A)), Icons.Rounded.MusicNote) { vm.showLibrary(LibraryFilter.SONGS) },
-                BrowseTile("Albums", listOf(Color(0xFFFF9F0A), Color(0xFFC2410C)), Icons.Rounded.Album) { vm.showLibrary(LibraryFilter.ALBUMS) },
-                BrowseTile("Artists", listOf(Color(0xFF0A84FF), Color(0xFF1E3A8A)), Icons.Rounded.Person) { vm.showLibrary(LibraryFilter.ARTISTS) },
+                BrowseTile("Songs", listOf(Color(0xFFFF375F), Color(0xFFB0124A)), Icons.Rounded.MusicNote) { vm.showLibrary(LibraryFilter.SONGS, everything = true) },
+                BrowseTile("Albums", listOf(Color(0xFFFF9F0A), Color(0xFFC2410C)), Icons.Rounded.Album) { vm.showLibrary(LibraryFilter.ALBUMS, everything = true) },
+                BrowseTile("Artists", listOf(Color(0xFF0A84FF), Color(0xFF1E3A8A)), Icons.Rounded.Person) { vm.showLibrary(LibraryFilter.ARTISTS, everything = true) },
                 BrowseTile("Playlists", listOf(Color(0xFFBF5AF2), Color(0xFF5B21B6)), Icons.AutoMirrored.Rounded.QueueMusic) { vm.showLibrary(LibraryFilter.PLAYLISTS) },
                 BrowseTile("Liked Songs", listOf(Color(0xFF5B2BFF), Color(0xFF8E7BFF)), Icons.Rounded.Favorite) { vm.open(Destination.LikedSongs) },
                 BrowseTile("Recently played", listOf(Color(0xFF30B158), Color(0xFF0F5132)), Icons.Rounded.History) { vm.open(Destination.RecentlyPlayed) },

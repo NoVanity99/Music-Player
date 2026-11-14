@@ -155,7 +155,7 @@ private fun HomeContent(actions: SongActions, contentPadding: PaddingValues) {
                     }
                 }
                 if (home.recentlyAdded.isNotEmpty()) {
-                    item { SectionHeader("Recently added", action = "See all") { vm.showLibrary(LibraryFilter.ALBUMS) } }
+                    item { SectionHeader("Recently added", action = "See all") { vm.showLibrary(LibraryFilter.ALBUMS, everything = true) } }
                     item {
                         CardRow(home.recentlyAdded, key = { it.id }) { album, m ->
                             AlbumCard(album, onClick = { vm.open(Destination.AlbumDetail(album.id)) }, modifier = m,

@@ -28,7 +28,9 @@ data class Friend(val username: String = "", val admin: Boolean = false, val ava
 
 /** A friend asking to listen along with you. */
 @Serializable
-data class ListenRequest(val id: Long = 0, val from: String = "")
+data class ListenRequest(val id: Long = 0, val from: String = "", /** "ask": they want to join you. "invite": they're inviting you to join them. */ val kind: String = "ask") {
+    val isInvite: Boolean get() = kind == "invite"
+}
 
 /**
  * The shared listening session you're in. As "host" it's yours and [members] are listening along;
@@ -265,6 +267,7 @@ class SocialRepository(
     fun addFriend(username: String) = act("Friend request sent to ${username.trim()}", "/me/friends/request", name(username))
     fun answerFriend(username: String, accept: Boolean) = act(if (accept) "You and $username are now friends" else null, "/me/friends/respond", name(username, accept))
     fun removeFriend(username: String) = act("Removed $username", "/me/friends/remove", name(username))
+    fun invite(username: String) = act("Invited $username to listen with you", "/me/listen/invite", name(username))
     fun askToListen(username: String) = act("Asked $username to listen along", "/me/listen/request", name(username))
 
     fun answerListen(request: ListenRequest, accept: Boolean) {

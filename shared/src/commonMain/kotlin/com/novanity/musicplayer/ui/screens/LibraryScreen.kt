@@ -86,6 +86,8 @@ fun LibraryScreen(actions: SongActions, contentPadding: PaddingValues) {
     val vm = actions.library
     val lib by vm.library.collectAsStateWithLifecycle()
     val favoriteArtists by vm.favoriteArtists.collectAsStateWithLifecycle()
+    val favoriteAlbums by vm.favoriteAlbums.collectAsStateWithLifecycle()
+    val likedOnly = vm.libraryLikedOnly
     var creating by rememberSaveable { mutableStateOf(false) }
 
     Column(Modifier.fillMaxSize()) {
@@ -120,6 +122,21 @@ fun LibraryScreen(actions: SongActions, contentPadding: PaddingValues) {
             }
         }
 
+        // Your Library is what you've liked; one click shows everything instead.
+        if (vm.libraryFilter != LibraryFilter.PLAYLISTS) {
+            Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Rounded.Favorite, contentDescription = null, tint = if (likedOnly) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(14.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    if (likedOnly) "Showing what you've liked" else "Showing everything",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f),
+                )
+                androidx.compose.material3.TextButton(onClick = { vm.libraryLikedOnly = !likedOnly }) { Text(if (likedOnly) "Show everything" else "Only what I've liked") }
+            }
+        }
+
         val layoutDirection = LocalLayoutDirection.current
         val listPadding = PaddingValues(
             start = contentPadding.calculateStartPadding(layoutDirection),
@@ -144,21 +161,22 @@ fun LibraryScreen(actions: SongActions, contentPadding: PaddingValues) {
                         verticalArrangement = Arrangement.spacedBy(18.dp),
                         modifier = Modifier.fillMaxSize(),
                     ) {
-                        items(lib.albums, key = { it.id }) { album ->
+                        val albums = if (likedOnly) lib.albums.filter { it.id in favoriteAlbums } else lib.albums
+                        if (albums.isEmpty()) {
+                            item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) {
+                                Text("No albums here yet. Tap the heart on an album's page to keep it in your library.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(vertical = 24.dp))
+                            }
+                        }
+                        items(albums, key = { it.id }) { album ->
                             AlbumCard(album, onClick = { vm.open(Destination.AlbumDetail(album.id)) }, modifier = Modifier)
                         }
                     }
                     LibraryFilter.ARTISTS -> LazyColumn(Modifier.fillMaxSize(), contentPadding = listPadding) {
-                        // Opened from "Your artists": just the hearted ones, with a way back to everyone.
-                        if (vm.artistsFavoritesOnly) {
-                            item {
-                                Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    Text("Your artists", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-                                    androidx.compose.material3.TextButton(onClick = { vm.artistsFavoritesOnly = false }) { Text("Show all artists") }
-                                }
-                            }
+                        val artists = if (likedOnly) lib.artists.filter { it.name in favoriteArtists } else lib.artists
+                        if (artists.isEmpty()) {
+                            item { Text("No artists here yet. Tap the heart on an artist's page to keep them in your library.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 16.dp, vertical = 24.dp)) }
                         }
-                        items(if (vm.artistsFavoritesOnly) lib.artists.filter { it.name in favoriteArtists } else lib.artists, key = { it.name }) { artist ->
+                        items(artists, key = { it.name }) { artist ->
                             CollectionRow(
                                 heart = artist.name in favoriteArtists,
                                 title = artist.name,
@@ -201,7 +219,8 @@ private fun SongsList(actions: SongActions, padding: PaddingValues) {
     val vm = actions.library
     val lib by vm.library.collectAsStateWithLifecycle()
     val likedIds by vm.likedIds.collectAsStateWithLifecycle()
-    val likedOnly by vm.likedOnly.collectAsStateWithLifecycle()
+    val likedChip by vm.likedOnly.collectAsStateWithLifecycle()
+    val likedOnly = likedChip || vm.libraryLikedOnly
     val offlineOnly by vm.offlineOnly.collectAsStateWithLifecycle()
     val hasCloud = remember(lib.songs) { lib.songs.any { it.source != SongSource.LOCAL } }
     val songs = remember(lib.songs, likedOnly, offlineOnly, likedIds) {
@@ -212,7 +231,7 @@ private fun SongsList(actions: SongActions, padding: PaddingValues) {
             Row(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
                 FilterChip(
                     selected = likedOnly,
-                    onClick = { vm.likedOnly.value = !likedOnly },
+                    onClick = { if (vm.libraryLikedOnly) vm.libraryLikedOnly = false else vm.likedOnly.value = !likedChip },
                     label = { Text("Liked only") },
                     leadingIcon = { Icon(Icons.Rounded.Favorite, contentDescription = null, modifier = Modifier.size(16.dp)) },
                     shape = CircleShape,

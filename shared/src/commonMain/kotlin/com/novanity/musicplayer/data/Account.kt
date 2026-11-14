@@ -349,11 +349,22 @@ class AccountRepository(
         queueStore.getString(KEY_FAV_ARTISTS)?.let { runCatching { json.decodeFromString(ArtistsBody.serializer(), it).artists.toSet() }.getOrNull() }.orEmpty()
     )
 
+    // Hearted albums are kept in the same saved list, marked with a prefix, so both sync together.
+    private val _artistNames = MutableStateFlow(_favoriteArtists.value.filterNot { it.startsWith(ALBUM_PREFIX) }.toSet())
+    private val _albumIds = MutableStateFlow(_favoriteArtists.value.mapNotNull { it.removePrefix(ALBUM_PREFIX).takeIf { id -> id != it }?.toLongOrNull() }.toSet())
+
     /** The artists this account has hearted (shown as "Your artists" on Home). */
-    val favoriteArtists: StateFlow<Set<String>> = _favoriteArtists.asStateFlow()
+    val favoriteArtists: StateFlow<Set<String>> = _artistNames.asStateFlow()
+
+    /** The albums this account has hearted, by album id. */
+    val favoriteAlbums: StateFlow<Set<Long>> = _albumIds.asStateFlow()
+
+    fun setFavoriteAlbum(albumId: Long, favorite: Boolean) = setFavoriteArtist(ALBUM_PREFIX + albumId, favorite)
 
     private fun storeFavoriteArtists(names: Set<String>) {
         _favoriteArtists.value = names
+        _artistNames.value = names.filterNot { it.startsWith(ALBUM_PREFIX) }.toSet()
+        _albumIds.value = names.mapNotNull { it.removePrefix(ALBUM_PREFIX).takeIf { id -> id != it }?.toLongOrNull() }.toSet()
         queueStore.putString(KEY_FAV_ARTISTS, if (names.isEmpty()) null else json.encodeToString(ArtistsBody.serializer(), ArtistsBody(names.toList())))
     }
 
@@ -595,6 +606,7 @@ class AccountRepository(
         const val KEY_ADMIN = "is_admin"
         const val KEY_PROFILE = "profile"
         const val KEY_PROFILE_DIRTY = "profile_dirty"
+        const val ALBUM_PREFIX = "album:"
         const val KEY_FAV_ARTISTS = "favorite_artists"
         const val KEY_ARTISTS_DIRTY = "favorite_artists_dirty"
         const val KEY_TOKEN = "session_token"

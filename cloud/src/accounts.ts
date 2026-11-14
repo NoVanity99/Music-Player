@@ -115,6 +115,7 @@ function ensureSchema(sql: Sql): Promise<void> {
       to_id UUID NOT NULL REFERENCES vp_users(id) ON DELETE CASCADE,
       created_at BIGINT NOT NULL
     )`;
+    await sql`ALTER TABLE vp_listen_requests ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'ask'`;
     await sql`CREATE TABLE IF NOT EXISTS vp_listen_adds (
       id BIGSERIAL PRIMARY KEY,
       host_id UUID NOT NULL REFERENCES vp_users(id) ON DELETE CASCADE,
@@ -341,7 +342,7 @@ export async function accounts(request: Request, env: AccountsEnv, path: string,
       sql`SELECT u.id, u.avatar, u.display_name, u.now_song, u.now_playing, u.now_pos, u.now_at, u.seen_at, f.status, (f.a = ${userId}) AS sent
         FROM vp_friends f JOIN vp_users u ON u.id = CASE WHEN f.a = ${userId} THEN f.b ELSE f.a END
         WHERE f.a = ${userId} OR f.b = ${userId} ORDER BY lower(u.display_name)`,
-      sql`SELECT r.id, u.display_name FROM vp_listen_requests r JOIN vp_users u ON u.id = r.from_id
+      sql`SELECT r.id, r.kind, u.display_name FROM vp_listen_requests r JOIN vp_users u ON u.id = r.from_id
         WHERE r.to_id = ${userId} AND r.created_at > ${now - LISTEN_REQUEST_MS} ORDER BY r.id`,
     ]);
     let session: unknown = null;
@@ -376,7 +377,7 @@ export async function accounts(request: Request, env: AccountsEnv, path: string,
       })),
       requests: links.filter((l) => l.status === "pending" && !l.sent).map((l) => l.display_name),
       sent: links.filter((l) => l.status === "pending" && l.sent).map((l) => l.display_name),
-      listenRequests: asks.map((a) => ({ id: Number(a.id), from: a.display_name })),
+      listenRequests: asks.map((a) => ({ id: Number(a.id), from: a.display_name, kind: a.kind })),
       session,
       adds,
     });
@@ -419,19 +420,33 @@ export async function accounts(request: Request, env: AccountsEnv, path: string,
     const body = await readJson(request, 4096);
     const other = await idOf(body?.username);
     if (!other || !(await areFriends(other))) return json({ error: "not_friends", message: "You can only listen along with friends." }, 403);
-    await sql`DELETE FROM vp_listen_requests WHERE from_id = ${userId}`;
+    await sql`DELETE FROM vp_listen_requests WHERE from_id = ${userId} AND kind = 'ask'`;
     await sql`INSERT INTO vp_listen_requests (from_id, to_id, created_at) VALUES (${userId}, ${other}, ${Date.now()})`;
+    return json({ ok: true });
+  }
+
+  // Invite a friend to listen along with you (they become a guest in your session if they accept).
+  if (path === "/me/listen/invite" && method === "POST") {
+    const body = await readJson(request, 4096);
+    const other = await idOf(body?.username);
+    if (!other || !(await areFriends(other))) return json({ error: "not_friends", message: "You can only invite friends." }, 403);
+    const me = await sql`SELECT listen_host FROM vp_users WHERE id = ${userId}`;
+    if (me[0]?.listen_host) return json({ error: "guest", message: "Only the host can invite people. Leave the session to start your own." }, 409);
+    await sql`DELETE FROM vp_listen_requests WHERE from_id = ${userId} AND to_id = ${other}`;
+    await sql`INSERT INTO vp_listen_requests (from_id, to_id, created_at, kind) VALUES (${userId}, ${other}, ${Date.now()}, 'invite')`;
     return json({ ok: true });
   }
 
   if (path === "/me/listen/respond" && method === "POST") {
     const body = await readJson(request, 4096);
     const id = Number.isFinite(body?.id) ? Math.trunc(body.id) : -1;
-    const asked = await sql`DELETE FROM vp_listen_requests WHERE id = ${id} AND to_id = ${userId} RETURNING from_id`;
+    const asked = await sql`DELETE FROM vp_listen_requests WHERE id = ${id} AND to_id = ${userId} RETURNING from_id, kind`;
     if (asked.length && body?.accept === true) {
-      // The host can't be a guest somewhere else at the same time.
-      await sql`UPDATE vp_users SET listen_host = NULL WHERE id = ${userId}`;
-      await sql`UPDATE vp_users SET listen_host = ${userId} WHERE id = ${asked[0].from_id}`;
+      // "ask": they join me. "invite": I join them. Either way the host can't also be a guest.
+      const host = asked[0].kind === "invite" ? asked[0].from_id : userId;
+      const guest = asked[0].kind === "invite" ? userId : asked[0].from_id;
+      await sql`UPDATE vp_users SET listen_host = NULL WHERE id = ${host}`;
+      await sql`UPDATE vp_users SET listen_host = ${host} WHERE id = ${guest}`;
     }
     return json({ ok: true });
   }

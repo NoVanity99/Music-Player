@@ -64,6 +64,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.Album
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.Modifier
@@ -204,6 +206,8 @@ internal fun Hero(
     subtitleContent: (@Composable (TextAlign) -> Unit)? = null,
     /** A small red pill beside the title, e.g. "ADVANCED TRANSITION". */
     badge: String? = null,
+    /** Something small after the title, e.g. a heart button. */
+    titleAction: (@Composable () -> Unit)? = null,
 ) {
     val background = MaterialTheme.colorScheme.background
     androidx.compose.foundation.layout.BoxWithConstraints(
@@ -243,6 +247,10 @@ internal fun Hero(
                             Spacer(Modifier.width(14.dp))
                             RedPill(badge)
                         }
+                        if (titleAction != null) {
+                            Spacer(Modifier.width(6.dp))
+                            titleAction()
+                        }
                     }
                     Spacer(Modifier.height(10.dp))
                     subtitleText(TextAlign.Start)
@@ -269,6 +277,7 @@ internal fun Hero(
                     RedPill(badge)
                     Spacer(Modifier.height(4.dp))
                 }
+                titleAction?.invoke()
                 subtitleText(TextAlign.Center)
                 Spacer(Modifier.height(4.dp))
                 Text(meta, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
@@ -422,6 +431,7 @@ private fun AlbumScreen(albumId: Long, actions: SongActions, contentPadding: Pad
     val ownerConfig = vm.ownerConfig?.collectAsStateWithLifecycle()?.value
     val advanced = remember(album, advancedOn, ownerConfig) { advancedOn && vm.hasAdvancedTransitions(album) }
     var showCover by remember { mutableStateOf(false) }
+    val favoriteAlbums by vm.favoriteAlbums.collectAsStateWithLifecycle()
     if (showCover) {
         androidx.compose.ui.window.Dialog(
             onDismissRequest = { showCover = false },
@@ -455,6 +465,17 @@ private fun AlbumScreen(albumId: Long, actions: SongActions, contentPadding: Pad
                     ArtistLinks(album.artist, vm, MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary, textAlign = align)
                 },
                 badge = if (advanced) "Advanced transition" else null,
+                titleAction = {
+                    // Heart an album to keep it in Your Library.
+                    val hearted = album.id in favoriteAlbums
+                    IconButton(onClick = { vm.setFavoriteAlbum(album, !hearted) }) {
+                        Icon(
+                            if (hearted) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+                            contentDescription = if (hearted) "Remove from your albums" else "Add to your albums",
+                            tint = if (hearted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
+                },
             )
         }
         item { PlayShuffleRow(album.songs, actions, album.title) }
