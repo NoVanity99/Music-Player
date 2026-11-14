@@ -70,7 +70,21 @@ private data class SyncResponse(
     val playlists: List<RemotePlaylist> = emptyList(),
     val artists: List<String> = emptyList(),
     val profile: AccountProfile = AccountProfile(),
+    val admin: Boolean = false,
 )
+
+/** A bug report, as the admin sees it. */
+@Serializable
+data class BugReport(val id: Long = 0, val username: String = "", val message: String = "", val app: String = "", val at: Long = 0)
+
+@Serializable
+private data class ReportBody(val message: String, val app: String)
+
+@Serializable
+private data class ReportsAnswer(val reports: List<BugReport> = emptyList())
+
+@Serializable
+private data class IdBody(val id: Long)
 
 @Serializable
 private data class ArtistsBody(val artists: List<String>)
@@ -115,6 +129,7 @@ data class PublicPlaylist(val name: String = "", val songs: List<String> = empty
 @Serializable
 data class PublicProfile(
     val username: String = "",
+    val admin: Boolean = false,
     val avatar: String? = null,
     val bio: String? = null,
     val likes: List<String>? = null,
@@ -270,6 +285,7 @@ class AccountRepository(
         queueStore.putBoolean(KEY_PLAYLISTS_DIRTY, false)
         queueStore.putBoolean(KEY_ARTISTS_DIRTY, false)
         storeFavoriteArtists(emptySet())
+        storeAdmin(false)
         queueStore.putBoolean(KEY_PROFILE_DIRTY, false)
         storeProfile(AccountProfile())
         favoritesDao().deleteAll()
@@ -365,6 +381,43 @@ class AccountRepository(
         // Unless another change came in while this one was on its way.
         if (body == json.encodeToString(ArtistsBody.serializer(), ArtistsBody(_favoriteArtists.value.toList()))) queueStore.putBoolean(KEY_ARTISTS_DIRTY, false)
         return true
+    }
+
+    // ---- Admin and bug reports ----
+
+    private val _isAdmin = MutableStateFlow(queueStore.getBoolean(KEY_ADMIN, false))
+
+    /** True for the owner's account (decided by the server). */
+    val isAdmin: StateFlow<Boolean> = _isAdmin.asStateFlow()
+
+    private fun storeAdmin(value: Boolean) {
+        _isAdmin.value = value
+        queueStore.putBoolean(KEY_ADMIN, value)
+    }
+
+    /** Sends a bug report. Returns null when it was sent, else what went wrong. */
+    suspend fun reportBug(message: String, app: String): String? = withContext(Dispatchers.IO) {
+        val response = try {
+            authed("POST", "/me/report", json.encodeToString(ReportBody.serializer(), ReportBody(message.trim(), app)))
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            null
+        } ?: return@withContext "Can't reach the server. Check your connection and try again."
+        if (response.status in 200..299) null
+        else runCatching { json.decodeFromString(ApiError.serializer(), response.body).message }.getOrNull()?.takeIf { it.isNotBlank() } ?: "The report couldn't be sent. Try again."
+    }
+
+    /** The reports people have sent (admin only); null when they can't be loaded. */
+    suspend fun bugReports(): List<BugReport>? = withContext(Dispatchers.IO) {
+        val response = runCatching { authed("GET", "/me/reports", null) }.getOrNull() ?: return@withContext null
+        if (response.status != 200) return@withContext null
+        runCatching { json.decodeFromString(ReportsAnswer.serializer(), response.body).reports }.getOrNull()
+    }
+
+    suspend fun deleteBugReport(id: Long) = withContext(Dispatchers.IO) {
+        runCatching { authed("POST", "/me/reports/delete", json.encodeToString(IdBody.serializer(), IdBody(id))) }
+        Unit
     }
 
     // ---- Profile ----
@@ -485,6 +538,7 @@ class AccountRepository(
                     )
                     syncedPlaylists = json.encodeToString(PlaylistsBody.serializer(), PlaylistsBody(remote.playlists))
                     if (!queueStore.getBoolean(KEY_ARTISTS_DIRTY, false)) storeFavoriteArtists(remote.artists.toSet())
+                    storeAdmin(remote.admin)
                     if (!queueStore.getBoolean(KEY_PROFILE_DIRTY, false)) storeProfile(remote.profile)
                     else storeProfile(_profile.value.copy(avatar = remote.profile.avatar))
                 }
@@ -538,6 +592,7 @@ class AccountRepository(
     }
 
     private companion object {
+        const val KEY_ADMIN = "is_admin"
         const val KEY_PROFILE = "profile"
         const val KEY_PROFILE_DIRTY = "profile_dirty"
         const val KEY_FAV_ARTISTS = "favorite_artists"

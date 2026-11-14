@@ -131,6 +131,8 @@ sealed interface Destination {
     /** Your playlists and your hearted artists, as pages of their own (opened from Account). */
     data object MyPlaylists : Destination
     data object MyArtists : Destination
+    /** The bug reports people sent (admin only). */
+    data object BugReports : Destination
     /** Someone else's public profile. */
     data class Profile(val username: String) : Destination
     data class MixDetail(val kind: com.novanity.musicplayer.data.MixKind) : Destination
@@ -188,6 +190,12 @@ class LibraryViewModel(
     fun setProfile(value: com.novanity.musicplayer.data.AccountProfile) {
         if (account != null) account.setProfile(value) else noProfile.value = value
     }
+
+    /** True for the owner's account: shows the Admin badge and the bug reports. */
+    val isAdmin: StateFlow<Boolean> = account?.isAdmin ?: MutableStateFlow(false)
+    suspend fun reportBug(message: String, app: String): String? = account?.reportBug(message, app) ?: "Sign in to send a report."
+    suspend fun bugReports(): List<com.novanity.musicplayer.data.BugReport>? = account?.bugReports()
+    suspend fun deleteBugReport(id: Long) { account?.deleteBugReport(id) }
 
     fun avatarUrl(token: String?): String? = account?.avatarUrl(token)
     fun setAvatar(jpeg: ByteArray) {

@@ -121,6 +121,7 @@ fun DetailScreen(destination: Destination, actions: SongActions, contentPadding:
         Destination.Friends -> FriendsPage(actions, contentPadding)
         Destination.MyPlaylists -> MyPlaylistsPage(actions, contentPadding)
         Destination.MyArtists -> MyArtistsPage(actions, contentPadding)
+        Destination.BugReports -> BugReportsPage(actions, contentPadding)
         is Destination.Profile -> ProfilePage(destination.username, actions, contentPadding)
         is Destination.MixDetail -> MixScreen(destination.kind, actions, contentPadding)
     }

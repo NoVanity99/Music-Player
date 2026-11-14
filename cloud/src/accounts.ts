@@ -50,6 +50,22 @@ function avatarToken(id: unknown, version: unknown): string | null {
   return typeof version === "string" && version ? `${id}?v=${version}` : null;
 }
 
+/** The owner's admin list (config.json in the bucket: {"admins": ["username"]}), re-read every minute. */
+let adminCache: { at: number; names: Set<string> } | null = null;
+async function adminNames(env: AccountsEnv): Promise<Set<string>> {
+  if (adminCache && Date.now() - adminCache.at < 60_000) return adminCache.names;
+  let names = new Set<string>();
+  try {
+    const object = await env.MUSIC.get("config.json");
+    const parsed: any = object ? await object.json() : null;
+    if (Array.isArray(parsed?.admins)) names = new Set(parsed.admins.filter((a: unknown) => typeof a === "string").map((a: string) => a.trim().toLowerCase()));
+  } catch {
+    // no admins if the file can't be read
+  }
+  adminCache = { at: Date.now(), names };
+  return names;
+}
+
 let schemaReady: Promise<void> | null = null;
 
 /** Creates the tables on first use (once per Worker instance; cheap when they exist). */
@@ -71,6 +87,14 @@ function ensureSchema(sql: Sql): Promise<void> {
     await sql`ALTER TABLE vp_users ADD COLUMN IF NOT EXISTS private JSONB NOT NULL DEFAULT '{}'::jsonb`;
     // Friends, what each person is playing, and listening together.
     await sql`ALTER TABLE vp_users ADD COLUMN IF NOT EXISTS avatar TEXT`;
+    await sql`CREATE TABLE IF NOT EXISTS vp_reports (
+      id BIGSERIAL PRIMARY KEY,
+      user_id UUID REFERENCES vp_users(id) ON DELETE SET NULL,
+      username TEXT NOT NULL,
+      message TEXT NOT NULL,
+      app TEXT NOT NULL DEFAULT '',
+      created_at BIGINT NOT NULL
+    )`;
     await sql`ALTER TABLE vp_users ADD COLUMN IF NOT EXISTS now_song TEXT`;
     await sql`ALTER TABLE vp_users ADD COLUMN IF NOT EXISTS now_next TEXT`;
     await sql`ALTER TABLE vp_users ADD COLUMN IF NOT EXISTS now_pos BIGINT NOT NULL DEFAULT 0`;
@@ -213,6 +237,7 @@ export async function accounts(request: Request, env: AccountsEnv, path: string,
     : [];
   if (!session.length) return json({ error: "signed_out", message: "Please sign in again." }, 401);
   const userId: string = session[0].id;
+  const admins = await adminNames(env);
 
   if (path === "/auth/logout" && method === "POST") {
     await sql`DELETE FROM vp_sessions WHERE token_hash = ${tokenHash}`;
@@ -227,6 +252,7 @@ export async function accounts(request: Request, env: AccountsEnv, path: string,
     ]);
     return json({
       user: { id: userId, username: session[0].display_name },
+      admin: admins.has(String(session[0].display_name).toLowerCase()),
       likes: likes.map((r) => ({ songId: r.song_id, at: Number(r.liked_at) })),
       plays: plays.map((r) => ({ songId: r.song_id, at: Number(r.played_at) })),
       playlists: user[0]?.playlists ?? [],
@@ -342,6 +368,7 @@ export async function accounts(request: Request, env: AccountsEnv, path: string,
     return json({
       friends: links.filter((l) => l.status === "accepted").map((l) => ({
         username: l.display_name,
+        admin: admins.has(String(l.display_name).toLowerCase()),
         avatar: avatarToken(l.id, l.avatar),
         online: fresh(l.seen_at),
         songId: fresh(l.now_at) ? l.now_song : null,
@@ -427,6 +454,31 @@ export async function accounts(request: Request, env: AccountsEnv, path: string,
     return json({ ok: true });
   }
 
+  // Bug reports: anyone signed in can send one; only admins can read them.
+  if (path === "/me/report" && method === "POST") {
+    const body = await readJson(request, 16 * 1024);
+    const message = typeof body?.message === "string" ? body.message.trim().slice(0, 4000) : "";
+    if (message.length < 5) return json({ error: "bad_request", message: "Describe what went wrong in a few words." }, 400);
+    const recent = await sql`SELECT count(*)::int AS n FROM vp_reports WHERE user_id = ${userId} AND created_at > ${Date.now() - 3_600_000}`;
+    if (recent[0].n >= 10) return json({ error: "too_many", message: "That's a lot of reports in an hour. Try again later." }, 429);
+    const app = typeof body?.app === "string" ? body.app.slice(0, 120) : "";
+    await sql`INSERT INTO vp_reports (user_id, username, message, app, created_at) VALUES (${userId}, ${session[0].display_name}, ${message}, ${app}, ${Date.now()})`;
+    return json({ ok: true });
+  }
+
+  if (path === "/me/reports" && method === "GET") {
+    if (!admins.has(String(session[0].display_name).toLowerCase())) return json({ error: "forbidden", message: "Only the admin can read bug reports." }, 403);
+    const rows = await sql`SELECT id, username, message, app, created_at FROM vp_reports ORDER BY id DESC LIMIT 200`;
+    return json({ reports: rows.map((r) => ({ id: Number(r.id), username: r.username, message: r.message, app: r.app, at: Number(r.created_at) })) });
+  }
+
+  if (path === "/me/reports/delete" && method === "POST") {
+    if (!admins.has(String(session[0].display_name).toLowerCase())) return json({ error: "forbidden" }, 403);
+    const body = await readJson(request, 4096);
+    if (Number.isFinite(body?.id)) await sql`DELETE FROM vp_reports WHERE id = ${Math.trunc(body.id)}`;
+    return json({ ok: true });
+  }
+
   // A profile picture: a small JPEG or PNG the app has already cropped and shrunk.
   if (path === "/me/avatar" && method === "PUT") {
     const body = await readJson(request, 400 * 1024);
@@ -479,6 +531,7 @@ export async function accounts(request: Request, env: AccountsEnv, path: string,
     }
     return json({
       username: u.display_name,
+      admin: admins.has(String(u.display_name).toLowerCase()),
       avatar: avatarToken(u.id, u.avatar),
       stats,
       bio: hidden.bio ? null : u.bio,

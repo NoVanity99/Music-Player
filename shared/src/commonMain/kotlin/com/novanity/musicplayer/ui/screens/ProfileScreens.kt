@@ -1,5 +1,6 @@
 package com.novanity.musicplayer.ui.screens
 
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -71,7 +72,7 @@ private val ProfileTint = Color(0xFF7C3AED)
 
 /** The round initial and name at the top of a profile. */
 @Composable
-private fun ProfileHeader(name: String, caption: String, avatarUrl: String? = null, onPicture: (() -> Unit)? = null, below: (@Composable () -> Unit)? = null) {
+private fun ProfileHeader(name: String, caption: String, admin: Boolean = false, avatarUrl: String? = null, onPicture: (() -> Unit)? = null, below: (@Composable () -> Unit)? = null) {
     Row(
         Modifier
             .fillMaxWidth()
@@ -83,7 +84,13 @@ private fun ProfileHeader(name: String, caption: String, avatarUrl: String? = nu
         Spacer(Modifier.width(20.dp))
         Column {
             Text(caption.uppercase(), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(name, style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(name, style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                if (admin) {
+                    Spacer(Modifier.width(12.dp))
+                    com.novanity.musicplayer.ui.components.AdminBadge()
+                }
+            }
             below?.invoke()
         }
     }
@@ -139,6 +146,7 @@ internal fun AccountPage(actions: SongActions, contentPadding: PaddingValues) {
     val artists by vm.favoriteArtists.collectAsStateWithLifecycle()
     val plays by vm.playCounts.collectAsStateWithLifecycle()
     val name = (state as? AccountState.SignedIn)?.user?.username ?: "You"
+    val isAdmin by vm.isAdmin.collectAsStateWithLifecycle()
     var editingBio by remember { mutableStateOf(false) }
     val pickPicture = com.novanity.musicplayer.platform.LocalPlatform.current.rememberImagePicker { bytes -> vm.setAvatar(bytes) }
     var find by rememberSaveable { mutableStateOf("") }
@@ -167,7 +175,7 @@ internal fun AccountPage(actions: SongActions, contentPadding: PaddingValues) {
     CollectionScaffold("Account", ProfileTint, { vm.back() }, emptyList(), contentPadding) {
         item {
             // Click the picture (or "Change picture") to choose one from this device.
-            ProfileHeader(name, "Your account", vm.avatarUrl(profile.avatar), pickPicture) {
+            ProfileHeader(name, "Your account", isAdmin, vm.avatarUrl(profile.avatar), pickPicture) {
                 if (pickPicture != null) {
                     Row {
                         TextButton(onClick = pickPicture, contentPadding = PaddingValues(horizontal = 0.dp)) { Text(if (profile.avatar == null) "Add a profile picture" else "Change picture") }
@@ -237,7 +245,13 @@ internal fun AccountPage(actions: SongActions, contentPadding: PaddingValues) {
                             com.novanity.musicplayer.ui.components.Avatar(friend.username, vm.avatarUrl(friend.avatar), 32.dp)
                             Spacer(Modifier.width(12.dp))
                             Column {
-                                Text(friend.username, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(friend.username, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                                    if (friend.admin) {
+                                        Spacer(Modifier.width(8.dp))
+                                        com.novanity.musicplayer.ui.components.AdminBadge()
+                                    }
+                                }
                                 Text(
                                     if (song != null && friend.playing) "Listening to ${song.title} \u2022 ${song.artist}" else if (friend.online) "Online \u2022 not listening to anything" else "Offline",
                                     style = MaterialTheme.typography.bodySmall,
@@ -296,7 +310,7 @@ internal fun ProfilePage(username: String, actions: SongActions, contentPadding:
     val profile = result?.first
 
     CollectionScaffold(profile?.username ?: username, ProfileTint, { vm.back() }, emptyList(), contentPadding) {
-        item { ProfileHeader(profile?.username ?: username, "Profile", vm.avatarUrl(profile?.avatar)) }
+        item { ProfileHeader(profile?.username ?: username, "Profile", profile?.admin == true, vm.avatarUrl(profile?.avatar)) }
         if (result == null) {
             item { Box(Modifier.fillMaxWidth().height(240.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() } }
             return@CollectionScaffold
@@ -467,7 +481,13 @@ internal fun FriendsPage(actions: SongActions, contentPadding: PaddingValues) {
                 }
                 Spacer(Modifier.width(14.dp))
                 Column(Modifier.weight(1f)) {
-                    Text(friend.username, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(friend.username, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                        if (friend.admin) {
+                            Spacer(Modifier.width(8.dp))
+                            com.novanity.musicplayer.ui.components.AdminBadge()
+                        }
+                    }
                     Text(
                         when {
                             song != null && friend.playing -> "Listening to ${song.title} • ${song.artist}"
@@ -632,6 +652,41 @@ internal fun MyArtistsPage(actions: SongActions, contentPadding: PaddingValues) 
                 menu = actions.collectionMenu(artist.songs),
                 heart = true,
             )
+        }
+        item { Spacer(Modifier.height(32.dp)) }
+    }
+}
+
+
+// ---------- Bug reports (admin) ----------
+
+/** What people have reported, newest first. Only the admin's account can open this. */
+@Composable
+internal fun BugReportsPage(actions: SongActions, contentPadding: PaddingValues) {
+    val vm = actions.library
+    var reload by remember { mutableStateOf(0) }
+    val reports by produceState<List<com.novanity.musicplayer.data.BugReport>?>(null, reload) { value = vm.bugReports() ?: emptyList() }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    CollectionScaffold("Bug reports", ProfileTint, { vm.back() }, emptyList(), contentPadding) {
+        item { PageTitle("Bug reports", reports?.let { if (it.size == 1) "1 report" else "${it.size} reports" } ?: "Loading\u2026") }
+        val list = reports
+        if (list != null && list.isEmpty()) {
+            item { Text("Nothing has been reported.", modifier = Modifier.padding(24.dp), color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        }
+        items(list.orEmpty(), key = { it.id }) { r ->
+            Surface(shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surfaceContainer, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
+                Column(Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(r.username, style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f).clickable { vm.open(Destination.Profile(r.username)) })
+                        TextButton(onClick = { scope.launch { vm.deleteBugReport(r.id); reload++ } }) { Text("Done") }
+                    }
+                    Text(r.message, style = MaterialTheme.typography.bodyMedium)
+                    if (r.app.isNotBlank()) {
+                        Spacer(Modifier.height(6.dp))
+                        Text(r.app, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
         }
         item { Spacer(Modifier.height(32.dp)) }
     }

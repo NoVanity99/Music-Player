@@ -1,5 +1,12 @@
 package com.novanity.musicplayer.ui.screens
 
+import kotlinx.coroutines.launch
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.BugReport
+import androidx.compose.material.icons.rounded.Extension
+import androidx.compose.material.icons.rounded.Sync
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.border
@@ -81,6 +88,12 @@ fun SettingsScreen(actions: SongActions, contentPadding: PaddingValues) {
     val lib by vm.grouped.collectAsStateWithLifecycle()
     val platform = LocalPlatform.current
 
+    val openGroups = remember { androidx.compose.runtime.mutableStateMapOf<String, Boolean>() }
+    val isAdmin by vm.isAdmin.collectAsStateWithLifecycle()
+    var reporting by remember { mutableStateOf(false) }
+    if (reporting) ReportBugDialog(vm, appInfo = (if (platform.isDesktop) "Windows" else "Android") + (actions.updates?.let { " \u2022 version ${it.currentVersion}" } ?: "")) { reporting = false }
+
+    androidx.compose.runtime.CompositionLocalProvider(LocalOpenGroups provides openGroups) {
     LazyColumn(
         Modifier.fillMaxSize(),
         contentPadding = PaddingValues(bottom = contentPadding.calculateBottomPadding() + 24.dp),
@@ -101,14 +114,14 @@ fun SettingsScreen(actions: SongActions, contentPadding: PaddingValues) {
         // ---- Account ----
         if (vm.accountsAvailable) {
             item { GroupLabel("Account") }
-            item { SettingsCard { AccountSettingsRow(vm, actions::toast) } }
+            item { SettingsCard("Account") { AccountSettingsRow(vm, actions::toast) } }
         }
 
         // ---- Cloud library ----
         if (vm.cloudAvailable) {
             item { GroupLabel("Cloud library") }
             item {
-                SettingsCard {
+                SettingsCard("Cloud library") {
                     Column(Modifier.padding(16.dp)) {
                         if (vm.cloudBuiltIn) {
                             // The server is built in: just the status and a way to reload the song list.
@@ -152,7 +165,7 @@ fun SettingsScreen(actions: SongActions, contentPadding: PaddingValues) {
             val crossfade by vm.crossfadeSeconds.collectAsStateWithLifecycle()
             val speed by actions.player.speed.collectAsStateWithLifecycle()
             var showSpeed by remember { mutableStateOf(false) }
-            SettingsCard {
+            SettingsCard("Playback") {
                 Column(Modifier.padding(16.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("Crossfade", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
@@ -184,7 +197,7 @@ fun SettingsScreen(actions: SongActions, contentPadding: PaddingValues) {
         // ---- Appearance ----
         item { GroupLabel("Appearance") }
         item {
-            SettingsCard {
+            SettingsCard("Appearance") {
                 Column(Modifier.padding(16.dp)) {
                     Text("Theme", style = MaterialTheme.typography.titleSmall)
                     Spacer(Modifier.height(12.dp))
@@ -249,7 +262,7 @@ fun SettingsScreen(actions: SongActions, contentPadding: PaddingValues) {
         if (actions.player.spectrum != null) {
             item {
                 val on by vm.visualizerEnabled.collectAsStateWithLifecycle()
-                SettingsCard {
+                SettingsCard("Appearance") {
                     SettingRow(
                         icon = Icons.Rounded.GraphicEq,
                         title = "Visualizer",
@@ -267,7 +280,7 @@ fun SettingsScreen(actions: SongActions, contentPadding: PaddingValues) {
             item {
                 val state by updates.state.collectAsStateWithLifecycle()
                 val auto by updates.autoCheck.collectAsStateWithLifecycle()
-                SettingsCard {
+                SettingsCard("Updates") {
                     SettingRow(
                         icon = Icons.Rounded.SystemUpdate,
                         title = "Version ${updates.currentVersion}",
@@ -307,7 +320,7 @@ fun SettingsScreen(actions: SongActions, contentPadding: PaddingValues) {
             item {
                 val discord by vm.discordPresence.collectAsStateWithLifecycle()
                 val discordStatus = platform.discordStatus?.collectAsStateWithLifecycle()?.value
-                SettingsCard {
+                SettingsCard("Integrations") {
                     SettingRow(
                         icon = Icons.Rounded.Gamepad,
                         title = "Discord Rich Presence",
@@ -321,7 +334,7 @@ fun SettingsScreen(actions: SongActions, contentPadding: PaddingValues) {
         } else {
             item { GroupLabel("Integrations") }
             item {
-                SettingsCard {
+                SettingsCard("Integrations") {
                     SettingRow(
                         icon = Icons.Rounded.Gamepad,
                         title = "Discord Rich Presence",
@@ -335,7 +348,7 @@ fun SettingsScreen(actions: SongActions, contentPadding: PaddingValues) {
         // ---- Library ----
         item { GroupLabel("Library") }
         item {
-            SettingsCard {
+            SettingsCard("Library") {
                 if (vm.canShowBios) {
                     val bios by vm.artistBiosEnabled.collectAsStateWithLifecycle()
                     SettingRow(
@@ -349,29 +362,77 @@ fun SettingsScreen(actions: SongActions, contentPadding: PaddingValues) {
                 SettingRow(Icons.Rounded.Shield, "Private by design", "No ads or tracking. The music comes only from our cloud and is safety checked.")
             }
         }
+
+        // ---- Help ----
+        item { GroupLabel("Help") }
+        item {
+            SettingsCard("Help") {
+                SettingRow(Icons.Rounded.BugReport, "Report a bug", "Tell us what went wrong", onClick = { reporting = true })
+                if (isAdmin) {
+                    SettingRow(Icons.Rounded.Shield, "Bug reports", "Read what people have reported", onClick = { vm.open(com.novanity.musicplayer.ui.Destination.BugReports) })
+                }
+            }
+        }
+    }
     }
 }
 
+/** Which settings sections are open. They start closed, so the page is a short list. */
+private val LocalOpenGroups = androidx.compose.runtime.compositionLocalOf<androidx.compose.runtime.snapshots.SnapshotStateMap<String, Boolean>> { error("no settings groups") }
+
+private val GroupInfo: Map<String, Pair<ImageVector, String>> = mapOf(
+    "Account" to (Icons.Rounded.Person to "Your sign-in"),
+    "Cloud library" to (Icons.Rounded.Sync to "Library status and downloads"),
+    "Playback" to (Icons.Rounded.GraphicEq to "Crossfade, transitions, speed and equalizer"),
+    "Appearance" to (Icons.Rounded.Palette to "Theme, colours and the visualizer"),
+    "Updates" to (Icons.Rounded.Sync to "Version and automatic updates"),
+    "Integrations" to (Icons.Rounded.Extension to "Discord"),
+    "Library" to (Icons.Rounded.Shield to "Artist bios and privacy"),
+    "Help" to (Icons.Rounded.BugReport to "Report a bug"),
+)
+
+/** A section heading you click to open or close. */
 @Composable
 private fun GroupLabel(text: String) {
-    Text(
-        text.uppercase(),
-        style = MaterialTheme.typography.labelMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(start = 32.dp, top = 24.dp, bottom = 8.dp),
-    )
+    val open = LocalOpenGroups.current
+    val isOpen = open[text] == true
+    val turn by androidx.compose.animation.core.animateFloatAsState(if (isOpen) 90f else 0f, label = "chevron")
+    val (icon, about) = GroupInfo[text] ?: (Icons.Rounded.Settings to "")
+    Surface(
+        onClick = { open[text] = !isOpen },
+        shape = RoundedCornerShape(16.dp),
+        color = if (isOpen) MaterialTheme.colorScheme.surfaceContainerHigh else MaterialTheme.colorScheme.surfaceContainer,
+        modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 10.dp),
+    ) {
+        Row(Modifier.padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
+            Spacer(Modifier.width(16.dp))
+            Column(Modifier.weight(1f)) {
+                Text(text, style = MaterialTheme.typography.titleMedium)
+                if (about.isNotEmpty()) Text(about, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Icon(Icons.Rounded.ChevronRight, contentDescription = if (isOpen) "Close" else "Open", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.graphicsLayer { rotationZ = turn })
+        }
+    }
 }
 
+/** The settings of one section, shown while that section is open. */
 @Composable
-private fun SettingsCard(content: @Composable () -> Unit) {
-    Surface(
-        shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surfaceContainer,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp),
+private fun SettingsCard(group: String, content: @Composable () -> Unit) {
+    androidx.compose.animation.AnimatedVisibility(
+        visible = LocalOpenGroups.current[group] == true,
+        enter = androidx.compose.animation.expandVertically() + androidx.compose.animation.fadeIn(),
+        exit = androidx.compose.animation.shrinkVertically() + androidx.compose.animation.fadeOut(),
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(0.dp)) { content() }
+        Surface(
+            shape = RoundedCornerShape(16.dp),
+            color = MaterialTheme.colorScheme.surfaceContainer,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 16.dp, end = 16.dp, top = 6.dp),
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(0.dp)) { content() }
+        }
     }
 }
 
@@ -417,4 +478,49 @@ private fun SettingRow(
         }
         trailing?.invoke()
     }
+}
+
+
+/** A box to describe a problem; it's sent to the admin along with the app version. */
+@Composable
+private fun ReportBugDialog(vm: com.novanity.musicplayer.ui.LibraryViewModel, appInfo: String, onDismiss: () -> Unit) {
+    var text by remember { mutableStateOf("") }
+    var sending by remember { mutableStateOf(false) }
+    var problem by remember { mutableStateOf<String?>(null) }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = { if (!sending) onDismiss() },
+        title = { Text("Report a bug") },
+        text = {
+            Column {
+                androidx.compose.material3.OutlinedTextField(
+                    value = text,
+                    onValueChange = { text = it.take(4000); problem = null },
+                    placeholder = { Text("What happened, and what were you doing when it did?") },
+                    minLines = 5,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Text(
+                    problem ?: "Sent with your username and \u201C$appInfo\u201D.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (problem != null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = !sending && text.trim().length >= 5,
+                onClick = {
+                    sending = true
+                    scope.launch {
+                        val failed = vm.reportBug(text, appInfo)
+                        sending = false
+                        if (failed == null) { vm.notify("Thanks. Your report was sent."); onDismiss() } else problem = failed
+                    }
+                },
+            ) { Text(if (sending) "Sending\u2026" else "Send") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss, enabled = !sending) { Text("Cancel") } },
+    )
 }

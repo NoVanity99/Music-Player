@@ -3,7 +3,11 @@ package com.novanity.musicplayer.ui.components
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -69,3 +73,75 @@ fun Avatar(name: String, url: String?, size: Dp, modifier: Modifier = Modifier) 
         }
     }
 }
+
+/**
+ * The "ADMIN" bubble shown next to the owner's name: a gold outline with a gold crown and gold
+ * lettering, and a band of light that sweeps across it every few seconds so it catches the eye.
+ */
+@Composable
+fun AdminBadge(modifier: Modifier = Modifier) {
+    val gold = Color(0xFFF5C33B)
+    val pale = Color(0xFFFFF3C4)
+    val deep = Color(0xFFB8860B)
+    val sweep by androidx.compose.animation.core.rememberInfiniteTransition(label = "admin").animateFloat(
+        initialValue = -1f,
+        targetValue = 2f,
+        animationSpec = androidx.compose.animation.core.infiniteRepeatable(
+            androidx.compose.animation.core.tween(2600, easing = androidx.compose.animation.core.LinearEasing),
+        ),
+        label = "shine",
+    )
+    // Gold that brightens where the light is passing.
+    fun shine(width: Float) = Brush.linearGradient(
+        colorStops = arrayOf(0f to deep, (sweep - 0.25f).coerceIn(0f, 1f) to gold, sweep.coerceIn(0f, 1f) to pale, (sweep + 0.25f).coerceIn(0f, 1f) to gold, 1f to deep),
+        start = androidx.compose.ui.geometry.Offset(0f, 0f),
+        end = androidx.compose.ui.geometry.Offset(width, width * 0.35f),
+    )
+    androidx.compose.foundation.layout.BoxWithConstraints(modifier) {
+        androidx.compose.foundation.layout.Row(
+            Modifier
+                .clip(androidx.compose.foundation.shape.RoundedCornerShape(50))
+                .background(gold.copy(alpha = 0.10f))
+                .drawWithContentBorder { w -> shine(w) }
+                .padding(start = 7.dp, end = 9.dp, top = 3.dp, bottom = 3.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            androidx.compose.foundation.Canvas(Modifier.size(width = 15.dp, height = 12.dp)) {
+                val w = size.width
+                val h = size.height
+                // A crown: three points over a band.
+                val crown = androidx.compose.ui.graphics.Path().apply {
+                    moveTo(0f, h * 0.18f); lineTo(w * 0.27f, h * 0.55f); lineTo(w * 0.5f, 0f); lineTo(w * 0.73f, h * 0.55f); lineTo(w, h * 0.18f)
+                    lineTo(w * 0.88f, h * 0.78f); lineTo(w * 0.12f, h * 0.78f); close()
+                }
+                drawPath(crown, shine(w * 4))
+                drawRoundRect(shine(w * 4), topLeft = androidx.compose.ui.geometry.Offset(w * 0.12f, h * 0.86f), size = androidx.compose.ui.geometry.Size(w * 0.76f, h * 0.14f), cornerRadius = androidx.compose.ui.geometry.CornerRadius(h * 0.07f))
+            }
+            androidx.compose.foundation.layout.Spacer(Modifier.size(5.dp))
+            Text(
+                "ADMIN",
+                fontSize = 10.5.sp,
+                fontWeight = FontWeight.ExtraBold,
+                letterSpacing = 0.8.sp,
+                maxLines = 1,
+                softWrap = false,
+                style = androidx.compose.ui.text.TextStyle(brush = shine(220f)),
+            )
+        }
+    }
+}
+
+/** A thin rounded outline drawn with a brush that depends on the element's width. */
+private fun Modifier.drawWithContentBorder(brush: (width: Float) -> Brush): Modifier = this.then(
+    Modifier.drawWithContent {
+        drawContent()
+        val stroke = 1.4.dp.toPx()
+        drawRoundRect(
+            brush(size.width),
+            topLeft = androidx.compose.ui.geometry.Offset(stroke / 2, stroke / 2),
+            size = androidx.compose.ui.geometry.Size(size.width - stroke, size.height - stroke),
+            cornerRadius = androidx.compose.ui.geometry.CornerRadius(size.height / 2),
+            style = androidx.compose.ui.graphics.drawscope.Stroke(stroke),
+        )
+    }
+)
