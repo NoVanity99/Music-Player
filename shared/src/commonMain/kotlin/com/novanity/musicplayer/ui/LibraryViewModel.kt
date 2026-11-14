@@ -125,6 +125,10 @@ sealed interface Destination {
     data object Equalizer : Destination
     data object Stats : Destination
     data object Downloads : Destination
+    /** Your own account page. */
+    data object Account : Destination
+    /** Someone else's public profile. */
+    data class Profile(val username: String) : Destination
     data class MixDetail(val kind: com.novanity.musicplayer.data.MixKind) : Destination
 }
 
@@ -154,6 +158,28 @@ class LibraryViewModel(
         }
     }
     fun signOut() { viewModelScope.launch { account?.signOut() } }
+
+    // ---- Profile ----
+
+    private val noProfile = MutableStateFlow(com.novanity.musicplayer.data.AccountProfile())
+    val profile: StateFlow<com.novanity.musicplayer.data.AccountProfile> = account?.profile ?: noProfile
+    fun setProfile(value: com.novanity.musicplayer.data.AccountProfile) {
+        if (account != null) account.setProfile(value) else noProfile.value = value
+    }
+
+    suspend fun lookUpProfile(username: String): Pair<com.novanity.musicplayer.data.PublicProfile?, String?> =
+        account?.lookUpProfile(username) ?: (null to "Accounts aren't available.")
+
+    /** The library's songs for a list of the server's song ids (ones no longer in the library are left out). */
+    fun songsForCloudIds(ids: List<String>): List<Song> = ids.mapNotNull { music.songsById[com.novanity.musicplayer.data.CloudRepository.songIdFor(it)] }
+
+    /** The Artists list shows only hearted artists when opened from Home's "Your artists". */
+    var artistsFavoritesOnly by mutableStateOf(false)
+    fun showFavoriteArtists() {
+        showLibrary(LibraryFilter.ARTISTS)
+        artistsFavoritesOnly = favoriteArtistsNow().isNotEmpty()
+    }
+    private fun favoriteArtistsNow(): Set<String> = account?.favoriteArtists?.value ?: localFavoriteArtists.value
 
     /** Artists this account has hearted; without accounts (tests) they're kept for the session. */
     private val localFavoriteArtists = MutableStateFlow<Set<String>>(emptySet())
@@ -263,6 +289,7 @@ class LibraryViewModel(
     }
 
     fun showLibrary(filter: LibraryFilter) {
+        artistsFavoritesOnly = false
         libraryFilter = filter
         stacks.getValue(Tab.LIBRARY).clear()
         tab = Tab.LIBRARY

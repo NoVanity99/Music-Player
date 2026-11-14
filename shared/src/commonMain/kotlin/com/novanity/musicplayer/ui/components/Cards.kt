@@ -233,8 +233,8 @@ fun SongCard(song: Song, onClick: () -> Unit, modifier: Modifier = Modifier.widt
     HoverCard(onClick, onClick, modifier, art = { m -> AlbumArt(song, m, shape = RoundedCornerShape(8.dp)) }, title = song.title, subtitle = song.artist)
 
 @Composable
-fun ArtistCard(artist: Artist, onClick: () -> Unit, modifier: Modifier = Modifier.width(CardWidth - 16.dp), onPlay: (() -> Unit)? = null) =
-    HoverCard(onClick, onPlay, modifier, center = true, art = { m -> AlbumArt(artist.songs.first(), m, shape = CircleShape) }, title = artist.name, subtitle = "Artist")
+fun ArtistCard(artist: Artist, onClick: () -> Unit, modifier: Modifier = Modifier.width(CardWidth - 16.dp), onPlay: (() -> Unit)? = null, favorite: Boolean = false) =
+    HoverCard(onClick, onPlay, modifier, center = true, art = { m -> AlbumArt(artist.songs.first(), m, shape = CircleShape) }, title = if (favorite) "\u2665 ${artist.name}" else artist.name, subtitle = "Artist")
 
 @Composable
 fun PlaylistTile(playlist: PlaylistCard, onClick: () -> Unit, modifier: Modifier = Modifier.width(CardWidth), onPlay: (() -> Unit)? = null) =
@@ -281,6 +281,8 @@ fun CollectionRow(
     art: @Composable (Modifier) -> Unit,
     onClick: () -> Unit,
     menu: List<MenuAction> = emptyList(),
+    /** A small heart after the title (a favourited artist). */
+    heart: Boolean = false,
 ) {
     RightClickMenu(menu) { rightClick ->
     Row(
@@ -294,7 +296,13 @@ fun CollectionRow(
         art(Modifier.size(56.dp))
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(title, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                if (heart) {
+                    Spacer(Modifier.width(6.dp))
+                    Icon(Icons.Rounded.Favorite, contentDescription = "In Your artists", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(14.dp))
+                }
+            }
             Text(
                 subtitle,
                 style = MaterialTheme.typography.bodyMedium,

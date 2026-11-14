@@ -5,6 +5,7 @@ import com.novanity.musicplayer.ui.components.LocalTopEndInset
 import androidx.compose.material.icons.rounded.DownloadDone
 import com.novanity.musicplayer.platform.LocalPlatform
 import androidx.compose.material.icons.rounded.PictureInPictureAlt
+import androidx.compose.material.icons.rounded.AccountCircle
 import androidx.compose.material.icons.rounded.Insights
 import com.novanity.musicplayer.ui.components.ArtistLinks
 import androidx.compose.animation.core.rememberInfiniteTransition
@@ -243,6 +244,7 @@ private fun Sidebar(library: LibraryViewModel, actions: SongActions, uiState: Ro
             }
         }
         if (hasCloud) NavRow(Icons.Rounded.DownloadDone, Icons.Rounded.DownloadDone, "Downloads", top == Destination.Downloads) { library.open(Destination.Downloads) }
+        if (library.accountsAvailable) NavRow(Icons.Rounded.AccountCircle, Icons.Rounded.AccountCircle, "Account", top == Destination.Account) { library.open(Destination.Account) }
         NavRow(Icons.Rounded.Insights, Icons.Rounded.Insights, "Your stats", top == Destination.Stats) { library.open(Destination.Stats) }
         NavRow(Icons.Rounded.Keyboard, Icons.Rounded.Keyboard, "Shortcuts", false) { uiState.showShortcuts = true }
         NavRow(Icons.Rounded.Settings, Icons.Rounded.Settings, "Settings", top == Destination.Settings) { library.open(Destination.Settings) }

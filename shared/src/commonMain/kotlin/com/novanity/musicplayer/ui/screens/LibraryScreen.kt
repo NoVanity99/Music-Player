@@ -85,6 +85,7 @@ import com.novanity.musicplayer.ui.components.songCount
 fun LibraryScreen(actions: SongActions, contentPadding: PaddingValues) {
     val vm = actions.library
     val lib by vm.library.collectAsStateWithLifecycle()
+    val favoriteArtists by vm.favoriteArtists.collectAsStateWithLifecycle()
     var creating by rememberSaveable { mutableStateOf(false) }
 
     Column(Modifier.fillMaxSize()) {
@@ -148,8 +149,18 @@ fun LibraryScreen(actions: SongActions, contentPadding: PaddingValues) {
                         }
                     }
                     LibraryFilter.ARTISTS -> LazyColumn(Modifier.fillMaxSize(), contentPadding = listPadding) {
-                        items(lib.artists, key = { it.name }) { artist ->
+                        // Opened from "Your artists": just the hearted ones, with a way back to everyone.
+                        if (vm.artistsFavoritesOnly) {
+                            item {
+                                Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Text("Your artists", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                                    androidx.compose.material3.TextButton(onClick = { vm.artistsFavoritesOnly = false }) { Text("Show all artists") }
+                                }
+                            }
+                        }
+                        items(if (vm.artistsFavoritesOnly) lib.artists.filter { it.name in favoriteArtists } else lib.artists, key = { it.name }) { artist ->
                             CollectionRow(
+                                heart = artist.name in favoriteArtists,
                                 title = artist.name,
                                 subtitle = "${if (artist.albumCount == 1) "1 album" else "${artist.albumCount} albums"} • ${songCount(artist.songs.size)}",
                                 art = { m -> AlbumArt(artist.songs.first(), m, shape = CircleShape) },

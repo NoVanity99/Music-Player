@@ -69,10 +69,32 @@ private data class SyncResponse(
     val plays: List<Stamp> = emptyList(),
     val playlists: List<RemotePlaylist> = emptyList(),
     val artists: List<String> = emptyList(),
+    val profile: AccountProfile = AccountProfile(),
 )
 
 @Serializable
 private data class ArtistsBody(val artists: List<String>)
+
+/** Which parts of your profile other people can't see. Everything is public unless switched off. */
+@Serializable
+data class ProfilePrivacy(val bio: Boolean = false, val likes: Boolean = false, val playlists: Boolean = false, val artists: Boolean = false)
+
+/** Your own profile settings: an optional bio and what's private. */
+@Serializable
+data class AccountProfile(val bio: String = "", val private: ProfilePrivacy = ProfilePrivacy())
+
+@Serializable
+data class PublicPlaylist(val name: String = "", val songs: List<String> = emptyList())
+
+/** Someone's profile as others see it; a null part is private. Song ids are the server's. */
+@Serializable
+data class PublicProfile(
+    val username: String = "",
+    val bio: String? = null,
+    val likes: List<String>? = null,
+    val playlists: List<PublicPlaylist>? = null,
+    val artists: List<String>? = null,
+)
 
 /**
  * The signed-in account. Liked songs, play history (which the stats and mixes are built from) and
@@ -221,6 +243,8 @@ class AccountRepository(
         queueStore.putBoolean(KEY_PLAYLISTS_DIRTY, false)
         queueStore.putBoolean(KEY_ARTISTS_DIRTY, false)
         storeFavoriteArtists(emptySet())
+        queueStore.putBoolean(KEY_PROFILE_DIRTY, false)
+        storeProfile(AccountProfile())
         favoritesDao().deleteAll()
         historyDao().deleteAll()
         playlistDao().replaceAll(emptyList())
@@ -313,6 +337,68 @@ class AccountRepository(
         return true
     }
 
+    // ---- Profile ----
+
+    private val _profile = MutableStateFlow(
+        queueStore.getString(KEY_PROFILE)?.let { runCatching { json.decodeFromString(AccountProfile.serializer(), it) }.getOrNull() } ?: AccountProfile()
+    )
+
+    /** This account's bio and privacy choices. */
+    val profile: StateFlow<AccountProfile> = _profile.asStateFlow()
+
+    private fun storeProfile(value: AccountProfile) {
+        _profile.value = value
+        queueStore.putString(KEY_PROFILE, json.encodeToString(AccountProfile.serializer(), value))
+    }
+
+    fun setProfile(value: AccountProfile) {
+        val clean = value.copy(bio = value.bio.trim().take(300))
+        if (clean == _profile.value) return
+        storeProfile(clean)
+        queueStore.putBoolean(KEY_PROFILE_DIRTY, true)
+        scope.launch(Dispatchers.IO) { runCatching { syncLock.withLock { pushProfile() } } }
+    }
+
+    private suspend fun pushProfile(): Boolean {
+        if (_state.value !is AccountState.SignedIn) return false
+        val sent = _profile.value
+        val response = try {
+            authed("PUT", "/me/profile", json.encodeToString(AccountProfile.serializer(), sent))
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            null
+        }
+        if (response == null || response.status !in 200..299) return false
+        if (sent == _profile.value) queueStore.putBoolean(KEY_PROFILE_DIRTY, false)
+        return true
+    }
+
+    /** Another account's public profile, or a message saying why it can't be shown. */
+    suspend fun lookUpProfile(username: String): Pair<PublicProfile?, String?> = withContext(Dispatchers.IO) {
+        val name = username.trim()
+        if (name.isEmpty()) return@withContext null to "Type a username."
+        val response = try {
+            authed("GET", "/users/" + name.encodeURLPathPart(), null)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            null
+        } ?: return@withContext null to "Can't reach the server. Check your connection."
+        when (response.status) {
+            200 -> runCatching { json.decodeFromString(PublicProfile.serializer(), response.body) }.getOrNull()?.let { it to null } ?: (null to "That profile couldn't be read.")
+            404 -> null to "No account with that username."
+            else -> null to "The server had a problem. Try again later."
+        }
+    }
+
+    private fun String.encodeURLPathPart(): String = buildString {
+        for (b in this@encodeURLPathPart.encodeToByteArray()) {
+            val c = b.toInt().toChar()
+            if (c.isLetterOrDigit() && b >= 0 || c in "-._~") append(c) else append('%').append((b.toInt() and 0xFF).toString(16).uppercase().padStart(2, '0'))
+        }
+    }
+
     // ---- Syncing ----
 
     /**
@@ -327,6 +413,7 @@ class AccountRepository(
                     if (!flush()) return@withLock
                     if (queueStore.getBoolean(KEY_PLAYLISTS_DIRTY, false) && !pushPlaylists(force = true)) return@withLock
                     if (queueStore.getBoolean(KEY_ARTISTS_DIRTY, false) && !pushArtists()) return@withLock
+                    if (queueStore.getBoolean(KEY_PROFILE_DIRTY, false) && !pushProfile()) return@withLock
                     val response = authed("GET", "/me/sync", null) ?: return@withLock
                     if (response.status != 200) return@withLock
                     val remote = runCatching { json.decodeFromString(SyncResponse.serializer(), response.body) }.getOrNull() ?: return@withLock
@@ -341,6 +428,7 @@ class AccountRepository(
                     )
                     syncedPlaylists = json.encodeToString(PlaylistsBody.serializer(), PlaylistsBody(remote.playlists))
                     if (!queueStore.getBoolean(KEY_ARTISTS_DIRTY, false)) storeFavoriteArtists(remote.artists.toSet())
+                    if (!queueStore.getBoolean(KEY_PROFILE_DIRTY, false)) storeProfile(remote.profile)
                 }
             }
         } catch (e: CancellationException) {
@@ -392,6 +480,8 @@ class AccountRepository(
     }
 
     private companion object {
+        const val KEY_PROFILE = "profile"
+        const val KEY_PROFILE_DIRTY = "profile_dirty"
         const val KEY_FAV_ARTISTS = "favorite_artists"
         const val KEY_ARTISTS_DIRTY = "favorite_artists_dirty"
         const val KEY_TOKEN = "session_token"

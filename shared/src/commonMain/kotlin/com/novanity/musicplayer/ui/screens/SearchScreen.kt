@@ -75,6 +75,7 @@ private data class BrowseTile(val title: String, val colors: List<Color>, val ic
 @Composable
 fun SearchScreen(actions: SongActions, contentPadding: PaddingValues) {
     val vm = actions.library
+    val favoriteArtists by vm.favoriteArtists.collectAsStateWithLifecycle()
     val query by vm.searchQuery.collectAsStateWithLifecycle()
     val results by vm.searchResults.collectAsStateWithLifecycle()
     val likedIds by vm.likedIds.collectAsStateWithLifecycle()
@@ -178,7 +179,7 @@ fun SearchScreen(actions: SongActions, contentPadding: PaddingValues) {
             item { SectionHeader("Artists") }
             item {
                 CardRow(results.artists, key = { it.name }, minCardWidth = com.novanity.musicplayer.ui.components.CardWidth - 16.dp) { a, m ->
-                    ArtistCard(a, onClick = { vm.open(Destination.ArtistDetail(a.name)) }, modifier = m)
+                    ArtistCard(a, onClick = { vm.open(Destination.ArtistDetail(a.name)) }, modifier = m, favorite = a.name in favoriteArtists)
                 }
             }
         }

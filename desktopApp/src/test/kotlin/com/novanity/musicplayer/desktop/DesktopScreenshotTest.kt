@@ -179,6 +179,7 @@ class DesktopScreenshotTest {
             it.library.selectTab(Tab.LIBRARY); it.library.libraryFilter = com.novanity.musicplayer.ui.LibraryFilter.ALBUMS
         }
         shoot("09_settings_1280x800", 1280, 800, 1f, f) { it.library.open(Destination.Settings) }
+        shoot("09b_account_1280x800", 1280, 800, 1f, f) { it.library.setProfile(com.novanity.musicplayer.data.AccountProfile(bio = "Night drives and loud choruses.")); it.library.open(Destination.Account) }
         shoot("10_now_playing_1440x900", 1440, 900, 1f, f) { it.ui.nowPlayingOpen = true }
         shoot("11_narrow_480x900", 480, 900, 1f, f) { it.ui.nowPlayingOpen = false; it.library.selectTab(Tab.HOME); it.library.backStack.clear() }
         shoot("12_shortcuts", 1280, 800, 1f, f) { it.ui.showShortcuts = true }

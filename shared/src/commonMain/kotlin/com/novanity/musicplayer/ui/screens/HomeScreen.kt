@@ -2,6 +2,7 @@ package com.novanity.musicplayer.ui.screens
 
 import com.novanity.musicplayer.ui.components.clearOfWindowControls
 import com.novanity.musicplayer.ui.components.MixCard
+import androidx.compose.material.icons.rounded.AccountCircle
 import androidx.compose.material.icons.rounded.Insights
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -98,7 +99,7 @@ private fun HomeContent(actions: SongActions, contentPadding: PaddingValues) {
         when {
             home.loading -> CircularProgressIndicator(Modifier.align(Alignment.Center))
             home.isEmpty -> Column(Modifier.statusBarsPadding()) {
-                HomeHeader(onSettings = { vm.open(Destination.Settings) }, onStats = { vm.open(Destination.Stats) })
+                HomeHeader(onSettings = { vm.open(Destination.Settings) }, onStats = { vm.open(Destination.Stats) }, onAccount = if (vm.accountsAvailable) ({ vm.open(Destination.Account) }) else null)
                 CloudProblemBanner(vm)
                 EmptyState(
                     icon = Icons.Rounded.LibraryMusic,
@@ -115,7 +116,7 @@ private fun HomeContent(actions: SongActions, contentPadding: PaddingValues) {
             }
             else -> LazyColumn(Modifier.fillMaxSize(), contentPadding = contentPadding) {
                 item { Spacer(Modifier.statusBarsPadding()) }
-                item { HomeHeader(onSettings = { vm.open(Destination.Settings) }, onStats = { vm.open(Destination.Stats) }) }
+                item { HomeHeader(onSettings = { vm.open(Destination.Settings) }, onStats = { vm.open(Destination.Stats) }, onAccount = if (vm.accountsAvailable) ({ vm.open(Destination.Account) }) else null) }
                 if (syncing) item { SyncingBanner() }
                 item { CloudProblemBanner(vm) }
                 item {
@@ -162,7 +163,7 @@ private fun HomeContent(actions: SongActions, contentPadding: PaddingValues) {
                         }
                     }
                 }
-                item { SectionHeader("Your artists", action = "All artists") { vm.showLibrary(LibraryFilter.ARTISTS) } }
+                item { SectionHeader("Your artists", action = if (home.topArtists.isEmpty()) "All artists" else "See all") { vm.showFavoriteArtists() } }
                 if (home.topArtists.isEmpty()) {
                     item {
                         Text(
@@ -205,7 +206,7 @@ private fun HomeContent(actions: SongActions, contentPadding: PaddingValues) {
 }
 
 @Composable
-private fun HomeHeader(onSettings: () -> Unit, onStats: () -> Unit) {
+private fun HomeHeader(onSettings: () -> Unit, onStats: () -> Unit, onAccount: (() -> Unit)? = null) {
     Row(
         Modifier
             .fillMaxWidth()
@@ -214,6 +215,7 @@ private fun HomeHeader(onSettings: () -> Unit, onStats: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(greeting(), style = MaterialTheme.typography.headlineLarge, modifier = Modifier.weight(1f))
+        if (onAccount != null) IconButton(onClick = onAccount) { Icon(Icons.Rounded.AccountCircle, contentDescription = "Account") }
         IconButton(onClick = onStats) { Icon(Icons.Rounded.Insights, contentDescription = "Your stats") }
         IconButton(onClick = onSettings) { Icon(Icons.Rounded.Settings, contentDescription = "Settings") }
     }

@@ -10,6 +10,8 @@
  *   POST   /me/ops        {ops: [{type, songId, at}]}   type: like | unlike | play
  *   PUT    /me/playlists  {playlists: [...]}
  *   PUT    /me/artists    {artists: [names]}   favourite artists
+ *   PUT    /me/profile    {bio, private: {bio, likes, playlists, artists}}
+ *   GET    /users/:username                     -> that account's public profile
  *   DELETE /me                                       deletes the account and its data
  */
 import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
@@ -28,6 +30,11 @@ const MAX_OPS = 1000;
 const MAX_PLAYS_RETURNED = 5000;
 const MAX_PLAYLISTS_BYTES = 512 * 1024;
 
+/** Which parts of a profile are private; anything not set is public. */
+function privacy(raw: any): { bio: boolean; likes: boolean; playlists: boolean; artists: boolean } {
+  return { bio: raw?.bio === true, likes: raw?.likes === true, playlists: raw?.playlists === true, artists: raw?.artists === true };
+}
+
 let schemaReady: Promise<void> | null = null;
 
 /** Creates the tables on first use (once per Worker instance; cheap when they exist). */
@@ -44,6 +51,9 @@ function ensureSchema(sql: Sql): Promise<void> {
     )`;
     // Favourite artists were added later.
     await sql`ALTER TABLE vp_users ADD COLUMN IF NOT EXISTS artists JSONB NOT NULL DEFAULT '[]'::jsonb`;
+    // Profiles: an optional bio, and which parts of the profile the owner keeps private.
+    await sql`ALTER TABLE vp_users ADD COLUMN IF NOT EXISTS bio TEXT NOT NULL DEFAULT ''`;
+    await sql`ALTER TABLE vp_users ADD COLUMN IF NOT EXISTS private JSONB NOT NULL DEFAULT '{}'::jsonb`;
     await sql`CREATE TABLE IF NOT EXISTS vp_sessions (
       token_hash TEXT PRIMARY KEY,
       user_id UUID NOT NULL REFERENCES vp_users(id) ON DELETE CASCADE,
@@ -108,7 +118,7 @@ async function readJson(request: Request, maxBytes: number): Promise<any | null>
 
 /** Handles /auth/* and /me*; returns null for any other path. The app key was already checked. */
 export async function accounts(request: Request, env: AccountsEnv, path: string, json: Json): Promise<Response | null> {
-  if (!path.startsWith("/auth/") && path !== "/me" && !path.startsWith("/me/")) return null;
+  if (!path.startsWith("/auth/") && path !== "/me" && !path.startsWith("/me/") && !path.startsWith("/users/")) return null;
   if (!env.DATABASE_URL) return json({ error: "accounts_not_configured", message: "Accounts aren't set up on this server" }, 503);
   const sql = neon(env.DATABASE_URL);
   await ensureSchema(sql);
@@ -170,7 +180,7 @@ export async function accounts(request: Request, env: AccountsEnv, path: string,
     const [likes, plays, user] = await Promise.all([
       sql`SELECT song_id, liked_at FROM vp_likes WHERE user_id = ${userId} ORDER BY liked_at DESC`,
       sql`SELECT song_id, played_at FROM vp_plays WHERE user_id = ${userId} ORDER BY played_at DESC LIMIT ${MAX_PLAYS_RETURNED}`,
-      sql`SELECT playlists, artists FROM vp_users WHERE id = ${userId}`,
+      sql`SELECT playlists, artists, bio, private FROM vp_users WHERE id = ${userId}`,
     ]);
     return json({
       user: { id: userId, username: session[0].display_name },
@@ -178,6 +188,7 @@ export async function accounts(request: Request, env: AccountsEnv, path: string,
       plays: plays.map((r) => ({ songId: r.song_id, at: Number(r.played_at) })),
       playlists: user[0]?.playlists ?? [],
       artists: user[0]?.artists ?? [],
+      profile: { bio: user[0]?.bio ?? "", private: privacy(user[0]?.private) },
     });
   }
 
@@ -231,6 +242,30 @@ export async function accounts(request: Request, env: AccountsEnv, path: string,
     const clean = [...new Set(body.artists.filter((a: unknown) => typeof a === "string" && a.trim()).map((a: string) => a.trim().slice(0, 200)))].slice(0, 1000);
     await sql`UPDATE vp_users SET artists = ${JSON.stringify(clean)}::jsonb WHERE id = ${userId}`;
     return json({ ok: true });
+  }
+
+  if (path === "/me/profile" && method === "PUT") {
+    const body = await readJson(request, 16 * 1024);
+    const bio = typeof body?.bio === "string" ? body.bio.trim().slice(0, 300) : "";
+    await sql`UPDATE vp_users SET bio = ${bio}, private = ${JSON.stringify(privacy(body?.private))}::jsonb WHERE id = ${userId}`;
+    return json({ ok: true });
+  }
+
+  // Someone else's profile: only the parts they haven't made private.
+  const other = path.match(/^\/users\/([^/]{1,40})$/);
+  if (other && method === "GET") {
+    const rows = await sql`SELECT id, display_name, bio, private, playlists, artists FROM vp_users WHERE username = ${decodeURIComponent(other[1]).trim().toLowerCase()}`;
+    if (rows.length === 0) return json({ error: "no_such_user", message: "No account with that username." }, 404);
+    const u = rows[0];
+    const hidden = privacy(u.private);
+    const likes = hidden.likes ? null : await sql`SELECT song_id FROM vp_likes WHERE user_id = ${u.id} ORDER BY liked_at DESC LIMIT 2000`;
+    return json({
+      username: u.display_name,
+      bio: hidden.bio ? null : u.bio,
+      likes: likes ? likes.map((r) => r.song_id) : null,
+      playlists: hidden.playlists ? null : u.playlists,
+      artists: hidden.artists ? null : u.artists,
+    });
   }
 
   if (path === "/me" && method === "DELETE") {
