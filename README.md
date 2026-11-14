@@ -34,12 +34,20 @@ and that artist's studio albums on MusicBrainz (both cached, and can be turned o
   with a toggle in Settings
 - Self-updating from GitHub Releases, with signed and checksummed downloads (see [RELEASING.md](RELEASING.md))
 
+## Cloud library (optional)
+
+Your own music can live in Cloudflare R2 behind a small Worker (`cloud/`). The app streams it,
+shows it in the same library as local songs, and can download songs for offline play. See
+[cloud/README.md](cloud/README.md) for setup and uploading; then enter the Worker URL and access
+key in Settings → Cloud library. The app only holds that access key, never R2 credentials.
+
 ## Project layout
 
 ```
 shared/       Common code: data layer, Room, ViewModels, the whole Compose UI, updater logic
 app/          Android app: Media3 playback service, MediaStore scanning, equalizer, APK updates
 desktopApp/   Windows/desktop app: FFmpeg audio engine, file scanner, media keys, Discord, MSI updates
+cloud/        Cloudflare Worker (TypeScript) + upload script for the optional cloud library
 updatecore/   Small JVM library for the downloads and Ed25519 signature checks (used by both apps)
 branding/     App icon sources (SVG) and exports (PNG, ICO)
 ```
