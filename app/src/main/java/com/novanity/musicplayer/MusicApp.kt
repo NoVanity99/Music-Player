@@ -1,5 +1,6 @@
 package com.novanity.musicplayer
 
+import androidx.compose.ui.graphics.asImageBitmap
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import android.net.Uri
@@ -68,6 +69,8 @@ class MusicApp : Application() {
             builtInCloud = if (underTest) null else com.novanity.musicplayer.data.CloudConfig(BuildConfig.CLOUD_SERVER_URL, BuildConfig.CLOUD_APP_KEY),
         )
         val cloud = container.cloud
+        com.novanity.musicplayer.ui.components.Avatars.fetch = { url -> com.novanity.musicplayer.updatecore.UpdateCore.fetch(url, 2_000_000) }
+        com.novanity.musicplayer.ui.components.Avatars.decode = { bytes -> android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap() }
         ArtworkLoader.provider = AndroidArtworkProvider(appContext) { coverId -> cloud.coverFile(coverId) }
         CloudCovers.localFile = { coverId -> File(appContext.filesDir, "covers/$coverId.jpg").takeIf { it.isFile } }
         CloudCovers.remoteUri = { coverId -> cloud.config.value.takeIf { it.isSet }?.let { Uri.parse("${it.serverUrl}/cover/$coverId") } }

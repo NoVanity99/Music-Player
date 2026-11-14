@@ -126,6 +126,15 @@ class SocialFlowTest {
             guestUi.setQueue(listOf(songs[4], songs[5]), 0, false)
             guestPlayer.position = 61_000
 
+            // A profile picture: uploaded, then served back at the address the app builds.
+            val picture = java.io.ByteArrayOutputStream().also {
+                javax.imageio.ImageIO.write(java.awt.image.BufferedImage(320, 320, java.awt.image.BufferedImage.TYPE_INT_RGB), "jpg", it)
+            }.toByteArray()
+            assertNull(hostDevice.account!!.setAvatar(picture))
+            val pictureUrl = assertNotNull(hostDevice.account!!.avatarUrl(hostDevice.account!!.profile.value.avatar))
+            assertTrue(UpdateCore.fetch(pictureUrl, 2_000_000).contentEquals(picture))
+            assertTrue("JPEG or PNG" in hostDevice.account!!.setAvatar("not a picture at all, just some text that is long enough to pass the size check ".repeat(3).toByteArray())!!)
+
             // Friends: a request, then an accept.
             guest.addFriend(hostName)
             waitFor("the request arrives") { runBlocking { host.pulse() }; guestName in host.state.value.requests }
@@ -138,7 +147,7 @@ class SocialFlowTest {
             host.pulse()
             waitFor("the guest sees what the host plays") {
                 runBlocking { guest.pulse() }
-                guest.state.value.friends.first { it.username == hostName }.let { it.playing && guestDevice.musicRepository.songsById[com.novanity.musicplayer.data.CloudRepository.songIdFor(it.songId!!)]?.id == songs[0].id }
+                guest.state.value.friends.first { it.username == hostName }.let { it.avatar != null && it.playing && guestDevice.musicRepository.songsById[com.novanity.musicplayer.data.CloudRepository.songIdFor(it.songId!!)]?.id == songs[0].id }
             }
 
             // The guest asks to listen along; the host gets the request and accepts.

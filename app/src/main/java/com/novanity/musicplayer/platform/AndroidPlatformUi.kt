@@ -25,6 +25,28 @@ class AndroidPlatformUi(private val context: Context) : PlatformUi {
 
     override val equalizer: EqualizerInfo? get() = AndroidEqualizer.info
 
+    @Composable
+    override fun rememberImagePicker(onPicked: (ByteArray) -> Unit): (() -> Unit)? {
+        val launcher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+            if (uri != null) runCatching { squareJpeg(uri) }.getOrNull()?.let(onPicked)
+        }
+        return { launcher.launch("image/*") }
+    }
+
+    /** The middle square of a picture, shrunk to 320 px, as a JPEG. */
+    private fun squareJpeg(uri: Uri): ByteArray? {
+        val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        context.contentResolver.openInputStream(uri)?.use { android.graphics.BitmapFactory.decodeStream(it, null, bounds) }
+        var sample = 1
+        while (minOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= 320) sample *= 2
+        val options = android.graphics.BitmapFactory.Options().apply { inSampleSize = sample }
+        val source = context.contentResolver.openInputStream(uri)?.use { android.graphics.BitmapFactory.decodeStream(it, null, options) } ?: return null
+        val side = minOf(source.width, source.height)
+        val square = android.graphics.Bitmap.createBitmap(source, (source.width - side) / 2, (source.height - side) / 2, side, side)
+        val small = android.graphics.Bitmap.createScaledBitmap(square, 320, 320, true)
+        return java.io.ByteArrayOutputStream().also { small.compress(android.graphics.Bitmap.CompressFormat.JPEG, 86, it) }.toByteArray()
+    }
+
     override fun dynamicColorScheme(dark: Boolean): ColorScheme? =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)

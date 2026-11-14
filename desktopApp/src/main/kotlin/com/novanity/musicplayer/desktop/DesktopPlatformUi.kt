@@ -27,6 +27,36 @@ class DesktopPlatformUi(
     override val supportsEqualizer = true
     override val equalizer get() = com.novanity.musicplayer.desktop.audio.DesktopEqualizer.info
 
+    @Composable
+    override fun rememberImagePicker(onPicked: (ByteArray) -> Unit): (() -> Unit)? {
+        val callback = rememberUpdatedState(onPicked)
+        return {
+            SwingUtilities.invokeLater {
+                runCatching { UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName()) }
+                val chooser = JFileChooser(FileSystemView.getFileSystemView().defaultDirectory).apply {
+                    dialogTitle = "Choose a profile picture"
+                    fileFilter = javax.swing.filechooser.FileNameExtensionFilter("Pictures (JPEG, PNG)", "jpg", "jpeg", "png")
+                    isAcceptAllFileFilterUsed = false
+                }
+                if (chooser.showOpenDialog(parent) == JFileChooser.APPROVE_OPTION) {
+                    chooser.selectedFile?.let { file -> runCatching { squareJpeg(file) }.getOrNull()?.let { callback.value(it) } }
+                }
+            }
+        }
+    }
+
+    /** The middle square of a picture, shrunk to 320 px, as a JPEG. */
+    private fun squareJpeg(file: File): ByteArray? {
+        val source = javax.imageio.ImageIO.read(file) ?: return null
+        val side = minOf(source.width, source.height)
+        val out = java.awt.image.BufferedImage(320, 320, java.awt.image.BufferedImage.TYPE_INT_RGB)
+        val g = out.createGraphics()
+        g.setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION, java.awt.RenderingHints.VALUE_INTERPOLATION_BICUBIC)
+        g.drawImage(source, 0, 0, 320, 320, (source.width - side) / 2, (source.height - side) / 2, (source.width + side) / 2, (source.height + side) / 2, java.awt.Color.BLACK, null)
+        g.dispose()
+        return java.io.ByteArrayOutputStream().also { javax.imageio.ImageIO.write(out, "jpg", it) }.toByteArray()
+    }
+
     override fun dynamicColorScheme(dark: Boolean): ColorScheme? = null
 
     override fun storageRoots(): List<StorageRoot> = desktopStorageRoots()

@@ -71,7 +71,7 @@ private val ProfileTint = Color(0xFF7C3AED)
 
 /** The round initial and name at the top of a profile. */
 @Composable
-private fun ProfileHeader(name: String, caption: String) {
+private fun ProfileHeader(name: String, caption: String, avatarUrl: String? = null, onPicture: (() -> Unit)? = null, below: (@Composable () -> Unit)? = null) {
     Row(
         Modifier
             .fillMaxWidth()
@@ -79,16 +79,12 @@ private fun ProfileHeader(name: String, caption: String) {
             .padding(start = 24.dp, end = 24.dp, top = 76.dp, bottom = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(
-            Modifier.size(84.dp).background(Brush.linearGradient(listOf(ProfileTint, MaterialTheme.colorScheme.primary)), CircleShape),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(name.take(1).uppercase(), style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.ExtraBold, color = Color.White)
-        }
+        com.novanity.musicplayer.ui.components.Avatar(name, avatarUrl, 96.dp, if (onPicture != null) Modifier.clip(CircleShape).clickable(onClick = onPicture) else Modifier)
         Spacer(Modifier.width(20.dp))
         Column {
             Text(caption.uppercase(), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(name, style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            below?.invoke()
         }
     }
 }
@@ -144,6 +140,7 @@ internal fun AccountPage(actions: SongActions, contentPadding: PaddingValues) {
     val plays by vm.playCounts.collectAsStateWithLifecycle()
     val name = (state as? AccountState.SignedIn)?.user?.username ?: "You"
     var editingBio by remember { mutableStateOf(false) }
+    val pickPicture = com.novanity.musicplayer.platform.LocalPlatform.current.rememberImagePicker { bytes -> vm.setAvatar(bytes) }
     var find by rememberSaveable { mutableStateOf("") }
     fun update(change: (AccountProfile) -> AccountProfile) = vm.setProfile(change(profile))
 
@@ -168,7 +165,20 @@ internal fun AccountPage(actions: SongActions, contentPadding: PaddingValues) {
     }
 
     CollectionScaffold("Account", ProfileTint, { vm.back() }, emptyList(), contentPadding) {
-        item { ProfileHeader(name, "Your account") }
+        item {
+            // Click the picture (or "Change picture") to choose one from this device.
+            ProfileHeader(name, "Your account", vm.avatarUrl(profile.avatar), pickPicture) {
+                if (pickPicture != null) {
+                    Row {
+                        TextButton(onClick = pickPicture, contentPadding = PaddingValues(horizontal = 0.dp)) { Text(if (profile.avatar == null) "Add a profile picture" else "Change picture") }
+                        if (profile.avatar != null) {
+                            Spacer(Modifier.width(16.dp))
+                            TextButton(onClick = { vm.removeAvatar() }, contentPadding = PaddingValues(horizontal = 0.dp)) { Text("Remove", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                        }
+                    }
+                }
+            }
+        }
         item {
             Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(
@@ -224,12 +234,12 @@ internal fun AccountPage(actions: SongActions, contentPadding: PaddingValues) {
                             Modifier.fillMaxWidth().clickable { vm.open(Destination.Profile(friend.username)) }.padding(start = 70.dp, end = 24.dp, top = 6.dp, bottom = 6.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Initial(friend.username, 32.dp)
+                            com.novanity.musicplayer.ui.components.Avatar(friend.username, vm.avatarUrl(friend.avatar), 32.dp)
                             Spacer(Modifier.width(12.dp))
                             Column {
                                 Text(friend.username, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
                                 Text(
-                                    if (song != null && friend.playing) "Listening to ${song.title} \u2022 ${song.artist}" else if (friend.online) "Online" else "Offline",
+                                    if (song != null && friend.playing) "Listening to ${song.title} \u2022 ${song.artist}" else if (friend.online) "Online \u2022 not listening to anything" else "Offline",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = if (song != null && friend.playing) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                                     maxLines = 1, overflow = TextOverflow.Ellipsis,
@@ -286,7 +296,7 @@ internal fun ProfilePage(username: String, actions: SongActions, contentPadding:
     val profile = result?.first
 
     CollectionScaffold(profile?.username ?: username, ProfileTint, { vm.back() }, emptyList(), contentPadding) {
-        item { ProfileHeader(profile?.username ?: username, "Profile") }
+        item { ProfileHeader(profile?.username ?: username, "Profile", vm.avatarUrl(profile?.avatar)) }
         if (result == null) {
             item { Box(Modifier.fillMaxWidth().height(240.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() } }
             return@CollectionScaffold
@@ -451,7 +461,7 @@ internal fun FriendsPage(actions: SongActions, contentPadding: PaddingValues) {
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Box {
-                    Initial(friend.username)
+                    com.novanity.musicplayer.ui.components.Avatar(friend.username, vm.avatarUrl(friend.avatar), 44.dp)
                     // A green dot while they have the player open.
                     if (friend.online) Box(Modifier.align(Alignment.BottomEnd).size(12.dp).background(MaterialTheme.colorScheme.background, CircleShape).padding(2.dp).background(Color(0xFF30D158), CircleShape))
                 }
@@ -462,8 +472,8 @@ internal fun FriendsPage(actions: SongActions, contentPadding: PaddingValues) {
                         when {
                             song != null && friend.playing -> "Listening to ${song.title} • ${song.artist}"
                             song != null -> "Paused on ${song.title} • ${song.artist}"
-                            friend.online -> "Online"
-                            else -> "Offline"
+                            friend.online -> "Online \u2022 not listening to anything"
+                            else -> "Offline \u2022 not listening to anything"
                         },
                         style = MaterialTheme.typography.bodySmall,
                         color = if (song != null && friend.playing) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,

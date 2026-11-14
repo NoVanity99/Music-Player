@@ -114,6 +114,8 @@ class DesktopApp {
 
     init {
         ArtworkLoader.provider = artwork
+        com.novanity.musicplayer.ui.components.Avatars.fetch = { url -> com.novanity.musicplayer.updatecore.UpdateCore.fetch(url, 2_000_000) }
+        com.novanity.musicplayer.ui.components.Avatars.decode = { bytes -> org.jetbrains.skia.Image.makeFromEncoded(bytes).toComposeImageBitmap() }
         LyricsLoader.provider = DesktopLyricsProvider()
         PathLabels.roots = desktopStorageRoots()
         updates.checkOnLaunch()

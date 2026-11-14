@@ -48,6 +48,16 @@ export default {
       return media(request, env, ctx, `covers/${art[1]}`, art[1], "image/jpeg");
     }
 
+    // Profile pictures, also without the key (the id is a random account id).
+    const avatar = new URL(request.url).pathname.match(/^\/avatar\/([0-9a-f-]{36})$/);
+    if (avatar && (request.method === "GET" || request.method === "HEAD")) {
+      const object = await env.MUSIC.get(`avatars/${avatar[1]}`);
+      if (!object) return json({ error: "not_found" }, 404);
+      return new Response(request.method === "HEAD" ? null : object.body, {
+        headers: { "Content-Type": object.httpMetadata?.contentType ?? "image/jpeg", "Cache-Control": "public, max-age=31536000, immutable", ...CORS },
+      });
+    }
+
     if (!env.APP_KEY) return json({ error: "server_not_configured", message: "APP_KEY secret is not set" }, 500);
     const given = request.headers.get(KEY_HEADER) ?? "";
     if (!(await sameKey(given, env.APP_KEY))) {

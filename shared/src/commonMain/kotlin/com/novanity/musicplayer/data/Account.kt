@@ -88,7 +88,18 @@ data class ProfilePrivacy(
 
 /** Your own profile settings: an optional bio and what's private. */
 @Serializable
-data class AccountProfile(val bio: String = "", val private: ProfilePrivacy = ProfilePrivacy())
+data class AccountProfile(
+    val bio: String = "",
+    val private: ProfilePrivacy = ProfilePrivacy(),
+    /** What to add to the server's /avatar/ address for your picture; null when you have none. */
+    val avatar: String? = null,
+)
+
+@Serializable
+private data class AvatarBody(val image: String)
+
+@Serializable
+private data class AvatarAnswer(val avatar: String? = null, val message: String = "")
 
 @Serializable
 data class PublicSongPlays(val songId: String = "", val plays: Int = 0)
@@ -104,6 +115,7 @@ data class PublicPlaylist(val name: String = "", val songs: List<String> = empty
 @Serializable
 data class PublicProfile(
     val username: String = "",
+    val avatar: String? = null,
     val bio: String? = null,
     val likes: List<String>? = null,
     val playlists: List<PublicPlaylist>? = null,
@@ -369,8 +381,35 @@ class AccountRepository(
         queueStore.putString(KEY_PROFILE, json.encodeToString(AccountProfile.serializer(), value))
     }
 
+    /** The full address of a picture from its token, or null. */
+    fun avatarUrl(token: String?): String? = token?.let { cloud.config.value.serverUrl + "/avatar/" + it }
+
+    /** Uploads a new profile picture (a small JPEG). Returns null when it worked, else what went wrong. */
+    @OptIn(kotlin.io.encoding.ExperimentalEncodingApi::class)
+    suspend fun setAvatar(jpeg: ByteArray): String? = withContext(Dispatchers.IO) {
+        val body = json.encodeToString(AvatarBody.serializer(), AvatarBody(kotlin.io.encoding.Base64.encode(jpeg)))
+        val response = try {
+            authed("PUT", "/me/avatar", body)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            null
+        } ?: return@withContext "Can't reach the server. Check your connection."
+        val answer = runCatching { json.decodeFromString(AvatarAnswer.serializer(), response.body) }.getOrNull()
+        if (response.status !in 200..299 || answer?.avatar == null) return@withContext answer?.message?.takeIf { it.isNotBlank() } ?: "That picture couldn't be saved."
+        avatarUrl(answer.avatar)?.let { com.novanity.musicplayer.ui.components.Avatars.put(it, jpeg) }
+        storeProfile(_profile.value.copy(avatar = answer.avatar))
+        null
+    }
+
+    suspend fun removeAvatar() = withContext(Dispatchers.IO) {
+        val ok = runCatching { authed("DELETE", "/me/avatar", null)?.status in 200..299 }.getOrDefault(false)
+        if (ok) storeProfile(_profile.value.copy(avatar = null))
+    }
+
     fun setProfile(value: AccountProfile) {
-        val clean = value.copy(bio = value.bio.trim().take(300))
+        // The picture is changed with setAvatar, never from here.
+        val clean = value.copy(bio = value.bio.trim().take(300), avatar = _profile.value.avatar)
         if (clean == _profile.value) return
         storeProfile(clean)
         queueStore.putBoolean(KEY_PROFILE_DIRTY, true)
@@ -447,6 +486,7 @@ class AccountRepository(
                     syncedPlaylists = json.encodeToString(PlaylistsBody.serializer(), PlaylistsBody(remote.playlists))
                     if (!queueStore.getBoolean(KEY_ARTISTS_DIRTY, false)) storeFavoriteArtists(remote.artists.toSet())
                     if (!queueStore.getBoolean(KEY_PROFILE_DIRTY, false)) storeProfile(remote.profile)
+                    else storeProfile(_profile.value.copy(avatar = remote.profile.avatar))
                 }
             }
         } catch (e: CancellationException) {

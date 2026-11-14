@@ -92,6 +92,13 @@ interface PlatformUi {
     @Composable
     fun rememberSystemFolderPicker(onPicked: (String) -> Unit): () -> Unit
 
+    /**
+     * A launcher for choosing a picture from the device. The callback gets it as a small square
+     * JPEG (cropped to the middle, at most 320 px), ready to upload. Null where there's no picker.
+     */
+    @Composable
+    fun rememberImagePicker(onPicked: (ByteArray) -> Unit): (() -> Unit)? = null
+
     /** Band layout + presets of the system equalizer (Android), or null where there is none. */
     val equalizer: EqualizerInfo? get() = null
 

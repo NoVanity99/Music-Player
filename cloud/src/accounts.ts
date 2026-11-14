@@ -18,6 +18,8 @@ import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
 
 export interface AccountsEnv {
   DATABASE_URL?: string;
+  /** Profile pictures are kept in the bucket under avatars/<user id>. */
+  MUSIC: R2Bucket;
 }
 
 type Sql = NeonQueryFunction<false, false>;
@@ -43,6 +45,11 @@ const SESSION_STALE_MS = 45_000;
 /** A request to listen along is offered for this long. */
 const LISTEN_REQUEST_MS = 60_000;
 
+/** What the app appends to /avatar/ to show someone's picture (null when they have none). */
+function avatarToken(id: unknown, version: unknown): string | null {
+  return typeof version === "string" && version ? `${id}?v=${version}` : null;
+}
+
 let schemaReady: Promise<void> | null = null;
 
 /** Creates the tables on first use (once per Worker instance; cheap when they exist). */
@@ -63,6 +70,7 @@ function ensureSchema(sql: Sql): Promise<void> {
     await sql`ALTER TABLE vp_users ADD COLUMN IF NOT EXISTS bio TEXT NOT NULL DEFAULT ''`;
     await sql`ALTER TABLE vp_users ADD COLUMN IF NOT EXISTS private JSONB NOT NULL DEFAULT '{}'::jsonb`;
     // Friends, what each person is playing, and listening together.
+    await sql`ALTER TABLE vp_users ADD COLUMN IF NOT EXISTS avatar TEXT`;
     await sql`ALTER TABLE vp_users ADD COLUMN IF NOT EXISTS now_song TEXT`;
     await sql`ALTER TABLE vp_users ADD COLUMN IF NOT EXISTS now_next TEXT`;
     await sql`ALTER TABLE vp_users ADD COLUMN IF NOT EXISTS now_pos BIGINT NOT NULL DEFAULT 0`;
@@ -215,7 +223,7 @@ export async function accounts(request: Request, env: AccountsEnv, path: string,
     const [likes, plays, user] = await Promise.all([
       sql`SELECT song_id, liked_at FROM vp_likes WHERE user_id = ${userId} ORDER BY liked_at DESC`,
       sql`SELECT song_id, played_at FROM vp_plays WHERE user_id = ${userId} ORDER BY played_at DESC LIMIT ${MAX_PLAYS_RETURNED}`,
-      sql`SELECT playlists, artists, bio, private FROM vp_users WHERE id = ${userId}`,
+      sql`SELECT playlists, artists, bio, private, avatar FROM vp_users WHERE id = ${userId}`,
     ]);
     return json({
       user: { id: userId, username: session[0].display_name },
@@ -223,7 +231,7 @@ export async function accounts(request: Request, env: AccountsEnv, path: string,
       plays: plays.map((r) => ({ songId: r.song_id, at: Number(r.played_at) })),
       playlists: user[0]?.playlists ?? [],
       artists: user[0]?.artists ?? [],
-      profile: { bio: user[0]?.bio ?? "", private: privacy(user[0]?.private) },
+      profile: { bio: user[0]?.bio ?? "", private: privacy(user[0]?.private), avatar: avatarToken(userId, user[0]?.avatar) },
     });
   }
 
@@ -304,7 +312,7 @@ export async function accounts(request: Request, env: AccountsEnv, path: string,
       WHERE id = ${userId} RETURNING listen_host`;
     const hostId: string | null = mine[0]?.listen_host ?? null;
     const [links, asks] = await Promise.all([
-      sql`SELECT u.display_name, u.now_song, u.now_playing, u.now_pos, u.now_at, u.seen_at, f.status, (f.a = ${userId}) AS sent
+      sql`SELECT u.id, u.avatar, u.display_name, u.now_song, u.now_playing, u.now_pos, u.now_at, u.seen_at, f.status, (f.a = ${userId}) AS sent
         FROM vp_friends f JOIN vp_users u ON u.id = CASE WHEN f.a = ${userId} THEN f.b ELSE f.a END
         WHERE f.a = ${userId} OR f.b = ${userId} ORDER BY lower(u.display_name)`,
       sql`SELECT r.id, u.display_name FROM vp_listen_requests r JOIN vp_users u ON u.id = r.from_id
@@ -334,6 +342,7 @@ export async function accounts(request: Request, env: AccountsEnv, path: string,
     return json({
       friends: links.filter((l) => l.status === "accepted").map((l) => ({
         username: l.display_name,
+        avatar: avatarToken(l.id, l.avatar),
         online: fresh(l.seen_at),
         songId: fresh(l.now_at) ? l.now_song : null,
         playing: fresh(l.now_at) && l.now_playing === true,
@@ -418,6 +427,32 @@ export async function accounts(request: Request, env: AccountsEnv, path: string,
     return json({ ok: true });
   }
 
+  // A profile picture: a small JPEG or PNG the app has already cropped and shrunk.
+  if (path === "/me/avatar" && method === "PUT") {
+    const body = await readJson(request, 400 * 1024);
+    let bytes: Uint8Array;
+    try {
+      bytes = Uint8Array.from(atob(String(body?.image ?? "")), (c) => c.charCodeAt(0));
+    } catch {
+      return json({ error: "bad_request", message: "That picture couldn't be read." }, 400);
+    }
+    const jpeg = bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+    const png = bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47;
+    if (bytes.length < 100 || bytes.length > 300 * 1024 || !(jpeg || png)) {
+      return json({ error: "bad_request", message: "Use a JPEG or PNG picture." }, 400);
+    }
+    await env.MUSIC.put(`avatars/${userId}`, bytes, { httpMetadata: { contentType: jpeg ? "image/jpeg" : "image/png" } });
+    const version = Date.now().toString(36);
+    await sql`UPDATE vp_users SET avatar = ${version} WHERE id = ${userId}`;
+    return json({ ok: true, avatar: avatarToken(userId, version) });
+  }
+
+  if (path === "/me/avatar" && method === "DELETE") {
+    await env.MUSIC.delete(`avatars/${userId}`);
+    await sql`UPDATE vp_users SET avatar = NULL WHERE id = ${userId}`;
+    return json({ ok: true });
+  }
+
   if (path === "/me/profile" && method === "PUT") {
     const body = await readJson(request, 16 * 1024);
     const bio = typeof body?.bio === "string" ? body.bio.trim().slice(0, 300) : "";
@@ -428,7 +463,7 @@ export async function accounts(request: Request, env: AccountsEnv, path: string,
   // Someone else's profile: only the parts they haven't made private.
   const other = path.match(/^\/users\/([^/]{1,40})$/);
   if (other && method === "GET") {
-    const rows = await sql`SELECT id, display_name, bio, private, playlists, artists FROM vp_users WHERE username = ${decodeURIComponent(other[1]).trim().toLowerCase()}`;
+    const rows = await sql`SELECT id, display_name, bio, private, playlists, artists, avatar FROM vp_users WHERE username = ${decodeURIComponent(other[1]).trim().toLowerCase()}`;
     if (rows.length === 0) return json({ error: "no_such_user", message: "No account with that username." }, 404);
     const u = rows[0];
     const hidden = privacy(u.private);
@@ -444,6 +479,7 @@ export async function accounts(request: Request, env: AccountsEnv, path: string,
     }
     return json({
       username: u.display_name,
+      avatar: avatarToken(u.id, u.avatar),
       stats,
       bio: hidden.bio ? null : u.bio,
       likes: likes ? likes.map((r) => r.song_id) : null,
@@ -453,6 +489,7 @@ export async function accounts(request: Request, env: AccountsEnv, path: string,
   }
 
   if (path === "/me" && method === "DELETE") {
+    await env.MUSIC.delete(`avatars/${userId}`);
     await sql`DELETE FROM vp_users WHERE id = ${userId}`; // likes, plays and sessions go with it
     return json({ ok: true });
   }

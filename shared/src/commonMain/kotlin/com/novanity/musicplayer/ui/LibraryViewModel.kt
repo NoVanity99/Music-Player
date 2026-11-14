@@ -189,6 +189,12 @@ class LibraryViewModel(
         if (account != null) account.setProfile(value) else noProfile.value = value
     }
 
+    fun avatarUrl(token: String?): String? = account?.avatarUrl(token)
+    fun setAvatar(jpeg: ByteArray) {
+        viewModelScope.launch { notify(account?.setAvatar(jpeg) ?: "Profile picture updated") }
+    }
+    fun removeAvatar() { viewModelScope.launch { account?.removeAvatar() } }
+
     suspend fun lookUpProfile(username: String): Pair<com.novanity.musicplayer.data.PublicProfile?, String?> =
         account?.lookUpProfile(username) ?: (null to "Accounts aren't available.")
 
