@@ -93,6 +93,9 @@ dependencies {
 
     implementation(libs.androidx.media3.exoplayer)
     implementation(libs.androidx.media3.session)
+    implementation(libs.androidx.media3.datasource) // HTTP streaming + disk cache for cloud songs
+    implementation(libs.androidx.media3.database)
+    implementation(libs.androidx.work.runtime) // background song downloads
     implementation(libs.kotlinx.coroutines.guava)
 
 

@@ -53,6 +53,7 @@ class Crossfader(
 
         val baseVolume = main.volume.coerceIn(0f, 1f)
         val out = ExoPlayer.Builder(context)
+            .setMediaSourceFactory(StreamSources.mediaSourceFactory(context)) // streamed songs need the key and cache too
             .setAudioAttributes(
                 AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MUSIC).build(),
                 /* handleAudioFocus = */ false, // the main player owns audio focus

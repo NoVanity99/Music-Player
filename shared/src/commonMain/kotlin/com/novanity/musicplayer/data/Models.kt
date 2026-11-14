@@ -18,7 +18,16 @@ data class Song(
     val folderPath: String,
     /** Absolute path of the file, when MediaStore reports one. */
     val filePath: String = "",
+    /** Where the song is: on this device, in the cloud, or a cloud song downloaded for offline play. */
+    val source: SongSource = SongSource.LOCAL,
+    /** The song's id on the cloud server (cloud and downloaded songs). */
+    val cloudId: String? = null,
+    /** The cover's id on the cloud server, if it has one. */
+    val coverId: String? = null,
+    val sizeBytes: Long = 0,
 )
+
+enum class SongSource { LOCAL, CLOUD, DOWNLOADED }
 
 @Immutable
 data class Album(

@@ -56,6 +56,30 @@ data class PlaylistCoverEntry(
     val songId: Long,
 )
 
+/**
+ * A cloud song saved (or queued to be saved) for offline play. [metaJson] is the song's cloud
+ * metadata, so downloads still show up when the server can't be reached.
+ */
+@Entity(tableName = "downloads")
+data class DownloadEntity(
+    @PrimaryKey val cloudId: String,
+    /** Absolute path in the app's private storage; empty until the download finishes. */
+    val filePath: String,
+    val size: Long,
+    /** When the download finished (or was queued), unix ms. */
+    val downloadedAt: Long,
+    /** [STATUS_QUEUED], [STATUS_DONE] or [STATUS_FAILED]. */
+    val status: Int,
+    val metaJson: String,
+    val error: String? = null,
+) {
+    companion object {
+        const val STATUS_QUEUED = 0
+        const val STATUS_DONE = 1
+        const val STATUS_FAILED = 2
+    }
+}
+
 data class PlayCount(val songId: Long, val plays: Int)
 
 /** One play from the history: which song and when (unix ms). */

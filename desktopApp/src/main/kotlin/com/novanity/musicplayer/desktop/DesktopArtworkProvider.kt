@@ -1,5 +1,6 @@
 package com.novanity.musicplayer.desktop
 
+import com.novanity.musicplayer.data.SongSource
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import com.novanity.musicplayer.data.Song
@@ -15,22 +16,33 @@ import org.jetbrains.skia.Surface
 import java.io.File
 
 /** Embedded cover art (via jaudiotagger), else a cover/folder image next to the file. */
-class DesktopArtworkProvider : ArtworkProvider {
+class DesktopArtworkProvider(
+    /** Local file of a cloud cover (downloading it if needed), or null. */
+    private val cloudCover: suspend (coverId: String) -> String? = { null },
+) : ArtworkProvider {
     private val folderNames = listOf("cover", "folder", "front", "album", "albumart", "albumartsmall")
     private val imageExtensions = listOf("jpg", "jpeg", "png", "webp")
 
     override suspend fun load(song: Song, sizePx: Int): ImageBitmap? {
-        val bytes = embedded(song.filePath) ?: folderImage(song.folderPath) ?: return null
+        val bytes = bytesFor(song) ?: return null
         val image = runCatching { Image.makeFromEncoded(bytes) }.getOrNull() ?: return null
         return scale(image, sizePx).toComposeImageBitmap()
     }
 
     /** The song's cover as a square JPEG of at most [px] pixels (for Discord), or null if it has none. */
-    fun coverJpeg(song: Song, px: Int = 512): ByteArray? {
-        val bytes = embedded(song.filePath) ?: folderImage(song.folderPath) ?: return null
+    suspend fun coverJpeg(song: Song, px: Int = 512): ByteArray? {
+        val bytes = bytesFor(song) ?: return null
         val image = runCatching { Image.makeFromEncoded(bytes) }.getOrNull() ?: return null
         return scale(image, px).encodeToData(EncodedImageFormat.JPEG, 88)?.bytes
     }
+
+    /** Cloud songs use the server's cover (kept on disk); local songs their tags or folder image. */
+    private suspend fun bytesFor(song: Song): ByteArray? =
+        if (song.source != SongSource.LOCAL) {
+            song.coverId?.let { cloudCover(it) }?.let { runCatching { File(it).readBytes() }.getOrNull() }
+        } else {
+            embedded(song.filePath) ?: folderImage(song.folderPath)
+        }
 
     private fun embedded(path: String): ByteArray? = runCatching {
         AudioFileIO.read(File(path)).tag?.firstArtwork?.binaryData

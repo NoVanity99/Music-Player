@@ -1,5 +1,8 @@
 package com.novanity.musicplayer
 
+import com.novanity.musicplayer.data.CloudFiles
+import com.novanity.musicplayer.data.CloudRepository
+import com.novanity.musicplayer.data.DownloadsRepository
 import com.novanity.musicplayer.data.FavoritesRepository
 import com.novanity.musicplayer.data.HistoryRepository
 import com.novanity.musicplayer.data.MusicRepository
@@ -17,16 +20,30 @@ class AppGraph(
     storeFactory: (name: String) -> KeyValueStore,
     librarySource: LibrarySource,
     val appScope: CoroutineScope,
-    /** HTTP GET for artist bios; null leaves bios off (tests). */
-    httpGet: (suspend (url: String) -> com.novanity.musicplayer.data.HttpText)? = null,
+    /** HTTP GET (artist bios, the cloud library); null leaves both off (tests). */
+    httpGet: (suspend (url: String, headers: Map<String, String>) -> com.novanity.musicplayer.data.HttpText)? = null,
+    /** Private storage for downloads and covers. */
+    cloudFiles: CloudFiles = CloudFiles.None,
 ) {
     private val database by lazy(databaseFactory)
 
     val settings = SettingsRepository(storeFactory("settings"))
-    val musicRepository = MusicRepository(librarySource, appScope, settings.includedFolders, settings.excludedFolders)
+    val downloads = DownloadsRepository({ database.downloadsDao() }, cloudFiles, appScope)
+
+    /** Server address and key live in their own store, which each platform protects as well as it can. */
+    val cloud = CloudRepository(
+        secure = storeFactory("cloud_secure"),
+        cache = storeFactory("cloud_cache"),
+        httpGet = httpGet ?: { _, _ -> throw IllegalStateException("No network in this build") },
+        files = cloudFiles,
+        scope = appScope,
+        downloads = downloads.rows,
+    ).also { downloads.cloud = it }
+
+    val musicRepository = MusicRepository(librarySource, appScope, settings.includedFolders, settings.excludedFolders, cloud.songs)
     val playlistRepository by lazy { PlaylistRepository(database.playlistDao()) }
     val historyRepository by lazy { HistoryRepository(database.historyDao()) }
     val favoritesRepository by lazy { FavoritesRepository(database.favoritesDao()) }
     val playbackStateStore = PlaybackStateStore(storeFactory("playback_state"))
-    val artistBios = httpGet?.let { com.novanity.musicplayer.data.ArtistBios(storeFactory("artist_bios"), it) }
+    val artistBios = httpGet?.let { get -> com.novanity.musicplayer.data.ArtistBios(storeFactory("artist_bios"), { url -> get(url, emptyMap()) }) }
 }

@@ -50,13 +50,13 @@ class CoverUploaderTest {
         val dir = Files.createTempDirectory("album").toFile()
         ImageIO.write(BufferedImage(1200, 900, BufferedImage.TYPE_INT_RGB), "png", File(dir, "cover.png"))
         val song = Song(1, "x", "T", "A", "Al", 1, 1000, 1, 1, 0, dir.absolutePath, File(dir, "song.mp3").absolutePath)
-        val jpeg = assertNotNull(DesktopArtworkProvider().coverJpeg(song))
+        val jpeg = assertNotNull(kotlinx.coroutines.runBlocking { DesktopArtworkProvider().coverJpeg(song) })
         assertTrue(jpeg[0] == 0xFF.toByte() && jpeg[1] == 0xD8.toByte(), "is a JPEG")
         val decoded = ImageIO.read(ByteArrayInputStream(jpeg))
         assertEquals(512, decoded.width)
         assertEquals(512, decoded.height)
 
         val empty = Files.createTempDirectory("noart").toFile()
-        assertNull(DesktopArtworkProvider().coverJpeg(song.copy(folderPath = empty.absolutePath, filePath = File(empty, "s.mp3").absolutePath)))
+        assertNull(kotlinx.coroutines.runBlocking { DesktopArtworkProvider().coverJpeg(song.copy(folderPath = empty.absolutePath, filePath = File(empty, "s.mp3").absolutePath)) })
     }
 }

@@ -282,7 +282,7 @@ class FfmpegPlayerController(
     private fun startCrossfade(): Boolean {
         val nextIdx = nextIndex(+1) ?: return false
         val incoming = try {
-            Decoder.open(entries[nextIdx].song.uri, speed)
+            openSong(entries[nextIdx].song)
         } catch (_: Throwable) {
             return false // let the normal end-of-track path handle the bad file
         }
@@ -318,7 +318,18 @@ class FfmpegPlayerController(
     }
 
     private fun handleDecodeError(t: Throwable) {
-        val title = entries.getOrNull(current)?.song?.title ?: "this track"
+        val song = entries.getOrNull(current)?.song
+        val title = song?.title ?: "this track"
+        val streamed = song != null && (graph.musicRepository.songsById[song.id]?.uri ?: song.uri).startsWith("http")
+        if (streamed) {
+            // A stream that won't open is a connection or key problem: skipping ahead wouldn't help.
+            onError("Can't stream “$title”. Check your connection and the cloud settings.")
+            closeVoices()
+            errorStreak = 0
+            playing = false
+            publish()
+            return
+        }
         onError("Can't play “$title” — skipping")
         closeVoices()
         errorStreak++
@@ -338,7 +349,7 @@ class FfmpegPlayerController(
         closeVoices()
         val entry = entries.getOrNull(current) ?: return publish(queueChanged = true)
         try {
-            val d = Decoder.open(entry.song.uri, speed)
+            val d = openSong(entry.song)
             if (startMs > 0) d.seek(startMs)
             voice = d
             playing = keepPlaying
@@ -351,6 +362,15 @@ class FfmpegPlayerController(
         output.flush()
         graph.playbackStateStore.savePosition(current, startMs)
         publish(queueChanged = true)
+    }
+
+    /**
+     * Opens a song's decoder. A cloud song that has been downloaded since it was queued plays from
+     * the local file; otherwise it streams, with the access key sent only to the user's own server.
+     */
+    private fun openSong(song: Song): Decoder {
+        val uri = graph.musicRepository.songsById[song.id]?.uri ?: song.uri
+        return Decoder.open(uri, speed, if (graph.cloud.isOurs(uri)) graph.cloud.authHeaders else emptyMap())
     }
 
     private fun closeVoices() {

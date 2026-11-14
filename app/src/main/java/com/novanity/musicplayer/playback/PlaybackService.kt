@@ -1,5 +1,8 @@
 package com.novanity.musicplayer.playback
 
+import androidx.media3.datasource.HttpDataSource
+import androidx.media3.datasource.DataSourceBitmapLoader
+import androidx.media3.session.CacheBitmapLoader
 import android.app.PendingIntent
 import android.content.Intent
 import android.widget.Toast
@@ -49,6 +52,8 @@ class PlaybackService : MediaSessionService() {
     override fun onCreate() {
         super.onCreate()
         player = ExoPlayer.Builder(this)
+            // Local files as before; cloud songs stream with the access key through a disk cache.
+            .setMediaSourceFactory(StreamSources.mediaSourceFactory(this))
             .setAudioAttributes(
                 AudioAttributes.Builder()
                     .setUsage(C.USAGE_MEDIA)
@@ -79,6 +84,8 @@ class PlaybackService : MediaSessionService() {
         mediaSession = MediaSession.Builder(this, player)
             .setCallback(SessionCallback())
             .setSessionActivity(openApp)
+            // Notification and lock-screen artwork: cloud covers need the access key as well.
+            .setBitmapLoader(CacheBitmapLoader(DataSourceBitmapLoader.Builder(this).setDataSourceFactory(StreamSources.dataSourceFactory(this)).build()))
             .build()
 
         restoreLastSession()
@@ -222,8 +229,24 @@ class PlaybackService : MediaSessionService() {
         }
 
         override fun onPlayerError(error: PlaybackException) {
-            // Corrupt or unsupported file: tell the user and move on to the next track.
             val title = player.currentMediaItem?.mediaMetadata?.title ?: "this track"
+            val streamed = player.currentMediaItem?.localConfiguration?.uri?.scheme?.startsWith("http") == true
+            if (streamed) {
+                // A stream that fails is a connection or key problem: skipping ahead wouldn't help.
+                val status = (error.cause as? HttpDataSource.InvalidResponseCodeException)?.responseCode
+                val message = when (status) {
+                    401, 403 -> "The cloud server rejected the access key. Check it in Settings."
+                    404 -> "“$title” is no longer on the cloud server."
+                    null -> "Can't stream “$title”. Check your internet connection."
+                    else -> "The cloud server had a problem (HTTP $status)."
+                }
+                Toast.makeText(this@PlaybackService, message, Toast.LENGTH_LONG).show()
+                consecutiveErrors = 0
+                player.pause()
+                player.prepare() // so pressing play tries again
+                return
+            }
+            // Corrupt or unsupported file: tell the user and move on to the next track.
             Toast.makeText(this@PlaybackService, "Can't play “$title” — skipping", Toast.LENGTH_SHORT).show()
             consecutiveErrors++
             if (consecutiveErrors >= player.mediaItemCount || !player.hasNextMediaItem()) {

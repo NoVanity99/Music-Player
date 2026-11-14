@@ -56,14 +56,15 @@ object UpdateCore {
      * GET [url] as UTF-8 text (JSON APIs such as Wikipedia's), following HTTPS redirects. Returns
      * the status code and body for any HTTP answer; throws only when there's no answer at all.
      */
-    fun getText(url: String, userAgent: String, maxBytes: Int = 512_000): Pair<Int, String> {
-        require(url.startsWith("https://")) { "HTTPS only" }
+    fun getText(url: String, userAgent: String, maxBytes: Int = 512_000, headers: Map<String, String> = emptyMap()): Pair<Int, String> {
+        requireSafe(url)
         val c = URL(url).openConnection() as HttpURLConnection
         try {
             c.connectTimeout = 10_000
             c.readTimeout = 15_000
             c.setRequestProperty("User-Agent", userAgent)
             c.setRequestProperty("Accept", "application/json")
+            headers.forEach { (k, v) -> c.setRequestProperty(k, v) }
             val code = c.responseCode
             val stream = (if (code in 200..299) c.inputStream else c.errorStream) ?: return code to ""
             val bytes = stream.use { it.readNBytesCompat(maxBytes + 1) }
@@ -71,6 +72,67 @@ object UpdateCore {
             return code to bytes.toString(Charsets.UTF_8)
         } finally {
             c.disconnect()
+        }
+    }
+
+    /** HTTPS only, except for a server on this machine (development and tests). */
+    private fun requireSafe(url: String) {
+        val local = Regex("""^http://(localhost|127\.0\.0\.1|10\.0\.2\.2)(:\d+)?(/.*)?$""").matches(url)
+        require(url.startsWith("https://") || local) { "HTTPS only" }
+    }
+
+    /** The server answered with an error status. */
+    class HttpStatusException(val status: Int) : IOException("HTTP $status")
+
+    /** Thrown by [downloadWithHeaders] when its `isCancelled` turns true. */
+    class DownloadCancelled : IOException("Cancelled")
+
+    /**
+     * Downloads [url] with extra request [headers] to [dest] (via a ".part" file, removed on
+     * failure). [expectedSize] of 0 means unknown. Checks [isCancelled] between chunks.
+     */
+    fun downloadWithHeaders(
+        url: String,
+        headers: Map<String, String>,
+        dest: File,
+        expectedSize: Long,
+        userAgent: String,
+        onProgress: (Float) -> Unit,
+        isCancelled: () -> Boolean,
+    ) {
+        requireSafe(url)
+        dest.parentFile?.mkdirs()
+        val tmp = File(dest.parentFile, dest.name + ".part")
+        val c = URL(url).openConnection() as HttpURLConnection
+        try {
+            c.connectTimeout = 15_000
+            c.readTimeout = 30_000
+            c.instanceFollowRedirects = false // never forward the access key to another host
+            c.setRequestProperty("User-Agent", userAgent)
+            headers.forEach { (k, v) -> c.setRequestProperty(k, v) }
+            val code = c.responseCode
+            if (code !in 200..299) throw HttpStatusException(code)
+            val total = c.contentLengthLong.takeIf { it > 0 } ?: expectedSize
+            var read = 0L
+            c.inputStream.use { input ->
+                tmp.outputStream().use { out ->
+                    val buf = ByteArray(64 * 1024)
+                    while (true) {
+                        if (isCancelled()) throw DownloadCancelled()
+                        val n = input.read(buf)
+                        if (n < 0) break
+                        out.write(buf, 0, n)
+                        read += n
+                        if (total > 0) onProgress((read.toFloat() / total).coerceIn(0f, 1f))
+                    }
+                }
+            }
+            if (total > 0 && read != total) throw IOException("Incomplete download ($read of $total bytes)")
+            if (dest.exists()) dest.delete()
+            if (!tmp.renameTo(dest)) throw IOException("Couldn't save the file")
+        } finally {
+            c.disconnect()
+            tmp.delete()
         }
     }
 

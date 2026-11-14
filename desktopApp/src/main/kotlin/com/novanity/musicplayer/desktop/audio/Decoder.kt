@@ -123,11 +123,23 @@ class Decoder private constructor(private val grabber: FFmpegFrameGrabber, speed
     }
 
     companion object {
-        fun open(path: String, speed: Float): Decoder {
+        /**
+         * Opens a file path, or an http(s) URL to stream ([headers] are sent with every request,
+         * including the Range requests FFmpeg makes when seeking).
+         */
+        fun open(path: String, speed: Float, headers: Map<String, String> = emptyMap()): Decoder {
             val grabber = FFmpegFrameGrabber(path).apply {
                 sampleFormat = avutil.AV_SAMPLE_FMT_S16
                 sampleRate = OUT_RATE
                 audioChannels = OUT_CHANNELS
+                if (path.startsWith("http://") || path.startsWith("https://")) {
+                    if (headers.isNotEmpty()) setOption("headers", headers.entries.joinToString("") { "${it.key}: ${it.value}\r\n" })
+                    setOption("user_agent", "VanityPlayer/Desktop")
+                    setOption("reconnect", "1")
+                    setOption("reconnect_streamed", "1")
+                    setOption("reconnect_delay_max", "5")
+                    setOption("rw_timeout", "15000000") // 15 s, in microseconds
+                }
             }
             try {
                 grabber.start()

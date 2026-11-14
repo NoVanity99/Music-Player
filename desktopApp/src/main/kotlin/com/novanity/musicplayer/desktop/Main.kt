@@ -1,5 +1,7 @@
 package com.novanity.musicplayer.desktop
 
+import kotlinx.coroutines.delay
+import com.novanity.musicplayer.data.DownloadsRepository
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import com.novanity.musicplayer.data.Song
@@ -74,17 +76,19 @@ class DesktopApp {
         storeFactory = { name -> PropertiesStore(File(DesktopPaths.dataDir, "$name.properties")) },
         librarySource = FileLibrarySource(File(DesktopPaths.cacheDir, "library.json")),
         appScope = scope,
-        httpGet = { url ->
+        httpGet = { url, headers ->
             kotlinx.coroutines.withContext(Dispatchers.IO) {
-                val (status, body) = com.novanity.musicplayer.updatecore.UpdateCore.getText(url, BIO_USER_AGENT)
+                // The song list of a big library can be several megabytes.
+                val (status, body) = com.novanity.musicplayer.updatecore.UpdateCore.getText(url, BIO_USER_AGENT, 32_000_000, headers)
                 com.novanity.musicplayer.data.HttpText(status, body)
             }
         },
+        cloudFiles = DesktopCloudFiles(DesktopPaths.dataDir),
     )
     val library = LibraryViewModel(graph.musicRepository, graph.playlistRepository, graph.historyRepository, graph.favoritesRepository, graph.settings, graph.artistBios)
     val player = PlayerViewModel(FfmpegPlayerController(graph, scope) { message -> library.notify(message) }, graph.settings)
     val rootUi = RootUiState()
-    private val artwork = DesktopArtworkProvider()
+    private val artwork = DesktopArtworkProvider { coverId -> graph.cloud.coverFile(coverId) }
 
     /** The mini player is open (the main window is hidden meanwhile). */
     var miniPlayer by mutableStateOf(false)
@@ -152,10 +156,19 @@ class DesktopApp {
         }
     }
 
+    /** Works through the download queue; picks up where it left off when the app starts again. */
+    private fun runDownloads() {
+        scope.launch {
+            while (graph.downloads.processQueue() == DownloadsRepository.Outcome.RETRY_LATER) delay(30_000)
+        }
+    }
+
     // Start last: launching on Main.immediate runs this right away, so everything it uses
     // must already be initialised above.
     init {
         presence?.let(::showPresence)
+        graph.downloads.startRunner = ::runDownloads
+        runDownloads()
     }
 
     /** Stops playback and clears the Discord status; called before the app exits. */

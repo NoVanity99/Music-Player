@@ -99,3 +99,33 @@ abstract class FavoritesDao {
     @Query("DELETE FROM favorites WHERE songId = :songId")
     abstract suspend fun delete(songId: Long)
 }
+
+@Dao
+abstract class DownloadsDao {
+    @Query("SELECT * FROM downloads ORDER BY downloadedAt")
+    abstract fun observeAll(): Flow<List<DownloadEntity>>
+
+    @Query("SELECT * FROM downloads WHERE cloudId = :cloudId")
+    abstract suspend fun get(cloudId: String): DownloadEntity?
+
+    @Query("SELECT * FROM downloads WHERE status = 0 ORDER BY downloadedAt LIMIT 1")
+    abstract suspend fun nextQueued(): DownloadEntity?
+
+    @Query("SELECT * FROM downloads")
+    abstract suspend fun all(): List<DownloadEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    abstract suspend fun upsert(row: DownloadEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    abstract suspend fun upsertAll(rows: List<DownloadEntity>)
+
+    @Query("DELETE FROM downloads WHERE cloudId = :cloudId")
+    abstract suspend fun delete(cloudId: String)
+
+    @Query("DELETE FROM downloads WHERE status != 1")
+    abstract suspend fun deleteUnfinished()
+
+    @Query("DELETE FROM downloads")
+    abstract suspend fun deleteAll()
+}

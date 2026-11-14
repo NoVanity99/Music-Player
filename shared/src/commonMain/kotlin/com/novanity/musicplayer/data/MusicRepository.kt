@@ -26,6 +26,8 @@ class MusicRepository(
     private val scope: CoroutineScope,
     private val includedFolders: StateFlow<Set<String>>,
     private val excludedFolders: StateFlow<Set<String>>,
+    /** Songs from the cloud library (streamed or downloaded); they aren't tied to the chosen folders. */
+    private val cloudSongs: StateFlow<List<Song>> = MutableStateFlow(emptyList()),
 ) {
     private var rawSongs: List<Song>? = null
 
@@ -61,6 +63,10 @@ class MusicRepository(
         scope.launch {
             combine(includedFolders, excludedFolders) { _, _ -> }.drop(1).collect { refresh() }
         }
+        // The cloud list changed (loaded, went offline, a download finished): merge it in again.
+        scope.launch {
+            cloudSongs.drop(1).collect { scanMutex.withLock { publish() } }
+        }
     }
 
     suspend fun refresh(): List<Song> = scanMutex.withLock {
@@ -74,8 +80,9 @@ class MusicRepository(
         val raw = rawSongs ?: return emptyList()
         val included = includedFolders.value
         val excluded = excludedFolders.value
+        val cloud = cloudSongs.value
         val filtered = withContext(Dispatchers.Default) {
-            raw.filter { song -> included.any { song.isIn(it) } && excluded.none { song.isIn(it) } }
+            raw.filter { song -> included.any { song.isIn(it) } && excluded.none { song.isIn(it) } } + cloud
         }
         songsById = filtered.associateBy { it.id }
         _songs.value = filtered
