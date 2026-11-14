@@ -36,7 +36,7 @@ class DesktopPlatformUi(
             folders = children.filter { it.isDirectory && !it.isHidden && !it.name.startsWith(".") && !it.name.startsWith("$") }
                 .sortedBy { it.name.lowercase() }
                 .map { FolderEntry(it.name, DesktopPaths.normalize(it)) },
-            audioFileCount = children.count { it.isFile && it.extension.lowercase() in AUDIO_EXTENSIONS },
+            audioFileCount = 0, // the app no longer scans local folders
         )
     }
 

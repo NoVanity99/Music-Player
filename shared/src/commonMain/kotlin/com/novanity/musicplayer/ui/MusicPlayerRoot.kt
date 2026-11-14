@@ -51,7 +51,7 @@ import com.novanity.musicplayer.ui.components.AddToPlaylistDialog
 import com.novanity.musicplayer.ui.components.LocalNowPlaying
 import com.novanity.musicplayer.ui.components.NowPlayingInfo
 import com.novanity.musicplayer.ui.screens.DetailScreen
-import com.novanity.musicplayer.ui.screens.FolderSetupScreen
+import com.novanity.musicplayer.ui.screens.CloudSetupScreen
 import com.novanity.musicplayer.ui.screens.HomeScreen
 import com.novanity.musicplayer.ui.screens.LibraryScreen
 import com.novanity.musicplayer.ui.screens.MiniPlayer
@@ -81,7 +81,6 @@ fun MusicPlayerRoot(
     val currentSong = state.current?.songId?.let(songsById::get)
     val stateHolder = rememberSaveableStateHolder()
 
-    val includedFolders by library.includedFolders.collectAsStateWithLifecycle()
     LaunchedEffect(library) {
         library.newSongsFound.collect { n -> library.notify(if (n == 1) "Found 1 new song" else "Found $n new songs") }
     }
@@ -93,9 +92,10 @@ fun MusicPlayerRoot(
     val downloadStates by library.downloadStates.collectAsStateWithLifecycle()
     // A cloud library (or downloads from one) is enough to use the app without a local folder.
     val cloudReady by library.cloudEverConnected.collectAsStateWithLifecycle()
-    if (includedFolders.isEmpty() && !(cloudConfig.isSet && cloudReady) && downloadStates.isEmpty()) {
+    // Music comes only from the cloud library: until it's connected (or there are downloads), ask for it.
+    if (!(cloudConfig.isSet && cloudReady) && downloadStates.isEmpty() && songs.isNullOrEmpty()) {
         Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(top = titleBar)) {
-            FolderSetupScreen(actions)
+            CloudSetupScreen(actions.library)
         }
         return
     }

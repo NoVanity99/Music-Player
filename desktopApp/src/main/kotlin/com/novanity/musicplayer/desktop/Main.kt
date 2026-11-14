@@ -83,7 +83,6 @@ class DesktopApp {
             }
             PropertiesStore(file)
         },
-        librarySource = FileLibrarySource(File(DesktopPaths.cacheDir, "library.json")),
         appScope = scope,
         httpGet = { url, headers ->
             kotlinx.coroutines.withContext(Dispatchers.IO) {

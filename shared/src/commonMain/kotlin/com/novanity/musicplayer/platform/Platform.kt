@@ -38,6 +38,12 @@ interface LibrarySource {
 
     /** Calls [onChange] when the underlying library changes (optional). */
     fun observeChanges(onChange: () -> Unit) {}
+
+    /** No local files at all. */
+    object None : LibrarySource {
+        override suspend fun scan(included: Set<String>, excluded: Set<String>): List<Song> = emptyList()
+        override suspend fun indexNewFiles(included: Set<String>, excluded: Set<String>): Boolean = false
+    }
 }
 
 /** Decodes a song's artwork to an image of roughly [sizePx] square. */

@@ -64,22 +64,15 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.novanity.musicplayer.data.ThemeMode
 import com.novanity.musicplayer.data.friendlyPath
 import com.novanity.musicplayer.data.isIn
-import com.novanity.musicplayer.ui.components.FolderBrowser
 import com.novanity.musicplayer.ui.SongActions
 import com.novanity.musicplayer.ui.components.songCount
-
-private enum class Browse { ADD, IGNORE }
 
 @Composable
 fun SettingsScreen(actions: SongActions, contentPadding: PaddingValues) {
     val vm = actions.library
     val theme by vm.themeMode.collectAsStateWithLifecycle()
     val dynamic by vm.dynamicColor.collectAsStateWithLifecycle()
-    val included by vm.includedFolders.collectAsStateWithLifecycle()
-    val excluded by vm.excludedFolders.collectAsStateWithLifecycle()
-    val syncing by vm.syncing.collectAsStateWithLifecycle()
     val lib by vm.grouped.collectAsStateWithLifecycle()
-    var browse by remember { mutableStateOf<Browse?>(null) }
     val platform = LocalPlatform.current
 
     LazyColumn(
@@ -96,79 +89,6 @@ fun SettingsScreen(actions: SongActions, contentPadding: PaddingValues) {
             ) {
                 IconButton(onClick = { vm.back() }) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back") }
                 Text("Settings", style = MaterialTheme.typography.headlineMedium)
-            }
-        }
-
-        // ---- Music folders ----
-        item { GroupLabel("Music folders") }
-        item {
-            SettingsCard {
-                Text(
-                    "Music is only pulled from these folders and their subfolders. They're checked for new songs every time you open the app.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(16.dp),
-                )
-                val songs = lib?.songs.orEmpty()
-                included.sorted().forEach { path ->
-                    SettingRow(
-                        icon = Icons.Rounded.Folder,
-                        title = friendlyPath(path),
-                        subtitle = songCount(songs.count { it.isIn(path) }),
-                        trailing = {
-                            IconButton(onClick = { vm.removeFolder(path) }) {
-                                Icon(Icons.Rounded.Close, contentDescription = "Stop using this folder")
-                            }
-                        },
-                    )
-                }
-                SettingRow(
-                    icon = Icons.Rounded.CreateNewFolder,
-                    title = "Add a folder",
-                    subtitle = "Pull music from another folder",
-                    onClick = { browse = Browse.ADD },
-                    accent = true,
-                )
-                SettingRow(
-                    icon = Icons.Rounded.Refresh,
-                    title = if (syncing) "Checking for new songs\u2026" else "Check for new songs now",
-                    subtitle = "Looks through your folders for newly added files",
-                    onClick = if (syncing) null else ({ vm.checkForNewSongs() }),
-                    trailing = if (syncing) ({ CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp) }) else null,
-                )
-            }
-        }
-
-        // ---- Ignored folders ----
-        item { GroupLabel("Ignored folders") }
-        item {
-            SettingsCard {
-                Text(
-                    if (excluded.isEmpty()) "Nothing is ignored. Ignore a folder to hide everything in it, like voice memos or audiobooks."
-                    else "Songs in these folders (and their subfolders) are hidden.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(16.dp),
-                )
-                excluded.sorted().forEach { path ->
-                    SettingRow(
-                        icon = Icons.Rounded.FolderOff,
-                        title = friendlyPath(path),
-                        subtitle = "Ignored",
-                        trailing = {
-                            IconButton(onClick = { vm.unignoreFolder(path) }) {
-                                Icon(Icons.Rounded.Close, contentDescription = "Stop ignoring")
-                            }
-                        },
-                    )
-                }
-                SettingRow(
-                    icon = Icons.Rounded.FolderOff,
-                    title = "Ignore a folder",
-                    subtitle = "Hide a folder inside your music folders",
-                    onClick = { browse = Browse.IGNORE },
-                    accent = true,
-                )
             }
         }
 
@@ -355,38 +275,9 @@ fun SettingsScreen(actions: SongActions, contentPadding: PaddingValues) {
                         trailing = { Switch(checked = bios, onCheckedChange = vm::setArtistBiosEnabled) },
                     )
                 }
-                SettingRow(Icons.Rounded.Refresh, "Rescan library", "Look for new or deleted songs", onClick = {
-                    vm.refresh()
-                    actions.toast("Rescanning…")
-                })
-                SettingRow(Icons.Rounded.Shield, "Private by design", "No internet access, ads or tracking. Everything stays on your phone.")
+                SettingRow(Icons.Rounded.Shield, "Private by design", "No ads or tracking. Your music comes only from your own cloud server.")
             }
         }
-    }
-
-    when (browse) {
-        Browse.ADD -> FolderBrowser(
-            title = "Add a music folder",
-            confirmLabel = "Use this folder",
-            onPick = { path ->
-                vm.addFolder(path)
-                actions.toast("Added ${friendlyPath(path)}")
-                browse = null
-            },
-            onDismiss = { browse = null },
-        )
-        Browse.IGNORE -> FolderBrowser(
-            title = "Ignore a folder",
-            confirmLabel = "Ignore this folder",
-            startPath = included.minOrNull(),
-            onPick = { path ->
-                vm.ignoreFolder(path)
-                actions.toast("Ignoring ${friendlyPath(path)}")
-                browse = null
-            },
-            onDismiss = { browse = null },
-        )
-        null -> Unit
     }
 }
 

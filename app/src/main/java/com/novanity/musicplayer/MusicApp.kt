@@ -16,7 +16,6 @@ import com.novanity.musicplayer.data.PathLabels
 import com.novanity.musicplayer.data.db.AppDatabase
 import com.novanity.musicplayer.data.db.AppDatabase.Companion.configure
 import com.novanity.musicplayer.platform.AndroidArtworkProvider
-import com.novanity.musicplayer.platform.AndroidLibrarySource
 import com.novanity.musicplayer.platform.AndroidUpdatePlatform
 import com.novanity.musicplayer.update.UpdateManager
 import com.novanity.musicplayer.platform.AndroidLyricsProvider
@@ -48,7 +47,6 @@ class MusicApp : Application() {
             },
             // The cloud server address and access key are encrypted with a Keystore key.
             storeFactory = { name -> if (name == "cloud_secure") SecurePrefsStore(appContext, name) else SharedPrefsStore(appContext, name) },
-            librarySource = AndroidLibrarySource(appContext),
             appScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
             httpGet = { url, headers ->
                 kotlinx.coroutines.withContext(Dispatchers.IO) {

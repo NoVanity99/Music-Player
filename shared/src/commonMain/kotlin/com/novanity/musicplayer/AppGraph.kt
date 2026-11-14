@@ -18,8 +18,9 @@ import kotlinx.coroutines.CoroutineScope
 class AppGraph(
     databaseFactory: () -> AppDatabase,
     storeFactory: (name: String) -> KeyValueStore,
-    librarySource: LibrarySource,
     val appScope: CoroutineScope,
+    /** Only tests scan local files; the apps play the cloud library (and downloads of it). */
+    librarySource: LibrarySource = LibrarySource.None,
     /** HTTP GET (artist bios, the cloud library); null leaves both off (tests). */
     httpGet: (suspend (url: String, headers: Map<String, String>) -> com.novanity.musicplayer.data.HttpText)? = null,
     /** Private storage for downloads and covers. */

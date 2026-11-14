@@ -37,7 +37,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import com.novanity.musicplayer.ui.RootUiState
-import com.novanity.musicplayer.ui.screens.PermissionGate
 import com.novanity.musicplayer.ui.theme.MusicPlayerTheme
 
 class MainActivity : ComponentActivity() {
@@ -98,9 +97,7 @@ class MainActivity : ComponentActivity() {
             CompositionLocalProvider(LocalPlatform provides platform) {
                 MusicPlayerTheme(darkTheme = dark, dynamicColor = dynamicColor) {
                     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                        PermissionGate {
-                            MusicPlayerRoot(libraryViewModel, playerViewModel, rootUiState, updates)
-                        }
+                        MusicPlayerRoot(libraryViewModel, playerViewModel, rootUiState, updates)
                     }
                 }
             }

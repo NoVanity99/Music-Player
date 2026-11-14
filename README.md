@@ -13,8 +13,8 @@ and that artist's studio albums on MusicBrainz (both cached, and can be turned o
 - Streaming-app style UI: Home, Search and Library, with pages tinted by the album art. Phones get
   bottom tabs and a mini player; wide windows (840 dp and up) get a sidebar, a player bar and a
   queue/lyrics side panel (1180 dp and up)
-- You pick the music folders yourself (nothing is auto-detected), can ignore subfolders, and the
-  folders are checked for new songs every time the app starts
+- Plays your own cloud library only: songs are streamed from your server and can be downloaded
+  for offline play. The app doesn't scan the device for music and needs no storage permission
 - Playlists, Liked Songs, Most Played, history, and sorting by title, artist, album, date added,
   duration or play count, plus a "Liked only" filter
 - Collaborations: credits like "Drake & Future" or "A feat. B" link to each artist separately (or
@@ -34,7 +34,7 @@ and that artist's studio albums on MusicBrainz (both cached, and can be turned o
   with a toggle in Settings
 - Self-updating from GitHub Releases, with signed and checksummed downloads (see [RELEASING.md](RELEASING.md))
 
-## Cloud library (optional)
+## Cloud library
 
 Your own music can live in Cloudflare R2 behind a small Worker (`cloud/`). The app streams it,
 shows it in the same library as local songs, and can download songs for offline play. See
@@ -45,7 +45,7 @@ key in Settings → Cloud library. The app only holds that access key, never R2 
 
 ```
 shared/       Common code: data layer, Room, ViewModels, the whole Compose UI, updater logic
-app/          Android app: Media3 playback service, MediaStore scanning, equalizer, APK updates
+app/          Android app: Media3 playback service, streaming, background downloads, equalizer, APK updates
 desktopApp/   Windows/desktop app: FFmpeg audio engine, file scanner, media keys, Discord, MSI updates
 cloud/        Cloudflare Worker (TypeScript) + upload script for the optional cloud library
 updatecore/   Small JVM library for the downloads and Ed25519 signature checks (used by both apps)

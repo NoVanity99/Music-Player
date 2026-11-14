@@ -102,7 +102,7 @@ fun LibraryScreen(actions: SongActions, contentPadding: PaddingValues) {
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            items(LibraryFilter.entries) { filter ->
+            items(LibraryFilter.entries.filter { it != LibraryFilter.FOLDERS }) { filter ->
                 FilterChip(
                     selected = vm.libraryFilter == filter,
                     onClick = { vm.libraryFilter = filter },

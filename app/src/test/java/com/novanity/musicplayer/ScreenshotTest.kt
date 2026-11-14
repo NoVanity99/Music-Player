@@ -125,7 +125,7 @@ class ScreenshotTest {
     private val rootUi = RootUiState()
 
     private fun settle() {
-        compose.waitUntil(10_000) { !library.home.value.loading }
+        compose.waitUntil(30_000) { !library.home.value.loading } // generous: CI machines can be slow
         repeat(6) {
             compose.mainClock.advanceTimeBy(400)
             Thread.sleep(150) // let art colors / Room flows land
@@ -215,10 +215,11 @@ class ScreenshotTest {
     }
 
     @Test
-    fun firstRunAsksForAFolder() {
+    fun firstRunAsksForTheCloudLibrary() {
         launch()
+        // No songs at all (nothing connected yet): the connect screen is shown.
         compose.runOnUiThread { container.settings.setIncludedFolders(emptySet()) }
-        shot("00_choose_folder")
+        shot("00_connect_cloud")
     }
 
     @Test

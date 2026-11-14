@@ -94,12 +94,12 @@ fun HomeScreen(actions: SongActions, contentPadding: PaddingValues) {
                 EmptyState(
                     icon = Icons.Rounded.LibraryMusic,
                     title = "No music yet",
-                    message = "Pick the folders where your music lives, or copy some audio files (MP3, FLAC, M4A, OGG…) to your phone.",
+                    message = "Your cloud library is empty. Upload music to your server with the upload script, then refresh.",
                     action = {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Button(onClick = { vm.open(Destination.Settings) }) { Text("Choose music folders") }
+                            Button(onClick = vm::refreshCloud) { Text("Refresh") }
                             Spacer(Modifier.height(8.dp))
-                            OutlinedButton(onClick = vm::refresh) { Text("Rescan") }
+                            OutlinedButton(onClick = { vm.open(Destination.Settings) }) { Text("Cloud settings") }
                         }
                     },
                 )
