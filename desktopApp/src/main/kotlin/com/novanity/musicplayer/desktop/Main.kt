@@ -92,6 +92,7 @@ class DesktopApp {
             }
         },
         cloudFiles = DesktopCloudFiles(DesktopPaths.dataDir),
+        builtInCloud = com.novanity.musicplayer.data.CloudConfig(System.getProperty("cloud.serverUrl").orEmpty(), System.getProperty("cloud.appKey").orEmpty()),
     )
     val library = LibraryViewModel(graph.musicRepository, graph.playlistRepository, graph.historyRepository, graph.favoritesRepository, graph.settings, graph.artistBios, graph.cloud, graph.downloads)
     val player = PlayerViewModel(FfmpegPlayerController(graph, scope) { message -> library.notify(message) }, graph.settings)

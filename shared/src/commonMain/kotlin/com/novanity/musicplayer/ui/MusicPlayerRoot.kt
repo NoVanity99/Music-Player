@@ -93,7 +93,7 @@ fun MusicPlayerRoot(
     // A cloud library (or downloads from one) is enough to use the app without a local folder.
     val cloudReady by library.cloudEverConnected.collectAsStateWithLifecycle()
     // Music comes only from the cloud library: until it's connected (or there are downloads), ask for it.
-    if (!(cloudConfig.isSet && cloudReady) && downloadStates.isEmpty() && songs.isNullOrEmpty()) {
+    if (!library.cloudBuiltIn && !(cloudConfig.isSet && cloudReady) && downloadStates.isEmpty() && songs.isNullOrEmpty()) {
         Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(top = titleBar)) {
             CloudSetupScreen(actions.library)
         }

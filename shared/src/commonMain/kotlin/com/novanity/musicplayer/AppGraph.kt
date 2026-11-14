@@ -25,6 +25,8 @@ class AppGraph(
     httpGet: (suspend (url: String, headers: Map<String, String>) -> com.novanity.musicplayer.data.HttpText)? = null,
     /** Private storage for downloads and covers. */
     cloudFiles: CloudFiles = CloudFiles.None,
+    /** The server and key this build ships with; when set, there's nothing for the user to connect. */
+    builtInCloud: com.novanity.musicplayer.data.CloudConfig? = null,
 ) {
     private val database by lazy(databaseFactory)
 
@@ -39,6 +41,7 @@ class AppGraph(
         files = cloudFiles,
         scope = appScope,
         downloads = downloads.rows,
+        builtIn = builtInCloud?.takeIf { it.isSet },
     ).also { downloads.cloud = it }
 
     val musicRepository = MusicRepository(librarySource, appScope, settings.includedFolders, settings.excludedFolders, cloud.songs)

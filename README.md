@@ -38,8 +38,11 @@ and that artist's studio albums on MusicBrainz (both cached, and can be turned o
 
 Your own music can live in Cloudflare R2 behind a small Worker (`cloud/`). The app streams it,
 shows it in the same library as local songs, and can download songs for offline play. See
-[cloud/README.md](cloud/README.md) for setup and uploading; then enter the Worker URL and access
-key in Settings → Cloud library. The app only holds that access key, never R2 credentials.
+[cloud/README.md](cloud/README.md) for setup and uploading. The Worker URL and access key are built
+into the apps from `cloud.serverUrl` and `cloud.appKey` in `gradle.properties`, so users have nothing
+to set up. That key is therefore public (it's in this repository and in every copy of the app); the
+apps never hold R2 credentials. To change it: `npx wrangler secret put APP_KEY`, update
+`gradle.properties`, and publish a release.
 
 ## Project layout
 

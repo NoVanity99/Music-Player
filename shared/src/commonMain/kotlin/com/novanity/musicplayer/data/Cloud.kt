@@ -115,17 +115,24 @@ class CloudRepository(
     private val files: CloudFiles,
     private val scope: CoroutineScope,
     downloads: Flow<List<DownloadEntity>>,
+    /** A server and key built into the app: used as they are, and can't be changed or removed. */
+    private val builtIn: CloudConfig? = null,
 ) {
+    val isBuiltIn: Boolean get() = builtIn != null
+
     private val json = Json { ignoreUnknownKeys = true }
 
-    private val _config = MutableStateFlow(CloudConfig(secure.getString(KEY_URL).orEmpty(), secure.getString(KEY_KEY).orEmpty()))
+    private val _config = MutableStateFlow(
+        builtIn?.let { CloudConfig(normalizeUrl(it.serverUrl), it.key.trim()) }
+            ?: CloudConfig(secure.getString(KEY_URL).orEmpty(), secure.getString(KEY_KEY).orEmpty())
+    )
     val config: StateFlow<CloudConfig> = _config.asStateFlow()
 
     private val library = MutableStateFlow(
         cache.getString(KEY_LIBRARY)?.let { runCatching { json.decodeFromString(CloudLibraryFile.serializer(), it).songs }.getOrNull() }.orEmpty()
     )
 
-    private val _everConnected = MutableStateFlow(_config.value.isSet && cache.getBoolean(KEY_CONNECTED, false))
+    private val _everConnected = MutableStateFlow(builtIn != null || (_config.value.isSet && cache.getBoolean(KEY_CONNECTED, false)))
 
     /** True once these settings have worked at least once (so a first-time typo isn't treated as set up). */
     val everConnected: StateFlow<Boolean> = _everConnected.asStateFlow()
@@ -176,6 +183,7 @@ class CloudRepository(
 
     /** Saves the server address and key, then loads the library. */
     fun connect(serverUrl: String, key: String) {
+        if (builtIn != null) return
         val config = CloudConfig(normalizeUrl(serverUrl), key.trim())
         secure.putString(KEY_URL, config.serverUrl)
         secure.putString(KEY_KEY, config.key)
@@ -188,6 +196,7 @@ class CloudRepository(
 
     /** Forgets the server. Downloaded songs stay on the device. */
     fun disconnect() {
+        if (builtIn != null) return
         secure.putString(KEY_URL, null)
         secure.putString(KEY_KEY, null)
         _config.value = CloudConfig("", "")
@@ -216,7 +225,10 @@ class CloudRepository(
                         CloudStatus.Online(parsed.songs.size)
                     }
                 }
-                401, 403 -> CloudStatus.Error("The server rejected the access key. Check the key and try again.")
+                401, 403 -> CloudStatus.Error(
+                    if (builtIn != null) "The music server rejected this version of the app. Update to the latest version."
+                    else "The server rejected the access key. Check the key and try again."
+                )
                 404 -> CloudStatus.Error("No Vanity Player server found at that address.")
                 else -> CloudStatus.Error("The server had a problem (HTTP ${response.status}). Try again later.")
             }

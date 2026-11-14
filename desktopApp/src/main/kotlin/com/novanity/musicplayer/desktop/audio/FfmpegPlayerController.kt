@@ -323,7 +323,7 @@ class FfmpegPlayerController(
         val streamed = song != null && (graph.musicRepository.songsById[song.id]?.uri ?: song.uri).startsWith("http")
         if (streamed) {
             // A stream that won't open is a connection or key problem: skipping ahead wouldn't help.
-            onError("Can't stream “$title”. Check your connection and the cloud settings.")
+            onError("Can't stream “$title”. Check your internet connection.")
             scope.launch { graph.cloud.refresh() } // if the server is gone, switch the library to offline
             closeVoices()
             errorStreak = 0

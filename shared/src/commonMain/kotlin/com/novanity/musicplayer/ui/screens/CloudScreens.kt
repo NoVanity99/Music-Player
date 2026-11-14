@@ -215,8 +215,9 @@ fun CloudProblemBanner(vm: LibraryViewModel) {
             color = if (isError) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.weight(1f),
         )
-        TextButton(onClick = { if (isError) vm.open(Destination.Settings) else vm.refreshCloud() }) {
-            Text(if (isError) "Settings" else "Retry")
+        val toSettings = isError && !vm.cloudBuiltIn
+        TextButton(onClick = { if (toSettings) vm.open(Destination.Settings) else vm.refreshCloud() }) {
+            Text(if (toSettings) "Settings" else "Retry")
         }
     }
 }

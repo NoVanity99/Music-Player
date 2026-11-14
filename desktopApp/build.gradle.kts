@@ -62,6 +62,11 @@ compose.desktop {
         mainClass = "com.novanity.musicplayer.desktop.MainKt"
         val discordClientId = providers.gradleProperty("discord.clientId").getOrElse("")
         jvmArgs += listOf("-Dapp.version=$appVersion", "-Ddiscord.clientId=$discordClientId", "-Xmx768m")
+        // The cloud library this build is for (see gradle.properties).
+        jvmArgs += listOf(
+            "-Dcloud.serverUrl=${providers.gradleProperty("cloud.serverUrl").getOrElse("")}",
+            "-Dcloud.appKey=${providers.gradleProperty("cloud.appKey").getOrElse("")}",
+        )
 
         nativeDistributions {
             targetFormats(TargetFormat.Exe, TargetFormat.Msi)

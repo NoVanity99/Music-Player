@@ -19,6 +19,8 @@ android {
         applicationId = "com.novanity.musicplayer"
         minSdk = 26
         targetSdk = 37
+        buildConfigField("String", "CLOUD_SERVER_URL", "\"${providers.gradleProperty("cloud.serverUrl").getOrElse("")}\"")
+        buildConfigField("String", "CLOUD_APP_KEY", "\"${providers.gradleProperty("cloud.appKey").getOrElse("")}\"")
         versionCode = providers.gradleProperty("app.versionCode").get().toInt()
         versionName = providers.gradleProperty("app.versionName").get()
     }
@@ -50,7 +52,7 @@ android {
 
     buildFeatures {
         compose = true
-        buildConfig = false
+        buildConfig = true // carries the built-in cloud server address and key
     }
 
     dependenciesInfo {

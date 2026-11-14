@@ -56,6 +56,7 @@ class MusicApp : Application() {
                 }
             },
             cloudFiles = AndroidCloudFiles(appContext.filesDir),
+            builtInCloud = com.novanity.musicplayer.data.CloudConfig(BuildConfig.CLOUD_SERVER_URL, BuildConfig.CLOUD_APP_KEY),
         )
         val cloud = container.cloud
         ArtworkLoader.provider = AndroidArtworkProvider(appContext) { coverId -> cloud.coverFile(coverId) }

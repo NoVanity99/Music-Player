@@ -1,5 +1,6 @@
 package com.novanity.musicplayer.ui.screens
 
+import com.novanity.musicplayer.data.CloudStatus
 import androidx.compose.material.icons.rounded.Person
 import com.novanity.musicplayer.platform.LocalPlatform
 import androidx.compose.foundation.background
@@ -98,13 +99,22 @@ fun SettingsScreen(actions: SongActions, contentPadding: PaddingValues) {
             item {
                 SettingsCard {
                     Column(Modifier.padding(16.dp)) {
-                        Text(
-                            "Stream your own music from your Vanity Player server and download it for offline play.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        Spacer(Modifier.height(14.dp))
-                        CloudConnectForm(vm)
+                        if (vm.cloudBuiltIn) {
+                            // The server is built in: just the status and a way to reload the song list.
+                            val status by vm.cloudStatus.collectAsStateWithLifecycle()
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                CloudStatusLine(status, Modifier.weight(1f))
+                                TextButton(onClick = { vm.refreshCloud() }, enabled = status !is CloudStatus.Loading) { Text("Refresh") }
+                            }
+                        } else {
+                            Text(
+                                "Stream your own music from your Vanity Player server and download it for offline play.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Spacer(Modifier.height(14.dp))
+                            CloudConnectForm(vm)
+                        }
                         Spacer(Modifier.height(14.dp))
                         DownloadsSummaryRow(actions)
                     }

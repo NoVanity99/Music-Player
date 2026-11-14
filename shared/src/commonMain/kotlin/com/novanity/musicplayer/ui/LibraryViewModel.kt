@@ -140,6 +140,8 @@ class LibraryViewModel(
     // ---- Cloud library and offline downloads ----
 
     val cloudAvailable: Boolean get() = cloud != null
+    /** The server and key ship with the app: nothing to set up or change. */
+    val cloudBuiltIn: Boolean get() = cloud?.isBuiltIn == true
     val cloudStatus: StateFlow<CloudStatus> = cloud?.status ?: MutableStateFlow(CloudStatus.NotConfigured)
     val cloudConfig: StateFlow<CloudConfig> = cloud?.config ?: MutableStateFlow(CloudConfig("", ""))
     /** The cloud settings have worked at least once. */

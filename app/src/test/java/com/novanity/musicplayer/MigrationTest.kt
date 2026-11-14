@@ -20,7 +20,7 @@ class MigrationTest {
     @Test
     fun migrate1To3() = runBlocking {
         val context = ApplicationProvider.getApplicationContext<MusicApp>()
-        val dbFile = context.getDatabasePath("music.db").apply { parentFile?.mkdirs(); delete() }
+        val dbFile = context.getDatabasePath("migration-test.db").apply /* not the app's own, which is open */ { parentFile?.mkdirs(); delete() }
 
         // Recreate exactly what version 1.0 shipped, from its exported schema.
         val schema = JSONObject(File("../shared/schemas/com.novanity.musicplayer.data.db.AppDatabase/1.json").readText())

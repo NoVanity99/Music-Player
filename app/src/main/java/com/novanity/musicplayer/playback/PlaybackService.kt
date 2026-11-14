@@ -235,7 +235,7 @@ class PlaybackService : MediaSessionService() {
                 // A stream that fails is a connection or key problem: skipping ahead wouldn't help.
                 val status = (error.cause as? HttpDataSource.InvalidResponseCodeException)?.responseCode
                 val message = when (status) {
-                    401, 403 -> "The cloud server rejected the access key. Check it in Settings."
+                    401, 403 -> "The music server rejected this version of the app. Update to the latest version."
                     404 -> "“$title” is no longer on the cloud server."
                     null -> "Can't stream “$title”. Check your internet connection."
                     else -> "The cloud server had a problem (HTTP $status)."
