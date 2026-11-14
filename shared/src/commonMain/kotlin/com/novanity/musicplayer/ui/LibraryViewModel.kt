@@ -223,6 +223,13 @@ class LibraryViewModel(
 
     val artistBiosEnabled: StateFlow<Boolean> = settings.artistBios
     fun setArtistBiosEnabled(enabled: Boolean) = settings.setArtistBios(enabled)
+
+    val advancedTransitions: StateFlow<Boolean> = settings.advancedTransitions
+    fun setAdvancedTransitions(enabled: Boolean) = settings.setAdvancedTransitions(enabled)
+
+    /** The owner's list of albums that play with advanced transitions; recomposes when it changes. */
+    val ownerConfig: StateFlow<com.novanity.musicplayer.data.CloudOwnerConfig>? = cloud?.ownerConfig
+    fun hasAdvancedTransitions(album: Album): Boolean = cloud?.hasAdvancedTransitions(album.title, album.songs.first().artist) == true
     val canShowBios: Boolean get() = bios != null
 
     /** A short bio for [artist] from Wikipedia, or null (none found, offline, or turned off). */

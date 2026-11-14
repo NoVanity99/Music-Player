@@ -27,6 +27,8 @@ class Crossfader(
     private val main: ExoPlayer,
     private val scope: CoroutineScope,
     private val crossfadeMs: () -> Int,
+    /** True when the current song should run straight into the next (no crossfade): ExoPlayer joins them gaplessly. */
+    private val seamless: () -> Boolean = { false },
 ) {
     private var watcher: Job? = null
     private var fade: Job? = null
@@ -46,6 +48,7 @@ class Crossfader(
         val ms = crossfadeMs()
         if (ms <= 0 || fade?.isActive == true || !main.isPlaying) return
         if (main.repeatMode == Player.REPEAT_MODE_ONE || !main.hasNextMediaItem()) return
+        if (seamless()) return
         val duration = main.duration
         if (duration == C.TIME_UNSET || duration < ms * 2L) return
         if (duration - main.currentPosition > ms) return

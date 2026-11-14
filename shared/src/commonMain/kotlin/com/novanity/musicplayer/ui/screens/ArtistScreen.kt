@@ -77,6 +77,8 @@ import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.ui.graphics.graphicsLayer
 import com.novanity.musicplayer.ui.components.ArtworkLoader
+import androidx.compose.foundation.lazy.rememberLazyListState
+import com.novanity.musicplayer.ui.components.mouseDragScroll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
@@ -293,7 +295,8 @@ private fun UnreleasedRow(songs: List<Song>, actions: SongActions, source: Strin
         if (songs.isEmpty()) {
             EmptyRow(AlbumKind.UNRELEASED.empty)
         } else {
-            LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            val rowState = rememberLazyListState()
+            LazyRow(Modifier.mouseDragScroll(rowState), state = rowState, contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                 items(songs, key = { it.id }) { song ->
                     SongCard(song, onClick = { actions.play(songs, songs.indexOf(song), source) }, modifier = Modifier.width(CardWidth).animateItem())
                 }
@@ -312,7 +315,10 @@ private fun ReleaseRow(kind: AlbumKind, albums: List<Album>, actions: SongAction
         if (albums.isEmpty()) {
             EmptyRow(kind.empty)
         } else {
+            val rowState = rememberLazyListState()
             LazyRow(
+                Modifier.mouseDragScroll(rowState),
+                state = rowState,
                 contentPadding = PaddingValues(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(14.dp),
             ) {

@@ -68,6 +68,17 @@ class FfmpegPlayerController(
     private val fadeBuffer = ShortArray(buffer.size)
     private val bytes = ByteArray(buffer.size * 2)
 
+    // Equalizer: the settings are read on the engine thread, the filters live there.
+    @Volatile private var eqLevels: List<Int>? = null
+    private val eq = DesktopEqualizer.Chain()
+    private val eqTail = DesktopEqualizer.Chain()
+
+    // Advanced transitions: the next song of the album is opened ahead of time and joined on
+    // without a gap. [preloadKey] is the queue entry being (or already) opened.
+    private val reader = GaplessReader(buffer.size)
+    private var preloadKey: String? = null
+    private var preloaded: Decoder? = null
+
     private val thread = Thread(::runEngine, "audio-engine").apply {
         isDaemon = true
         priority = Thread.MAX_PRIORITY - 1
@@ -76,6 +87,10 @@ class FfmpegPlayerController(
 
     init {
         restore()
+        scope.launch {
+            kotlinx.coroutines.flow.combine(graph.settings.eqEnabled, graph.settings.eqPreset, graph.settings.eqBands) { e, p, b -> DesktopEqualizer.levels(e, p, b) }
+                .collect { eqLevels = it }
+        }
     }
 
     private fun post(cmd: () -> Unit) {
@@ -189,6 +204,7 @@ class FfmpegPlayerController(
     override fun setSpeed(speed: Float) = post {
         this.speed = speed.coerceIn(0.5f, 2f)
         voice?.setSpeed(this.speed)
+        preloaded?.setSpeed(this.speed)
         output.flush()
     }
 
@@ -229,22 +245,46 @@ class FfmpegPlayerController(
         }
     }
 
-    private fun renderChunk(v: Decoder) {
+    private fun renderChunk(first: Decoder) {
+        var v = first
         // Start crossfading into the next track near the end of this one.
-        if (crossfadeMs > 0 && fading == null && v.durationMs > crossfadeMs * 2 &&
+        val seamless = seamlessNext()
+        if (seamless != null) preloadIfNear(v, seamless) else dropPreload()
+        if (seamless == null && crossfadeMs > 0 && fading == null && v.durationMs > crossfadeMs * 2 &&
             v.positionMs >= v.durationMs - crossfadeMs && repeat != RepeatMode.ONE
         ) {
             if (startCrossfade()) return
         }
-        val n = v.fill(buffer)
-        if (n == 0) {
-            onTrackFinished()
-            return
+
+        var n = reader.fill(v, buffer, 0, trim = seamless != null)
+        if (reader.finished) {
+            val next = preloaded
+            if (seamless != null && next != null && preloadKey == entries[seamless].key) {
+                // Join the next song of the album onto this one, sample to sample.
+                preloaded = null
+                preloadKey = null
+                v.close()
+                voice = next
+                v = next
+                current = seamless
+                reader.reset(trimStart = true)
+                n += reader.fill(next, buffer, n, trim = seamlessNext() != null)
+                lastHistoryKey = null
+                publish(queueChanged = true)
+                graph.playbackStateStore.savePosition(current, 0)
+            } else if (n == 0) {
+                onTrackFinished()
+                return
+            }
         }
+        if (n == 0) return
+        val levels = eqLevels
+        eq.process(buffer, n, levels)
         val gain = volume * volume // perceptual volume curve
         val out = fading
         if (out != null) {
             val m = out.fill(fadeBuffer)
+            eqTail.process(fadeBuffer, m, levels)
             for (i in 0 until n) {
                 val p = ((fadePos + i / OUT_CHANNELS).toDouble() / fadeTotal).coerceIn(0.0, 1.0)
                 val gIn = sin(p * PI / 2)
@@ -277,6 +317,11 @@ class FfmpegPlayerController(
         }
     }
 
+    private companion object {
+        /** How long before the end of a song the next one is opened for a seamless join. */
+        const val PRELOAD_MS = 20_000L
+    }
+
     private fun clip(v: Double): Short = v.coerceIn(Short.MIN_VALUE.toDouble(), Short.MAX_VALUE.toDouble()).toInt().toShort()
 
     private fun startCrossfade(): Boolean {
@@ -287,6 +332,7 @@ class FfmpegPlayerController(
             return false // let the normal end-of-track path handle the bad file
         }
         fading = voice
+        reader.reset(trimStart = false)
         fadePos = 0
         fadeTotal = crossfadeMs.toLong() * OUT_RATE / 1000
         voice = incoming
@@ -314,7 +360,35 @@ class FfmpegPlayerController(
             return
         }
         current = nextIdx
-        openCurrent(0, keepPlaying = true)
+        openCurrent(0, keepPlaying = true, flush = false) // let the last notes already queued play out
+    }
+
+    /** The next queue entry when it should be joined on seamlessly (same marked album, setting on). */
+    private fun seamlessNext(): Int? {
+        if (repeat == RepeatMode.ONE || !graph.settings.advancedTransitions.value) return null
+        val a = entries.getOrNull(current)?.song ?: return null
+        val nextIdx = nextIndex(+1)?.takeIf { it != current } ?: return null
+        val b = entries[nextIdx].song
+        return nextIdx.takeIf { a.albumId == b.albumId && graph.cloud.hasAdvancedTransitions(a) }
+    }
+
+    /** Opens the next song in the background shortly before this one ends, so the join never waits. */
+    private fun preloadIfNear(v: Decoder, nextIdx: Int) {
+        val entry = entries[nextIdx]
+        if (preloadKey == entry.key) return
+        if (v.durationMs <= 0 || v.durationMs - v.positionMs > PRELOAD_MS) return
+        dropPreload()
+        preloadKey = entry.key
+        Thread({
+            val d = runCatching { openSong(entry.song) }.getOrNull()
+            post { if (d != null && preloadKey == entry.key && preloaded == null) preloaded = d else d?.close() }
+        }, "audio-preload").apply { isDaemon = true }.start()
+    }
+
+    private fun dropPreload() {
+        preloaded?.close()
+        preloaded = null
+        preloadKey = null
     }
 
     private fun handleDecodeError(t: Throwable) {
@@ -346,13 +420,14 @@ class FfmpegPlayerController(
     }
 
     /** Opens the current entry's decoder at [startMs]. Decode errors are routed to [handleDecodeError]. */
-    private fun openCurrent(startMs: Long, keepPlaying: Boolean) {
+    private fun openCurrent(startMs: Long, keepPlaying: Boolean, flush: Boolean = true) {
         closeVoices()
         val entry = entries.getOrNull(current) ?: return publish(queueChanged = true)
         try {
             val d = openSong(entry.song)
             if (startMs > 0) d.seek(startMs)
             voice = d
+            reader.reset(trimStart = false)
             playing = keepPlaying
             reportedPositionMs = startMs
             lastHistoryKey = null
@@ -360,7 +435,7 @@ class FfmpegPlayerController(
             publish(queueChanged = true)
             return handleDecodeError(t)
         }
-        output.flush()
+        if (flush) output.flush()
         graph.playbackStateStore.savePosition(current, startMs)
         publish(queueChanged = true)
     }
@@ -377,6 +452,7 @@ class FfmpegPlayerController(
     private fun closeVoices() {
         voice?.close(); voice = null
         fading?.close(); fading = null
+        dropPreload()
     }
 
     private fun seekInternal(ms: Long) {
@@ -387,6 +463,7 @@ class FfmpegPlayerController(
         }
         fading?.close(); fading = null
         v.seek(ms)
+        reader.reset(trimStart = false)
         output.flush()
         reportedPositionMs = ms
         graph.playbackStateStore.savePosition(current, ms)

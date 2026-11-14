@@ -99,15 +99,17 @@ private fun appTypography(): Typography {
         lineHeight = line.sp,
         letterSpacing = tracking.em,
     )
+    // No negative letter spacing: Compose measures the line narrower than it draws, which
+    // shaves the last letter (the "s" of "albums").
     return Typography(
-        displayLarge = style(52, 800, 58, -0.03),
-        displayMedium = style(42, 800, 48, -0.03),
-        displaySmall = style(34, 800, 40, -0.025),
-        headlineLarge = style(30, 800, 36, -0.02),
-        headlineMedium = style(26, 700, 32, -0.02),
-        headlineSmall = style(22, 700, 28, -0.015),
-        titleLarge = style(20, 700, 26, -0.01),
-        titleMedium = style(16, 600, 22, -0.005),
+        displayLarge = style(52, 800, 58),
+        displayMedium = style(42, 800, 48),
+        displaySmall = style(34, 800, 40),
+        headlineLarge = style(30, 800, 36),
+        headlineMedium = style(26, 700, 32),
+        headlineSmall = style(22, 700, 28),
+        titleLarge = style(20, 700, 26),
+        titleMedium = style(16, 600, 22),
         titleSmall = style(14, 600, 20),
         bodyLarge = style(16, 400, 22),
         bodyMedium = style(14, 400, 20),

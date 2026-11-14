@@ -29,6 +29,7 @@ class CloudPollTest {
         val http: suspend (String, Map<String, String>) -> HttpText = { url, _ ->
             if (down) throw java.io.IOException("offline")
             if (url.endsWith("/library/version")) HttpText(200, """{"version":"v$songs"}""")
+            else if (url.endsWith("/config")) HttpText(200, """{"advancedTransitions":[{"artist":"slayr","album":"Gaia"}]}""")
             else {
                 libraryFetches++
                 HttpText(200, """{"version":1,"songs":[${(1..songs).joinToString(",") { """{"id":"s$it","title":"Song $it","artist":"slayr","album":"Gaia"}""" }}]}""")
@@ -43,6 +44,9 @@ class CloudPollTest {
         suspend fun waitFor(count: Int) = withTimeout(10_000) { while (repo.songs.value.size != count) delay(20) }
         try {
             waitFor(2)
+            // The owner's album list arrives with the library; "Gaia 2" is a different album.
+            withTimeout(10_000) { while (!repo.hasAdvancedTransitions("gaia", "slayr, Kaisani")) delay(20) }
+            assertTrue(!repo.hasAdvancedTransitions("Gaia 2", "slayr"))
             delay(400) // several polls with nothing new: the first one re-reads the list, the rest don't
             assertTrue(libraryFetches <= 2, "fetched the whole list $libraryFetches times")
             songs = 5

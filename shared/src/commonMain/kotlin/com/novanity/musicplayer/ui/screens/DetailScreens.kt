@@ -196,6 +196,8 @@ internal fun Hero(
     onSubtitleClick: (() -> Unit)? = null,
     /** Shown instead of a plain [subtitle], e.g. clickable artist names. */
     subtitleContent: (@Composable (TextAlign) -> Unit)? = null,
+    /** A small red pill beside the title, e.g. "ADVANCED TRANSITION". */
+    badge: String? = null,
 ) {
     val background = MaterialTheme.colorScheme.background
     androidx.compose.foundation.layout.BoxWithConstraints(
@@ -229,7 +231,13 @@ internal fun Hero(
                 Column(Modifier.weight(1f)) {
                     Text(meta.substringBefore(" \u2022").uppercase(), style = MaterialTheme.typography.labelMedium)
                     Spacer(Modifier.height(6.dp))
-                    Text(title, style = MaterialTheme.typography.displaySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(title, style = MaterialTheme.typography.displaySmall, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                        if (badge != null) {
+                            Spacer(Modifier.width(14.dp))
+                            RedPill(badge)
+                        }
+                    }
                     Spacer(Modifier.height(10.dp))
                     subtitleText(TextAlign.Start)
                     Text(meta, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -250,6 +258,11 @@ internal fun Hero(
                 )
                 Spacer(Modifier.height(20.dp))
                 Text(title, style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                if (badge != null) {
+                    Spacer(Modifier.height(8.dp))
+                    RedPill(badge)
+                    Spacer(Modifier.height(4.dp))
+                }
                 subtitleText(TextAlign.Center)
                 Spacer(Modifier.height(4.dp))
                 Text(meta, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
@@ -362,6 +375,20 @@ internal fun LazyListScope.songItems(
 
 // ---------- Album ----------
 
+/** Small white capitals in a red bubble. */
+@Composable
+private fun RedPill(text: String) {
+    Text(
+        text.uppercase(),
+        color = Color.White,
+        style = MaterialTheme.typography.labelSmall,
+        fontWeight = FontWeight.Bold,
+        maxLines = 1,
+        softWrap = false,
+        modifier = Modifier.background(Color(0xFFE5243B), RoundedCornerShape(50)).padding(horizontal = 10.dp, vertical = 4.dp),
+    )
+}
+
 /** "Disc 2 • 11 songs" above each disc of a multi-disc album. */
 @Composable
 private fun DiscHeader(disc: Int, count: Int) {
@@ -384,6 +411,10 @@ private fun AlbumScreen(albumId: Long, actions: SongActions, contentPadding: Pad
     val likedIds by vm.likedIds.collectAsStateWithLifecycle()
     val album = lib?.albumsById?.get(albumId) ?: return Missing(contentPadding, lib == null, { vm.back() })
     val tint by rememberArtColor(album.songs.first(), MaterialTheme.colorScheme.surfaceContainerHigh)
+    // Shown while the setting is on, for the albums the owner marked.
+    val advancedOn by vm.advancedTransitions.collectAsStateWithLifecycle()
+    val ownerConfig = vm.ownerConfig?.collectAsStateWithLifecycle()?.value
+    val advanced = remember(album, advancedOn, ownerConfig) { advancedOn && vm.hasAdvancedTransitions(album) }
 
     CollectionScaffold(album.title, tint, { vm.back() }, actions.collectionMenu(album.songs), contentPadding) {
         item {
@@ -396,6 +427,7 @@ private fun AlbumScreen(albumId: Long, actions: SongActions, contentPadding: Pad
                 subtitleContent = if (album.artist == "Various artists") null else { align ->
                     ArtistLinks(album.artist, vm, MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary, textAlign = align)
                 },
+                badge = if (advanced) "Advanced transition" else null,
             )
         }
         item { PlayShuffleRow(album.songs, actions, album.title) }

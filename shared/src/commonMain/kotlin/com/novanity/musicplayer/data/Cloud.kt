@@ -52,6 +52,14 @@ data class CloudSong(
     val year: Int = 0,
 )
 
+/** An album the owner marked for advanced transitions (config.json on the server). */
+@Serializable
+data class CloudAlbumRef(val artist: String = "", val album: String = "")
+
+/** Settings the owner changes on the server, without an app update. */
+@Serializable
+data class CloudOwnerConfig(val advancedTransitions: List<CloudAlbumRef> = emptyList())
+
 @Serializable
 data class CloudLibraryVersion(val version: String = "")
 
@@ -144,6 +152,34 @@ class CloudRepository(
     private val library = MutableStateFlow(
         cache.getString(KEY_LIBRARY)?.let { runCatching { json.decodeFromString(CloudLibraryFile.serializer(), it).songs }.getOrNull() }.orEmpty()
     )
+
+    private val _ownerConfig = MutableStateFlow(
+        cache.getString(KEY_OWNER_CONFIG)?.let { runCatching { json.decodeFromString(CloudOwnerConfig.serializer(), it) }.getOrNull() } ?: CloudOwnerConfig()
+    )
+
+    /** The owner's server-side settings (kept from the last time the server was reached). */
+    val ownerConfig: StateFlow<CloudOwnerConfig> = _ownerConfig.asStateFlow()
+
+    /** True when the owner marked this song's album for advanced transitions. */
+    fun hasAdvancedTransitions(song: Song): Boolean = hasAdvancedTransitions(song.album, song.artist)
+
+    fun hasAdvancedTransitions(album: String, artist: String): Boolean = _ownerConfig.value.advancedTransitions.any {
+        it.album.trim().equals(album.trim(), ignoreCase = true) && (it.artist.isBlank() || artist.contains(it.artist.trim(), ignoreCase = true))
+    }
+
+    private suspend fun loadOwnerConfig(config: CloudConfig) {
+        try {
+            val response = httpGet("${config.serverUrl}/config", mapOf(KEY_HEADER to config.key))
+            if (response.status != 200) return
+            val parsed = runCatching { json.decodeFromString(CloudOwnerConfig.serializer(), response.body) }.getOrNull() ?: return
+            _ownerConfig.value = parsed
+            cache.putString(KEY_OWNER_CONFIG, json.encodeToString(CloudOwnerConfig.serializer(), parsed))
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            // keep what we had
+        }
+    }
 
     private val _everConnected = MutableStateFlow(builtIn != null || (_config.value.isSet && cache.getBoolean(KEY_CONNECTED, false)))
 
@@ -283,6 +319,7 @@ class CloudRepository(
                             if (before.isNotEmpty()) parsed.songs.filter { it.id !in before }.takeIf { it.isNotEmpty() }?.let { _arrivals.tryEmit(it) }
                         }
                         prefetchCovers(parsed.songs)
+                        loadOwnerConfig(config)
                         CloudStatus.Online(parsed.songs.size)
                     }
                 }
@@ -389,6 +426,7 @@ class CloudRepository(
         private const val KEY_URL = "server_url"
         private const val KEY_KEY = "access_key"
         private const val KEY_LIBRARY = "library"
+        private const val KEY_OWNER_CONFIG = "owner_config"
         private const val KEY_CONNECTED = "connected"
         private const val POLL_MS = 60_000L
 

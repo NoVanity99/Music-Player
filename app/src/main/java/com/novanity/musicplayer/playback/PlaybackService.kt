@@ -67,7 +67,7 @@ class PlaybackService : MediaSessionService() {
         player.addListener(PlayerListener())
 
         // Crossfade (settings-driven) and the system equalizer on our audio session.
-        crossfader = Crossfader(this, player, scope) { container.settings.crossfadeSeconds.value * 1000 }.also { it.start() }
+        crossfader = Crossfader(this, player, scope, { container.settings.crossfadeSeconds.value * 1000 }, ::seamlessNext).also { it.start() }
         scope.launch {
             kotlinx.coroutines.flow.combine(container.settings.eqEnabled, container.settings.eqPreset, container.settings.eqBands) { e, p, b -> Triple(e, p, b) }
                 .collect { (e, p, b) -> AndroidEqualizer.apply(e, p, b) }
@@ -99,6 +99,19 @@ class PlaybackService : MediaSessionService() {
         if (p == null || !p.playWhenReady || p.mediaItemCount == 0 || p.playbackState == Player.STATE_ENDED) {
             stopSelf()
         }
+    }
+
+    /**
+     * Advanced transitions: true when the song playing and the next one are on the same album the
+     * owner marked for it. Those are never crossfaded; ExoPlayer plays one into the next with no gap.
+     */
+    private fun seamlessNext(): Boolean {
+        if (!container.settings.advancedTransitions.value) return false
+        val songs = container.musicRepository.songsById
+        val a = player.currentMediaItem?.songId?.let { songs[it] } ?: return false
+        val nextIndex = player.nextMediaItemIndex.takeIf { it != androidx.media3.common.C.INDEX_UNSET } ?: return false
+        val b = player.getMediaItemAt(nextIndex).songId?.let { songs[it] } ?: return false
+        return a.albumId == b.albumId && container.cloud.hasAdvancedTransitions(a)
     }
 
     override fun onDestroy() {

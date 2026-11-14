@@ -114,6 +114,15 @@ class SettingsRepository(private val prefs: KeyValueStore) {
     /** Show a short Wikipedia bio on artist pages. */
     val artistBios: StateFlow<Boolean> = _artistBios.asStateFlow()
 
+    /** Seamless playback between the songs of the albums the owner has marked for it. */
+    private val _advancedTransitions = MutableStateFlow(prefs.getBoolean(KEY_ADVANCED_TRANSITIONS, true))
+    val advancedTransitions: StateFlow<Boolean> = _advancedTransitions.asStateFlow()
+
+    fun setAdvancedTransitions(enabled: Boolean) {
+        _advancedTransitions.value = enabled
+        prefs.putBoolean(KEY_ADVANCED_TRANSITIONS, enabled)
+    }
+
     fun setArtistBios(enabled: Boolean) {
         _artistBios.value = enabled
         prefs.putBoolean(KEY_ARTIST_BIOS, enabled)
@@ -204,6 +213,7 @@ class SettingsRepository(private val prefs: KeyValueStore) {
         const val KEY_LAST_PROMPTED = "last_prompted_version"
         const val KEY_DISCORD = "discord_presence"
         const val KEY_ARTIST_BIOS = "artist_bios"
+        const val KEY_ADVANCED_TRANSITIONS = "advanced_transitions"
         const val KEY_VISUALIZER = "visualizer"
         const val KEY_DOWNLOAD_LIKED = "download_liked"
         const val KEY_EQ_PRESET = "eq_preset"

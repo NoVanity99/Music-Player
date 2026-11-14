@@ -24,7 +24,8 @@ class DesktopPlatformUi(
     override val supportsBlur = true
     override val supportsDiscordPresence = true
     override val windowControlsWidth = WindowControlsWidth
-    override val supportsEqualizer = false
+    override val supportsEqualizer = true
+    override val equalizer get() = com.novanity.musicplayer.desktop.audio.DesktopEqualizer.info
 
     override fun dynamicColorScheme(dark: Boolean): ColorScheme? = null
 

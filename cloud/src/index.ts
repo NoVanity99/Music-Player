@@ -2,7 +2,9 @@
  * Vanity Player cloud: serves a music library from the R2 bucket `vanity-music`.
  *
  *   GET /library      the song list (library.json)
- *   GET /library/version   changes whenever the song list does
+ *   GET /library/version   changes whenever the song list or config does
+ *   GET /config       owner settings (config.json), e.g. albums with advanced transitions
+ *   GET /art/:id.jpg  a cover, without the key (for Discord)
  *   GET /stream/:id   a song's audio, with HTTP Range support
  *   GET /cover/:id    cover art
  *
@@ -39,6 +41,13 @@ export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
 
+    // Album covers are also served without the key at /art/<id>.jpg, so Discord can show the cover
+    // of the song that's playing (Discord fetches the image itself and can't send our key).
+    const art = new URL(request.url).pathname.match(/^\/art\/([a-f0-9]{16,64})(?:\.jpg)?$/);
+    if (art && (request.method === "GET" || request.method === "HEAD")) {
+      return media(request, env, ctx, `covers/${art[1]}`, art[1], "image/jpeg");
+    }
+
     if (!env.APP_KEY) return json({ error: "server_not_configured", message: "APP_KEY secret is not set" }, 500);
     const given = request.headers.get(KEY_HEADER) ?? "";
     if (!(await sameKey(given, env.APP_KEY))) {
@@ -60,6 +69,7 @@ export default {
     }
     if (path === "/library") return library(request, env);
     if (path === "/library/version") return libraryVersion(env);
+    if (path === "/config") return config(env);
 
     const stream = path.match(/^\/stream\/([^/]+)$/);
     if (stream) return media(request, env, ctx, `audio/${stream[1]}`, stream[1], "application/octet-stream");
@@ -116,8 +126,18 @@ async function library(request: Request, env: Env): Promise<Response> {
  * fetch the whole list only when it changed, so new uploads show up without an app update.
  */
 async function libraryVersion(env: Env): Promise<Response> {
-  const object = await env.MUSIC.head("library.json");
-  return json({ version: object?.etag ?? "" });
+  const [object, settings] = await Promise.all([env.MUSIC.head("library.json"), env.MUSIC.head("config.json")]);
+  return json({ version: (object?.etag ?? "") + (settings ? `-${settings.etag}` : "") });
+}
+
+/**
+ * Settings the owner changes without an app update (config.json in the bucket), such as which
+ * albums play with advanced transitions.
+ */
+async function config(env: Env): Promise<Response> {
+  const object = await env.MUSIC.get("config.json");
+  if (!object) return json({});
+  return new Response(object.body, { headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "private, no-cache", ...CORS } });
 }
 
 /** Audio or a cover: from the edge cache when it's there, otherwise from R2. */

@@ -165,6 +165,14 @@ fun SettingsScreen(actions: SongActions, contentPadding: PaddingValues) {
                         valueRange = 0f..12f,
                     )
                 }
+                val advanced by vm.advancedTransitions.collectAsStateWithLifecycle()
+                SettingRow(
+                    icon = Icons.Rounded.GraphicEq,
+                    title = "Advanced transitions on certain albums",
+                    subtitle = "On albums made to flow together, each song runs straight into the next with no gap",
+                    onClick = { vm.setAdvancedTransitions(!advanced) },
+                    trailing = { Switch(checked = advanced, onCheckedChange = vm::setAdvancedTransitions) },
+                )
                 SettingRow(Icons.Rounded.Speed, "Playback speed", if (speed == 1f) "Normal" else "${speed}\u00D7", onClick = { showSpeed = true })
                 if (LocalPlatform.current.supportsEqualizer) {
                     SettingRow(Icons.Rounded.GraphicEq, "Equalizer", "Presets and band levels", onClick = { vm.open(com.novanity.musicplayer.ui.Destination.Equalizer) })

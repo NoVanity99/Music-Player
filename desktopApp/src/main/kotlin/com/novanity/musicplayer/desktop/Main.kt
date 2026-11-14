@@ -138,14 +138,17 @@ class DesktopApp {
                 val start = System.currentTimeMillis() - (pos / rate).toLong()
                 val song = entry.songId?.let { graph.musicRepository.songsById[it] }
                 val album = song?.album.orEmpty()
-                if (song != null && song.id !in found) uploadCover(song)
+                // The cover straight from our own server when the song has one there; otherwise the
+                // file's own cover is put online (and the logo shows if there's none at all).
+                val cloudCover = song?.coverId?.let { id -> graph.cloud.config.value.takeIf { it.isSet }?.let { "${it.serverUrl}/art/$id.jpg" } }
+                if (song != null && cloudCover == null && song.id !in found) uploadCover(song)
                 PresenceActivity(
                     title = entry.title,
                     artist = entry.artist,
                     album = album,
                     startMs = start,
                     endMs = if (s.durationMs > 0) start + (s.durationMs / rate).toLong() else null,
-                    coverUrl = song?.let { found[it.id] },
+                    coverUrl = cloudCover ?: song?.let { found[it.id] },
                 )
             }.collect { next ->
                 // The position ticks constantly; only resend for a new song, play/pause, or a real seek.

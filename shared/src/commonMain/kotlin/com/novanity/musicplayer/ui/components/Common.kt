@@ -1,5 +1,9 @@
 package com.novanity.musicplayer.ui.components
 
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.animation.core.animateDecay
+import kotlinx.coroutines.launch
+import androidx.compose.ui.composed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.rounded.CloudDownload
 import androidx.compose.material3.CircularProgressIndicator
@@ -511,3 +515,35 @@ private fun PickerRow(art: @Composable () -> Unit, title: String, subtitle: Stri
 }
 
 val CardWidth: Dp = 148.dp
+
+
+/**
+ * Lets a row be dragged sideways with the mouse (click, hold and slide), with a little momentum
+ * on release. Touch already scrolls rows; this is for the desktop, where a mouse otherwise can't.
+ */
+fun Modifier.mouseDragScroll(state: androidx.compose.foundation.lazy.LazyListState): Modifier = composed {
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    pointerInput(state) {
+        val tracker = androidx.compose.ui.input.pointer.util.VelocityTracker()
+        var fling: kotlinx.coroutines.Job? = null
+        detectHorizontalDragGestures(
+            onDragStart = { fling?.cancel(); tracker.resetTracking() },
+            onDragEnd = {
+                val velocity = -tracker.calculateVelocity().x
+                fling = scope.launch {
+                    var last = 0f
+                    androidx.compose.animation.core.AnimationState(0f, velocity).animateDecay(androidx.compose.animation.core.exponentialDecay(frictionMultiplier = 2.2f)) {
+                        state.dispatchRawDelta(value - last)
+                        last = value
+                    }
+                }
+            },
+        ) { change, dx ->
+            if (change.type == androidx.compose.ui.input.pointer.PointerType.Mouse) {
+                change.consume()
+                tracker.addPosition(change.uptimeMillis, change.position)
+                state.dispatchRawDelta(-dx)
+            }
+        }
+    }
+}
