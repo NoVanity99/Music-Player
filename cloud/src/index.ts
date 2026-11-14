@@ -87,7 +87,9 @@ async function library(request: Request, env: Env): Promise<Response> {
     ETag: object.httpEtag,
     ...CORS,
   });
-  if (request.headers.get("If-None-Match") === object.httpEtag) {
+  // Cloudflare may turn the ETag into a weak one ("W/...") when it compresses the response.
+  const strip = (tag: string | null) => (tag ?? "").replace(/^W\//, "");
+  if (request.headers.has("If-None-Match") && strip(request.headers.get("If-None-Match")) === strip(object.httpEtag)) {
     return new Response(null, { status: 304, headers });
   }
   headers.set("Content-Length", String(object.size));
