@@ -10,6 +10,7 @@
     "test": "node scripts/test-worker.mjs"
   },
   "dependencies": {
+    "@neondatabase/serverless": "^1.2.1",
     "music-metadata": "^11.0.0",
     "sharp": "^0.34.0"
   },

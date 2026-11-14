@@ -9,17 +9,21 @@
  * secret APP_KEY (`wrangler secret put APP_KEY`); the app never sees any R2 credentials.
  */
 
+import { accounts } from "./accounts";
+
 export interface Env {
   MUSIC: R2Bucket;
   APP_KEY: string;
+  /** Neon Postgres connection string for accounts (`wrangler secret put DATABASE_URL`). */
+  DATABASE_URL?: string;
 }
 
 const KEY_HEADER = "X-App-Key";
 
 const CORS: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
-  "Access-Control-Allow-Headers": `${KEY_HEADER}, Range, If-None-Match`,
+  "Access-Control-Allow-Methods": "GET, HEAD, POST, PUT, DELETE, OPTIONS",
+  "Access-Control-Allow-Headers": `${KEY_HEADER}, Authorization, Content-Type, Range, If-None-Match`,
   "Access-Control-Expose-Headers": "Content-Length, Content-Range, Accept-Ranges, ETag",
   "Access-Control-Max-Age": "86400",
 };
@@ -33,9 +37,6 @@ const ID = /^[a-f0-9]{16,64}$/;
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
-    if (request.method !== "GET" && request.method !== "HEAD") {
-      return json({ error: "method_not_allowed" }, 405, { Allow: "GET, HEAD, OPTIONS" });
-    }
 
     if (!env.APP_KEY) return json({ error: "server_not_configured", message: "APP_KEY secret is not set" }, 500);
     const given = request.headers.get(KEY_HEADER) ?? "";
@@ -44,6 +45,18 @@ export default {
     }
 
     const path = new URL(request.url).pathname.replace(/\/+$/, "") || "/";
+
+    // Accounts (sign-in, likes, history, playlists) take POST/PUT/DELETE; the music is read-only.
+    try {
+      const account = await accounts(request, env, path, (body, status) => json(body, status));
+      if (account) return account;
+    } catch (e) {
+      console.error("accounts", e);
+      return json({ error: "server_error", message: "The account service had a problem. Try again." }, 500);
+    }
+    if (request.method !== "GET" && request.method !== "HEAD") {
+      return json({ error: "method_not_allowed" }, 405, { Allow: "GET, HEAD, OPTIONS" });
+    }
     if (path === "/library") return library(request, env);
 
     const stream = path.match(/^\/stream\/([^/]+)$/);
