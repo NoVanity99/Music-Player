@@ -346,7 +346,7 @@ fun SettingsScreen(actions: SongActions, contentPadding: PaddingValues) {
                         trailing = { Switch(checked = bios, onCheckedChange = vm::setArtistBiosEnabled) },
                     )
                 }
-                SettingRow(Icons.Rounded.Shield, "Private by design", "No ads or tracking. Your music comes only from your own cloud server.")
+                SettingRow(Icons.Rounded.Shield, "Private by design", "No ads or tracking. The music comes only from our cloud and is safety checked.")
             }
         }
     }
