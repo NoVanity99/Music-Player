@@ -52,7 +52,8 @@ class DesktopUpdatePlatform(private val exitApp: () -> Unit) : UpdatePlatform {
                 appendLine("@echo off")
                 // Wait for this process to exit so its files can be replaced.
                 appendLine(":wait")
-                appendLine("tasklist /FI \"PID eq $pid\" 2>nul | find \"$pid\" >nul && (timeout /t 1 /nobreak >nul & goto wait)")
+                // (ping as a 1 s pause: "timeout" refuses to run without a console window.)
+                appendLine("tasklist /FI \"PID eq $pid\" 2>nul | find \"$pid\" >nul && (ping -n 2 127.0.0.1 >nul & goto wait)")
                 // Upgrades in place: same folder, so shortcuts, pins and settings stay as they are.
                 appendLine("start \"\" /wait msiexec /i \"${msi.absolutePath}\" /passive /norestart")
                 // Relaunch the updated app; never pop up an error if it has moved.
@@ -62,8 +63,14 @@ class DesktopUpdatePlatform(private val exitApp: () -> Unit) : UpdatePlatform {
                 appendLine("if exist \"$fallback\" start \"\" \"$fallback\"")
             }
         )
-        ProcessBuilder("cmd.exe", "/c", "start", "\"\"", "/min", script.absolutePath)
+        // Run the script directly, with its output discarded. The app has no console, so the
+        // script gets none either: no command window appears (launching it through "start" opened
+        // one that stayed on screen).
+        ProcessBuilder("cmd.exe", "/c", script.absolutePath)
             .directory(msi.parentFile)
+            .redirectInput(ProcessBuilder.Redirect.from(File("NUL")))
+            .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+            .redirectError(ProcessBuilder.Redirect.DISCARD)
             .start()
         exitApp()
         InstallOutcome.STARTED
