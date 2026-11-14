@@ -242,7 +242,9 @@ fun NowPlayingScreen(
                 .fillMaxSize()
                 .graphicsLayer { translationY = dismiss.offset }
                 .clip(RoundedCornerShape((dismiss.progress * 160f).coerceAtMost(28f).dp))
-                .background(Color.Black),
+                .background(Color.Black)
+                // The player covers the whole window: nothing behind it can be clicked through it.
+                .pointerInput(Unit) { detectTapGestures { } },
         ) {
             // Backdrop: blurred artwork (Android 12+) under a wash of the art's color.
             if (LocalPlatform.current.supportsBlur) {
@@ -362,7 +364,9 @@ fun NowPlayingScreen(
                 // The bar at the top (handle and "Playing from") is the only place that drags the
                 // player down; the handle sits a little lower so it's easy to see and grab.
                 Column(Modifier.fillMaxWidth().dismissDrag(dismiss, onCollapse)) {
-                Box(Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 6.dp), contentAlignment = Alignment.Center) {
+                // On a computer the very top of the window moves the window itself, so the handle
+                // sits clear below that strip.
+                Box(Modifier.fillMaxWidth().padding(top = if (isDesktop) 48.dp else 22.dp, bottom = 8.dp), contentAlignment = Alignment.Center) {
                     Box(Modifier.size(width = 44.dp, height = 5.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.45f)))
                 }
                 Row(Modifier.fillMaxWidth().clearOfWindowControls(), verticalAlignment = Alignment.CenterVertically) {
