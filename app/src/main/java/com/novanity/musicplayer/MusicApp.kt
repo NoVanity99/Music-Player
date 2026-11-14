@@ -39,6 +39,9 @@ class MusicApp : Application() {
     override fun onCreate() {
         super.onCreate()
         val appContext = applicationContext
+        // Unit tests (Robolectric) run offline: no built-in server and no account, so they never
+        // touch the real library.
+        val underTest = android.os.Build.FINGERPRINT == "robolectric"
         container = AppGraph(
             databaseFactory = {
                 Room.databaseBuilder<AppDatabase>(appContext, appContext.getDatabasePath(AppDatabase.FILE_NAME).absolutePath)
@@ -55,14 +58,14 @@ class MusicApp : Application() {
                     com.novanity.musicplayer.data.HttpText(status, body)
                 }
             },
-            httpSend = { method, url, headers, body ->
+            httpSend = if (underTest) null else { method, url, headers, body ->
                 kotlinx.coroutines.withContext(Dispatchers.IO) {
                     val (status, text) = com.novanity.musicplayer.updatecore.UpdateCore.sendJson(method, url, headers, body, BIO_USER_AGENT)
                     com.novanity.musicplayer.data.HttpText(status, text)
                 }
             },
             cloudFiles = AndroidCloudFiles(appContext.filesDir),
-            builtInCloud = com.novanity.musicplayer.data.CloudConfig(BuildConfig.CLOUD_SERVER_URL, BuildConfig.CLOUD_APP_KEY),
+            builtInCloud = if (underTest) null else com.novanity.musicplayer.data.CloudConfig(BuildConfig.CLOUD_SERVER_URL, BuildConfig.CLOUD_APP_KEY),
         )
         val cloud = container.cloud
         ArtworkLoader.provider = AndroidArtworkProvider(appContext) { coverId -> cloud.coverFile(coverId) }

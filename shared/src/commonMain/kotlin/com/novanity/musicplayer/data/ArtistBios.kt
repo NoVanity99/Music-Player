@@ -18,16 +18,7 @@ import kotlinx.serialization.json.jsonObject
 data class ArtistBio(
     val text: String,
     val sourceUrl: String,
-    /** The article's Wikidata item (e.g. "Q185828"), which links to the artist on MusicBrainz. */
-    val wikidataId: String? = null,
 )
-
-/** A studio album from MusicBrainz. */
-@Immutable
-@Serializable
-data class RealAlbum(val title: String, val year: String?, val musicBrainzId: String) {
-    val url: String get() = "https://musicbrainz.org/release-group/$musicBrainzId"
-}
 
 /** Result of an HTTP GET: the status code and the response body. */
 class HttpText(val status: Int, val body: String)
@@ -113,71 +104,10 @@ class ArtistBios(
         if (!isMusical(page.str("description")) && !isMusical(extract.take(200))) return null
         val url = page["content_urls"]?.jsonObject?.get("desktop")?.jsonObject?.str("page")
             ?: "https://en.wikipedia.org/wiki/" + encode(title.replace(' ', '_'))
-        return ArtistBio(extract, url, page.str("wikibase_item"))
+        return ArtistBio(extract, url)
     }
 
     private suspend fun remember(key: String, bio: ArtistBio?) = lock.withLock { memory[key] = bio }
-
-    @Serializable
-    private class SavedAlbums(val albums: List<RealAlbum>, val fetchedAt: Long)
-
-    private val albumMemory = HashMap<String, List<RealAlbum>>()
-    private val musicBrainzLock = Mutex()
-    private var lastMusicBrainzCall = 0L
-
-    /**
-     * The artist's studio albums (official releases, no live/remix/compilation/soundtrack), oldest
-     * first. Found through the Wikidata item of the bio's Wikipedia article, so it's the same
-     * artist as the bio. Empty when there's no bio; null when MusicBrainz can't be reached now.
-     */
-    suspend fun albums(artist: String): List<RealAlbum>? {
-        val key = artist.trim().lowercase()
-        lock.withLock { albumMemory[key]?.let { return it } }
-        val saved = store.getString(ALBUMS_PREFIX + key)
-            ?.let { runCatching { json.decodeFromString(SavedAlbums.serializer(), it) }.getOrNull() }
-        if (saved != null && now() - saved.fetchedAt < ALBUMS_REFRESH_MS) {
-            lock.withLock { albumMemory[key] = saved.albums }
-            return saved.albums
-        }
-        val qid = bio(artist)?.wikidataId ?: return saved?.albums ?: emptyList()
-        val found = try {
-            fetchAlbums(qid)
-        } catch (e: Exception) {
-            if (e is kotlinx.coroutines.CancellationException) throw e
-            return saved?.albums // MusicBrainz busy or offline: keep what we had
-        }
-        lock.withLock { albumMemory[key] = found }
-        store.putString(ALBUMS_PREFIX + key, json.encodeToString(SavedAlbums.serializer(), SavedAlbums(found, now())))
-        return found
-    }
-
-    private suspend fun fetchAlbums(wikidataId: String): List<RealAlbum> {
-        val link = musicBrainz("$MUSICBRAINZ/url?inc=artist-rels&fmt=json&resource=" +
-            encode("https://www.wikidata.org/wiki/$wikidataId"))
-        if (link.status == 404) return emptyList() // not linked on MusicBrainz
-        check(link.status == 200) { "MusicBrainz HTTP ${link.status}" }
-        val mbid = runCatching {
-            json.parseToJsonElement(link.body).jsonObject["relations"]!!.jsonArray
-                .map { it.jsonObject }
-                .firstOrNull { it.str("target-type") == "artist" }
-                ?.get("artist")?.jsonObject?.str("id")
-        }.getOrNull() ?: return emptyList()
-        val groups = musicBrainz("$MUSICBRAINZ/release-group?fmt=json&limit=100&query=" +
-            encode("arid:$mbid AND primarytype:album AND status:official"))
-        check(groups.status == 200) { "MusicBrainz HTTP ${groups.status}" }
-        return parseStudioAlbums(groups.body)
-    }
-
-    /** One MusicBrainz request at a time, at most one per second. */
-    private suspend fun musicBrainz(url: String): HttpText = musicBrainzLock.withLock {
-        val wait = lastMusicBrainzCall + MUSICBRAINZ_GAP_MS - now()
-        if (wait > 0) kotlinx.coroutines.delay(wait)
-        try {
-            get(url)
-        } finally {
-            lastMusicBrainzCall = now()
-        }
-    }
 
     /** Stored as JSON, or "none|<time to look again>" when there's no article. */
     private fun encode(found: Found) =
@@ -194,11 +124,6 @@ class ArtistBios(
     companion object {
         private const val API = "https://en.wikipedia.org"
         private const val STORE_PREFIX = "bio2:"
-        private const val ALBUMS_PREFIX = "albums:"
-        private const val MUSICBRAINZ = "https://musicbrainz.org/ws/2"
-        private const val ALBUMS_REFRESH_MS = 30L * 24 * 60 * 60 * 1000
-        /** MusicBrainz allows one request per second. */
-        private const val MUSICBRAINZ_GAP_MS = 1_100L
         private const val RETRY_NONE_MS = 30L * 24 * 60 * 60 * 1000
         private const val RETRY_UNSURE_MS = 24L * 60 * 60 * 1000
 
@@ -228,21 +153,6 @@ class ArtistBios(
             fun norm(s: String) = s.replace('_', ' ').replace(Regex("""\s*\([^)]*\)\s*$"""), "")
                 .lowercase().replace("&", "and").replace(Regex("""[^\p{L}\p{N}]+"""), " ").trim()
             return norm(title) == norm(name)
-        }
-
-        /** Studio albums from a release-group search: no secondary types, sorted oldest first. */
-        fun parseStudioAlbums(body: String): List<RealAlbum> {
-            val groups = runCatching {
-                Json.parseToJsonElement(body).jsonObject["release-groups"]!!.jsonArray.map { it.jsonObject }
-            }.getOrDefault(emptyList())
-            return groups
-                .filter { it.str("primary-type") == "Album" && (it["secondary-types"] as? kotlinx.serialization.json.JsonArray).isNullOrEmpty() }
-                .mapNotNull { g ->
-                    val title = g.str("title") ?: return@mapNotNull null
-                    RealAlbum(title, g.str("first-release-date")?.take(4)?.takeIf { it.length == 4 }, g.str("id") ?: return@mapNotNull null)
-                }
-                .distinctBy { it.title.lowercase() }
-                .sortedWith(compareBy<RealAlbum> { it.year ?: "9999" }.thenBy { it.title })
         }
 
         /** Percent-encodes a URL path segment or query value (UTF-8). */

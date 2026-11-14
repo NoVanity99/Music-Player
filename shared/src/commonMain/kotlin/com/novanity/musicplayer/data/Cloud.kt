@@ -42,6 +42,9 @@ data class CloudSong(
     val addedAt: Long = 0,
     /** The file's path inside the uploaded folder. */
     val path: String = "",
+    /** "custom" (default), "released", "ep" or "single". */
+    val albumType: String = "",
+    val year: Int = 0,
 )
 
 @Serializable
@@ -315,6 +318,8 @@ class CloudRepository(
         cloudId = id,
         coverId = coverId,
         sizeBytes = size,
+        albumKind = AlbumKind.parse(albumType),
+        year = year,
     )
 
     companion object {

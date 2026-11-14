@@ -109,20 +109,6 @@ class ArtistBiosTest {
         assertNull(bios.bio("Sol Vega"))
         assertNull(bios.bio("Tidal"), "not the streaming service")
         assertNull(bios.bio("Tidal"), "not the streaming service")
-        // Real studio albums, through the bio's Wikidata item.
-        val albums = bios.albums("Daft Punk")!!.map { it.title }
-        println("Daft Punk albums: $albums")
-        assertEquals(listOf("Homework", "Discovery", "Human After All", "Random Access Memories"), albums)
-        assertTrue(bios.albums("Future")!!.any { it.title == "DS2" })
         Unit
-    }
-
-    @Test
-    fun studioAlbumsOnly() {
-        // A real MusicBrainz answer for Daft Punk: lives, remixes, compilations and the like are left out.
-        val body = javaClass.getResource("/musicbrainz-daft-punk-albums.json")!!.readText()
-        val albums = ArtistBios.parseStudioAlbums(body)
-        assertEquals(listOf("Homework", "Discovery", "Human After All", "Random Access Memories"), albums.map { it.title })
-        assertEquals(listOf("1997", "2001", "2005", "2013"), albums.map { it.year })
     }
 }

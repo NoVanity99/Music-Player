@@ -123,6 +123,19 @@ fun SettingsScreen(actions: SongActions, contentPadding: PaddingValues) {
                         }
                         Spacer(Modifier.height(14.dp))
                         DownloadsSummaryRow(actions)
+                        Spacer(Modifier.height(6.dp))
+                        val downloadLiked by vm.downloadLiked.collectAsStateWithLifecycle()
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text("Download liked songs", style = MaterialTheme.typography.titleSmall)
+                                Text(
+                                    "Liking a song also saves it for offline play",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            Switch(checked = downloadLiked, onCheckedChange = vm::setDownloadLiked)
+                        }
                     }
                 }
             }
@@ -285,8 +298,8 @@ fun SettingsScreen(actions: SongActions, contentPadding: PaddingValues) {
                     val bios by vm.artistBiosEnabled.collectAsStateWithLifecycle()
                     SettingRow(
                         icon = Icons.Rounded.Person,
-                        title = "Artist bios & albums",
-                        subtitle = "Show a short bio from Wikipedia and the artist's albums from MusicBrainz on artist pages",
+                        title = "Artist bios",
+                        subtitle = "Show a short bio from Wikipedia on artist pages",
                         onClick = { vm.setArtistBiosEnabled(!bios) },
                         trailing = { Switch(checked = bios, onCheckedChange = vm::setArtistBiosEnabled) },
                     )

@@ -1,5 +1,6 @@
 package com.novanity.musicplayer.ui.screens
 
+import com.novanity.musicplayer.ui.components.clearOfWindowControls
 import androidx.compose.material.icons.rounded.DownloadDone
 import com.novanity.musicplayer.data.SongSource
 import androidx.compose.foundation.layout.Arrangement
@@ -91,7 +92,8 @@ fun LibraryScreen(actions: SongActions, contentPadding: PaddingValues) {
             Modifier
                 .statusBarsPadding()
                 .fillMaxWidth()
-                .padding(start = 16.dp, end = 4.dp, top = 12.dp),
+                .padding(start = 16.dp, end = 4.dp, top = 12.dp)
+                .clearOfWindowControls(),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text("Your Library", style = MaterialTheme.typography.headlineLarge, modifier = Modifier.weight(1f))
@@ -228,6 +230,7 @@ private fun SongsList(actions: SongActions, padding: PaddingValues) {
         itemsIndexed(songs, key = { _, s -> s.id }) { index, song ->
             val liked = song.id in likedIds
             SongRow(
+                modifier = Modifier.animateItem(),
                 song = song,
                 liked = liked,
                 onClick = { actions.play(songs, index, "Your library") },

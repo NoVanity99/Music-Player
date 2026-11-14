@@ -1,5 +1,8 @@
 package com.novanity.musicplayer.ui.components
 
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -108,15 +111,18 @@ fun AlbumArt(
         contentAlignment = Alignment.Center,
     ) {
         val b = bitmap
-        if (b != null) {
-            Image(bitmap = b, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-        } else {
+        // Artwork that had to be loaded fades in over the placeholder; cached artwork is just there.
+        val shown by animateFloatAsState(if (b != null) 1f else 0f, tween(280), label = "art")
+        if (shown < 1f) {
             Icon(
                 Icons.Rounded.MusicNote,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.fillMaxSize(0.5f),
+                modifier = Modifier.fillMaxSize(0.5f).graphicsLayer { alpha = 1f - shown },
             )
+        }
+        if (b != null) {
+            Image(bitmap = b, contentDescription = null, modifier = Modifier.fillMaxSize().graphicsLayer { alpha = shown }, contentScale = ContentScale.Crop)
         }
     }
 }

@@ -75,8 +75,11 @@ interface PlatformUi {
     /** What Discord Rich Presence is doing right now, for Settings; null where it isn't supported. */
     val discordStatus: kotlinx.coroutines.flow.StateFlow<String>? get() = null
 
-    /** Height of the app-drawn window title bar (desktop); content starts below it. */
-    val titleBarHeight: Dp get() = 0.dp
+    /**
+     * Width taken by the floating minimize / maximize / close buttons in the window's top-right
+     * corner (desktop). Whatever sits in that corner keeps this much room free.
+     */
+    val windowControlsWidth: Dp get() = 0.dp
 
     fun dynamicColorScheme(dark: Boolean): ColorScheme?
 

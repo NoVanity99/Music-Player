@@ -1,5 +1,6 @@
 package com.novanity.musicplayer.ui.screens
 
+import com.novanity.musicplayer.ui.components.clearOfWindowControls
 import com.novanity.musicplayer.ui.components.Visualizer
 import com.novanity.musicplayer.ui.components.ArtistLinks
 import androidx.compose.material.icons.automirrored.rounded.VolumeDown
@@ -269,7 +270,7 @@ fun NowPlayingScreen(
                     )
             )
 
-            BoxWithConstraints(Modifier.fillMaxSize().systemBarsPadding().padding(top = LocalPlatform.current.titleBarHeight)) {
+            BoxWithConstraints(Modifier.fillMaxSize().systemBarsPadding()) {
                 // Wide windows: artwork on the left, controls (and lyrics, when turned on) on the right.
                 val wide = maxWidth >= 900.dp && maxHeight >= 520.dp
                 val artwork: @Composable (Modifier) -> Unit = { artModifier ->
@@ -356,7 +357,7 @@ fun NowPlayingScreen(
                 Box(Modifier.fillMaxWidth().padding(top = 6.dp), contentAlignment = Alignment.Center) {
                     Box(Modifier.size(width = 36.dp, height = 5.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.35f)))
                 }
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.fillMaxWidth().clearOfWindowControls(), verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = onCollapse) {
                         Icon(Icons.Rounded.KeyboardArrowDown, contentDescription = "Collapse", modifier = Modifier.size(30.dp))
                     }

@@ -1,7 +1,7 @@
 package com.novanity.musicplayer.ui.screens
 
+import com.novanity.musicplayer.ui.components.clearOfWindowControls
 import com.novanity.musicplayer.data.Album
-import com.novanity.musicplayer.data.RealAlbum
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.runtime.produceState
@@ -154,7 +154,8 @@ internal fun CollectionScaffold(
                 .background(lerp(background, tint, 0.35f).copy(alpha = barAlpha))
                 .statusBarsPadding()
                 .height(56.dp)
-                .padding(horizontal = 4.dp),
+                .padding(horizontal = 4.dp)
+                .clearOfWindowControls(),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             IconButton(onClick = onBack) {
@@ -301,7 +302,7 @@ internal fun meta(kind: String, songs: List<Song>) =
     "$kind • ${songCount(songs.size)} • ${formatTotal(songs.sumOf { it.durationMs })}"
 
 @Composable
-private fun Missing(contentPadding: PaddingValues, loading: Boolean, onBack: () -> Unit) {
+internal fun Missing(contentPadding: PaddingValues, loading: Boolean, onBack: () -> Unit) {
     CollectionScaffold("", MaterialTheme.colorScheme.background, onBack, emptyList(), contentPadding) {
         item {
             Box(Modifier.fillMaxWidth().height(400.dp), contentAlignment = Alignment.Center) {
@@ -323,6 +324,7 @@ internal fun LazyListScope.songItems(
     itemsIndexed(songs, key = { i, s -> "${s.id}-$i" }) { index, song ->
         val liked = song.id in likedIds
         SongRow(
+            modifier = Modifier.animateItem(), // rows glide when the list changes
             song = song,
             liked = liked,
             trackNumber = if (trackNumbers) song.track else null,
@@ -359,177 +361,6 @@ private fun AlbumScreen(albumId: Long, actions: SongActions, contentPadding: Pad
         item { PlayShuffleRow(album.songs, actions, album.title) }
         songItems(album.songs, likedIds, actions, album.title, trackNumbers = true, showAlbum = false)
     }
-}
-
-// ---------- Artist ----------
-
-@Composable
-private fun ArtistScreen(name: String, actions: SongActions, contentPadding: PaddingValues) {
-    val vm = actions.library
-    val lib by vm.grouped.collectAsStateWithLifecycle()
-    val likedIds by vm.likedIds.collectAsStateWithLifecycle()
-    val artist = lib?.artistsByName?.get(name) ?: return Missing(contentPadding, lib == null, { vm.back() })
-    // Discography: their own albums first, then albums they appear on as a collaborator.
-    val albums = remember(artist, lib) {
-        (artist.songs + artist.appearsOn).map { it.albumId }.distinct().mapNotNull { lib?.albumsById?.get(it) }
-    }
-    val everything = remember(artist) { artist.songs + artist.appearsOn }
-    var expanded by rememberSaveable(name) { mutableStateOf(false) }
-    var expandedAppears by rememberSaveable(name) { mutableStateOf(false) }
-    val biosOn by vm.artistBiosEnabled.collectAsStateWithLifecycle()
-    val bio by produceState<ArtistBio?>(null, name, biosOn) { value = if (biosOn) vm.artistBio(name) else null }
-    val realAlbums by produceState<List<RealAlbum>?>(null, name, biosOn, bio) {
-        value = if (biosOn && bio != null) vm.artistAlbums(name) else null
-    }
-    val tint by rememberArtColor(artist.songs.first(), MaterialTheme.colorScheme.surfaceContainerHigh)
-    val background = MaterialTheme.colorScheme.background
-
-    CollectionScaffold(artist.name, tint, { vm.back() }, actions.collectionMenu(artist.songs), contentPadding) {
-        item {
-            // Full-bleed image with the name over a fade, YouTube Music style.
-            // Square-ish on phones; a 360 dp banner on wide windows so it doesn't fill the screen.
-            androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth()) {
-            Box(if (maxWidth >= 600.dp) Modifier.fillMaxWidth().height(360.dp) else Modifier.fillMaxWidth().aspectRatio(1.05f)) {
-                AlbumArt(artist.songs.first(), Modifier.fillMaxSize(), shape = RoundedCornerShape(0.dp), large = true)
-                Box(
-                    Modifier
-                        .fillMaxSize()
-                        .background(Brush.verticalGradient(0.35f to Color.Transparent, 1f to background))
-                )
-                Column(Modifier.align(Alignment.BottomStart).padding(horizontal = 20.dp, vertical = 8.dp)) {
-                    Text(artist.name, style = MaterialTheme.typography.displaySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    Text(
-                        "${if (artist.albumCount == 1) "1 album" else "${artist.albumCount} albums"} • ${songCount(artist.songs.size)}" +
-                            when (artist.appearsOn.size) {
-                                0 -> ""
-                                1 -> " • 1 collaboration"
-                                else -> " • ${artist.appearsOn.size} collaborations"
-                            },
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-            }
-        }
-        item { PlayShuffleRow(everything, actions, artist.name) }
-        item { SectionHeader("Songs", action = if (artist.songs.size > 5) (if (expanded) "Show less" else "See all") else null) { expanded = !expanded } }
-        songItems(if (expanded) artist.songs else artist.songs.take(5), likedIds, actions, artist.name)
-        if (artist.appearsOn.isNotEmpty()) {
-            item {
-                SectionHeader("Appears on", action = if (artist.appearsOn.size > 5) (if (expandedAppears) "Show less" else "See all") else null) {
-                    expandedAppears = !expandedAppears
-                }
-            }
-            songItems(if (expandedAppears) artist.appearsOn else artist.appearsOn.take(5), likedIds, actions, artist.name)
-        }
-        if (albums.isNotEmpty()) {
-            item { SectionHeader("Discography") }
-            item {
-                CardRow(albums, key = { it.id }) { album, m ->
-                    AlbumCard(album, onClick = { vm.open(Destination.AlbumDetail(album.id)) }, modifier = m,
-                        onPlay = { actions.play(album.songs, 0, album.title) })
-                }
-            }
-        }
-        bio?.let { item { AboutCard(it) } }
-        realAlbums?.takeIf { it.isNotEmpty() }?.let { list ->
-            // Their real studio albums, with the ones in your library marked and playable.
-            val owned = albums.associateBy { albumKey(it.title) }
-            item { SectionHeader("Albums") }
-            items(list, key = { "real-${it.musicBrainzId}" }) { real ->
-                RealAlbumRow(real, owned[albumKey(real.title)], onOpen = { vm.open(Destination.AlbumDetail(it.id)) })
-            }
-            item {
-                Text(
-                    "Albums from MusicBrainz",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
-                )
-                Spacer(Modifier.height(24.dp))
-            }
-        }
-    }
-}
-
-/** "Random Access Memories (Deluxe)" and "random access memories" are the same album. */
-private fun albumKey(title: String) = title.lowercase()
-    .replace(Regex("""\s*[(\[][^)\]]*[)\]]"""), "")
-    .replace("&", "and")
-    .replace(Regex("""[^\p{L}\p{N}]+"""), " ")
-    .trim()
-
-@Composable
-private fun RealAlbumRow(real: RealAlbum, inLibrary: Album?, onOpen: (Album) -> Unit) {
-    val uriHandler = LocalUriHandler.current
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .clickable {
-                if (inLibrary != null) onOpen(inLibrary) else runCatching { uriHandler.openUri(real.url) }
-            }
-            .padding(horizontal = 20.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            real.year ?: "—",
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.width(52.dp),
-        )
-        Text(real.title, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-        if (inLibrary != null) {
-            Text(
-                "In your library",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(50))
-                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f))
-                    .padding(horizontal = 10.dp, vertical = 4.dp),
-            )
-        }
-    }
-}
-
-/** "About": the artist's bio, a few lines at first, with a link to the full article. */
-@Composable
-private fun AboutCard(bio: ArtistBio) {
-    var open by rememberSaveable(bio.sourceUrl) { mutableStateOf(false) }
-    val uriHandler = LocalUriHandler.current
-    SectionHeader("About")
-    Column(
-        Modifier
-            .padding(horizontal = 16.dp)
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(MaterialTheme.colorScheme.surfaceContainer)
-            .clickable { open = !open }
-            .padding(16.dp),
-    ) {
-        Text(
-            bio.text,
-            style = MaterialTheme.typography.bodyMedium,
-            maxLines = if (open) Int.MAX_VALUE else 5,
-            overflow = TextOverflow.Ellipsis,
-        )
-        Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                if (open) "Show less" else "Show more",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary,
-            )
-            Spacer(Modifier.weight(1f))
-            Text(
-                "From Wikipedia",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.clickable { runCatching { uriHandler.openUri(bio.sourceUrl) } }.padding(4.dp),
-            )
-        }
-    }
-    Spacer(Modifier.height(24.dp))
 }
 
 // ---------- Folder / Recently played / Liked ----------
@@ -737,7 +568,8 @@ private fun PlaylistScreen(playlistId: Long, actions: SongActions, contentPaddin
                 .background(lerp(background, tint, 0.35f).copy(alpha = barAlpha))
                 .statusBarsPadding()
                 .height(56.dp)
-                .padding(horizontal = 4.dp),
+                .padding(horizontal = 4.dp)
+                .clearOfWindowControls(),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             IconButton(onClick = { vm.back() }) {

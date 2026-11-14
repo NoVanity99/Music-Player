@@ -1,5 +1,6 @@
 package com.novanity.musicplayer.ui.screens
 
+import com.novanity.musicplayer.ui.components.clearOfWindowControls
 import com.novanity.musicplayer.ui.components.MixCard
 import androidx.compose.material.icons.rounded.Insights
 import androidx.compose.foundation.background
@@ -191,7 +192,8 @@ private fun HomeHeader(onSettings: () -> Unit, onStats: () -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
-            .padding(start = 16.dp, end = 4.dp, top = 12.dp, bottom = 16.dp),
+            .padding(start = 16.dp, end = 4.dp, top = 12.dp, bottom = 16.dp)
+            .clearOfWindowControls(),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(greeting(), style = MaterialTheme.typography.headlineLarge, modifier = Modifier.weight(1f))

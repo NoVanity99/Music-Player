@@ -92,6 +92,15 @@ class SettingsRepository(private val prefs: KeyValueStore) {
         prefs.putString(KEY_LAST_PROMPTED, version)
     }
 
+    private val _downloadLiked = MutableStateFlow(prefs.getBoolean(KEY_DOWNLOAD_LIKED, false))
+    /** Liking a song also downloads it for offline play. */
+    val downloadLiked: StateFlow<Boolean> = _downloadLiked.asStateFlow()
+
+    fun setDownloadLiked(enabled: Boolean) {
+        _downloadLiked.value = enabled
+        prefs.putBoolean(KEY_DOWNLOAD_LIKED, enabled)
+    }
+
     private val _visualizer = MutableStateFlow(prefs.getBoolean(KEY_VISUALIZER, true))
     /** Spectrum bars in the full-screen player (desktop). */
     val visualizer: StateFlow<Boolean> = _visualizer.asStateFlow()
@@ -177,6 +186,7 @@ class SettingsRepository(private val prefs: KeyValueStore) {
         const val KEY_DISCORD = "discord_presence"
         const val KEY_ARTIST_BIOS = "artist_bios"
         const val KEY_VISUALIZER = "visualizer"
+        const val KEY_DOWNLOAD_LIKED = "download_liked"
         const val KEY_EQ_PRESET = "eq_preset"
         const val KEY_EQ_BANDS = "eq_bands"
     }

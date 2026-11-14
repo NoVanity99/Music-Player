@@ -279,9 +279,11 @@ fun main() {
                 MusicPlayerTheme(darkTheme = dark, dynamicColor = false) {
                     val playerState by app.player.state.collectAsStateWithLifecycle()
                     // White controls over the full-screen player, theme colours elsewhere.
-                    val chromeColor = if (app.rootUi.nowPlayingOpen && playerState.hasMedia) Color.White else MaterialTheme.colorScheme.onSurface
+                    val overPlayer = app.rootUi.nowPlayingOpen && playerState.hasMedia
+                    val chromeColor = if (overPlayer) Color.White else MaterialTheme.colorScheme.onSurface
+                    val chromeBacking = if (overPlayer) Color.Black else MaterialTheme.colorScheme.surfaceContainerHighest
                     Surface(color = MaterialTheme.colorScheme.background) {
-                        WindowChrome(frame, window, TitleBarHeight, chromeColor, onClose = app.exitApp) {
+                        WindowChrome(frame, window, chromeColor, chromeBacking, onClose = app.exitApp) {
                             MusicPlayerRoot(app.library, app.player, app.rootUi, app.updates)
                         }
                     }

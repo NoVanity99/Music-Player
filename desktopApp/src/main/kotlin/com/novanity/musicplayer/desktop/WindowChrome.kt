@@ -1,5 +1,12 @@
 package com.novanity.musicplayer.desktop
 
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.padding
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -87,24 +94,35 @@ class WindowFrame(private val window: Window) {
     }
 }
 
+/** Room the floating window buttons take in the top-right corner (their width plus margins). */
+val WindowControlsWidth = 132.dp
+
+/** Height of the strip along the top of the window that drags it (there's no title bar). */
+private val DragZone = 40.dp
+
 /**
- * The app-drawn title bar: a draggable strip (double-click to maximize, drag to the top of the
- * screen to maximize) with minimize, maximize and close buttons on the right.
+ * Minimize, maximize and close as a small floating pill in the top-right corner. Always shown,
+ * above everything else in the window.
  */
 @Composable
-fun TitleBar(frame: WindowFrame, window: Window, height: Dp, contentColor: Color, onClose: () -> Unit) {
-    Row(Modifier.fillMaxWidth().height(height)) {
-        Box(Modifier.weight(1f).fillMaxHeight().windowDrag(frame, window))
-        ChromeButton(Icons.Rounded.Remove, "Minimize", contentColor, height, onClick = frame::minimize)
+private fun WindowButtons(frame: WindowFrame, contentColor: Color, backing: Color, onClose: () -> Unit, modifier: Modifier) {
+    Row(
+        modifier
+            .clip(RoundedCornerShape(50))
+            // Solid enough to stay readable over artwork and bright banners.
+            .background(backing.copy(alpha = 0.72f))
+            .padding(horizontal = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        ChromeButton(Icons.Rounded.Remove, "Minimize", contentColor, onClick = frame::minimize)
         ChromeButton(
             if (frame.maximized) Icons.Rounded.FilterNone else Icons.Rounded.CropSquare,
             if (frame.maximized) "Restore" else "Maximize",
             contentColor,
-            height,
-            iconSize = 14.dp,
+            iconSize = 13.dp,
             onClick = frame::toggleMaximize,
         )
-        ChromeButton(Icons.Rounded.Close, "Close", contentColor, height, hoverBackground = Color(0xFFE81123), hoverContent = Color.White, onClick = onClose)
+        ChromeButton(Icons.Rounded.Close, "Close", contentColor, hoverBackground = Color(0xFFE81123), hoverContent = Color.White, onClick = onClose)
     }
 }
 
@@ -113,69 +131,88 @@ private fun ChromeButton(
     icon: ImageVector,
     description: String,
     color: Color,
-    height: Dp,
-    iconSize: Dp = 16.dp,
-    hoverBackground: Color = color.copy(alpha = 0.1f),
+    iconSize: Dp = 15.dp,
+    hoverBackground: Color = color.copy(alpha = 0.14f),
     hoverContent: Color = color,
     onClick: () -> Unit,
 ) {
     val interaction = remember { MutableInteractionSource() }
     val hovered by interaction.collectIsHoveredAsState()
+    val background by animateColorAsState(if (hovered) hoverBackground else Color.Transparent, tween(140), label = "chromeBg")
+    val tint by animateColorAsState(if (hovered) hoverContent else color.copy(alpha = 0.8f), tween(140), label = "chromeTint")
     Box(
         Modifier
-            .width(46.dp)
-            .height(height)
+            .padding(vertical = 3.dp)
+            .size(width = 36.dp, height = 26.dp)
+            .clip(RoundedCornerShape(50))
             .hoverable(interaction)
-            .background(if (hovered) hoverBackground else Color.Transparent)
+            .background(background)
             .clickable(interactionSource = interaction, indication = null, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(icon, contentDescription = description, tint = if (hovered) hoverContent else color.copy(alpha = 0.85f), modifier = Modifier.size(iconSize))
+        Icon(icon, contentDescription = description, tint = tint, modifier = Modifier.size(iconSize))
     }
 }
 
-/** Moves the window with the mouse. Uses screen coordinates so the window doesn't jitter. */
-private fun Modifier.windowDrag(frame: WindowFrame, window: Window): Modifier {
-    var lastClick = 0L
-    return pointerInput(Unit) {
+/**
+ * Lets the top strip of the window drag it, even though app content is drawn there. A press that
+ * turns into a drag moves the window (and never clicks what was under it); a plain click goes to
+ * the content as usual. Double-clicking an empty spot maximizes or restores.
+ */
+private fun Modifier.windowDragZone(frame: WindowFrame, window: Window): Modifier = this
+    .pointerInput(Unit) {
         awaitEachGesture {
-            awaitFirstDown(requireUnconsumed = false)
-            val now = System.currentTimeMillis()
-            if (now - lastClick < 400) {
-                lastClick = 0L
-                frame.toggleMaximize()
-                // Swallow the rest of the second click.
-                while (awaitPointerEvent().changes.any { it.pressed }) Unit
-                return@awaitEachGesture
-            }
-            lastClick = now
+            val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+            // Not in the strip, or on the window buttons themselves.
+            if (down.position.y > DragZone.toPx() || down.position.x > size.width - WindowControlsWidth.toPx()) return@awaitEachGesture
             val startMouse = MouseInfo.getPointerInfo()?.location ?: return@awaitEachGesture
             var startWindow = window.location
-            var moved = false
+            var dragging = false
             while (true) {
-                val event = awaitPointerEvent()
-                if (event.changes.none { it.pressed }) break
+                val event = awaitPointerEvent(PointerEventPass.Initial)
+                if (event.changes.none { it.pressed }) {
+                    if (dragging) event.changes.forEach { it.consume() } // the release isn't a click
+                    break
+                }
                 val mouse = MouseInfo.getPointerInfo()?.location ?: break
                 val dx = mouse.x - startMouse.x
                 val dy = mouse.y - startMouse.y
-                if (!moved && dx * dx + dy * dy < 16) continue
-                if (!moved && frame.maximized) {
+                if (!dragging && dx * dx + dy * dy < 36) continue
+                if (!dragging && frame.maximized) {
                     // Dragging a maximized window pulls it back to its normal size under the cursor.
                     frame.restore(anchor = mouse)
                     startWindow = Point(window.x - dx, window.y - dy)
                 }
-                moved = true
+                dragging = true
                 window.setLocation(startWindow.x + dx, startWindow.y + dy)
                 event.changes.forEach { it.consume() }
             }
-            if (moved) {
-                lastClick = 0L
+            if (dragging) {
                 val mouse = MouseInfo.getPointerInfo()?.location
                 if (mouse != null && mouse.y <= frame.usableBounds().y + 1) frame.maximize()
             }
         }
     }
-}
+    .pointerInput(Unit) {
+        var lastTap = 0L
+        awaitEachGesture {
+            val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Final)
+            if (down.position.y > DragZone.toPx() || down.position.x > size.width - WindowControlsWidth.toPx()) return@awaitEachGesture
+            val up = waitForUpOrCancellation(PointerEventPass.Final) ?: return@awaitEachGesture
+            // Only clicks nothing else used (not a button, not a drag) count towards a double-click.
+            if (down.isConsumed || up.isConsumed) {
+                lastTap = 0L
+                return@awaitEachGesture
+            }
+            val now = System.currentTimeMillis()
+            if (now - lastTap < 400) {
+                lastTap = 0L
+                frame.toggleMaximize()
+            } else {
+                lastTap = now
+            }
+        }
+    }
 
 private enum class Edge(val cursor: Int, val left: Boolean = false, val top: Boolean = false, val right: Boolean = false, val bottom: Boolean = false) {
     N(Cursor.N_RESIZE_CURSOR, top = true),
@@ -235,19 +272,22 @@ private fun Modifier.resizeDrag(edge: Edge, window: Window): Modifier = pointerI
     }
 }
 
-/** Fills the window; draws [content], then the title bar and resize edges over it. */
+/**
+ * Fills the window with [content] and adds what an undecorated window needs: dragging from the
+ * top strip, the floating window buttons and resize edges.
+ */
 @Composable
 fun WindowChrome(
     frame: WindowFrame,
     window: Window,
-    titleBarHeight: Dp,
-    titleBarColor: Color,
+    controlsColor: Color,
+    controlsBacking: Color,
     onClose: () -> Unit,
     content: @Composable () -> Unit,
 ) {
-    Box(Modifier.fillMaxSize()) {
+    Box(Modifier.fillMaxSize().windowDragZone(frame, window)) {
         content()
-        TitleBar(frame, window, titleBarHeight, titleBarColor, onClose)
+        WindowButtons(frame, controlsColor, controlsBacking, onClose, Modifier.align(Alignment.TopEnd).padding(top = 12.dp, end = 12.dp))
         ResizeEdges(frame, window)
     }
 }

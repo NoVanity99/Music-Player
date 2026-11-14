@@ -25,7 +25,30 @@ data class Song(
     /** The cover's id on the cloud server, if it has one. */
     val coverId: String? = null,
     val sizeBytes: Long = 0,
+    /** Which row of the artist page the song's album belongs in. */
+    val albumKind: AlbumKind = AlbumKind.CUSTOM,
+    /** Release year from the file's tags, or 0 if unknown. */
+    val year: Int = 0,
 )
+
+/** The four kinds of release an artist page is organised by. */
+enum class AlbumKind(val title: String, val empty: String) {
+    CUSTOM("Custom albums", "No custom albums yet"),
+    RELEASED("Released albums", "No released albums yet"),
+    EP("EPs", "No EPs yet"),
+    SINGLE("Singles", "No singles yet"),
+    ;
+
+    companion object {
+        /** From the server's "albumType"; anything unknown is a custom album. */
+        fun parse(value: String?): AlbumKind = when (value?.lowercase()) {
+            "released", "album" -> RELEASED
+            "ep" -> EP
+            "single" -> SINGLE
+            else -> CUSTOM
+        }
+    }
+}
 
 enum class SongSource { LOCAL, CLOUD, DOWNLOADED }
 
@@ -36,6 +59,9 @@ data class Album(
     val artist: String,
     val songs: List<Song>,
     val dateAdded: Long,
+    val kind: AlbumKind = AlbumKind.CUSTOM,
+    /** Release year, or 0 if unknown. */
+    val year: Int = 0,
 )
 
 @Immutable

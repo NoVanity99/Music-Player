@@ -1,5 +1,7 @@
 package com.novanity.musicplayer.ui
 
+import androidx.compose.runtime.CompositionLocalProvider
+import com.novanity.musicplayer.ui.components.LocalTopEndInset
 import androidx.compose.material.icons.rounded.DownloadDone
 import com.novanity.musicplayer.platform.LocalPlatform
 import androidx.compose.material.icons.rounded.PictureInPictureAlt
@@ -149,7 +151,10 @@ fun WideLayout(
             )
             Spacer(Modifier.width(gap))
             Box(Modifier.weight(1f).fillMaxHeight().clip(panelShape).background(MaterialTheme.colorScheme.background)) {
-                content(PaddingValues(0.dp))
+                // With the side panel open, the content no longer reaches the window's corner.
+                CompositionLocalProvider(LocalTopEndInset provides if (showPanel) 0.dp else LocalTopEndInset.current) {
+                    content(PaddingValues(0.dp))
+                }
             }
             if (showPanel) {
                 Spacer(Modifier.width(gap))
@@ -174,7 +179,9 @@ fun WideLayout(
 
 @Composable
 internal fun PanelHeader(title: String, onClose: () -> Unit) {
-    Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp, top = 12.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+    // The side panel is always the right-most thing in the window, under the window buttons.
+    val controls = LocalPlatform.current.windowControlsWidth
+    Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp + controls, top = 12.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
         IconButton(onClick = onClose) { Icon(Icons.Rounded.Close, contentDescription = "Close panel") }
     }

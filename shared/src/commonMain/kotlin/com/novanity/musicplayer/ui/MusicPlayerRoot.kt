@@ -1,5 +1,6 @@
 package com.novanity.musicplayer.ui
 
+import com.novanity.musicplayer.ui.components.LocalTopEndInset
 import com.novanity.musicplayer.ui.screens.AccountScreen
 import com.novanity.musicplayer.data.AccountState
 import com.novanity.musicplayer.ui.components.LocalDownloadTap
@@ -87,12 +88,11 @@ fun MusicPlayerRoot(
         library.newSongsFound.collect { n -> library.notify(if (n == 1) "Found 1 new song" else "Found $n new songs") }
     }
 
-    val titleBar = com.novanity.musicplayer.platform.LocalPlatform.current.titleBarHeight
 
     // Everyone uses the app signed in: likes, history and playlists belong to the account.
     val accountState by library.accountState.collectAsStateWithLifecycle()
     if (library.accountsAvailable && accountState is AccountState.SignedOut) {
-        Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(top = titleBar)) {
+        Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
             AccountScreen(library)
         }
         return
@@ -105,7 +105,7 @@ fun MusicPlayerRoot(
     val cloudReady by library.cloudEverConnected.collectAsStateWithLifecycle()
     // Music comes only from the cloud library: until it's connected (or there are downloads), ask for it.
     if (!library.cloudBuiltIn && !(cloudConfig.isSet && cloudReady) && downloadStates.isEmpty() && songs.isNullOrEmpty()) {
-        Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(top = titleBar)) {
+        Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
             CloudSetupScreen(actions.library)
         }
         return
@@ -144,6 +144,7 @@ fun MusicPlayerRoot(
     CompositionLocalProvider(
         LocalNowPlaying provides NowPlayingInfo(state.current?.songId, state.isPlaying),
         LocalDownloadStates provides downloadStates,
+        LocalTopEndInset provides com.novanity.musicplayer.platform.LocalPlatform.current.windowControlsWidth,
         LocalDownloadTap provides actions::onDownloadTap,
     ) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
@@ -154,7 +155,7 @@ fun MusicPlayerRoot(
                     if (wide) MaterialTheme.colorScheme.surfaceContainerLowest else MaterialTheme.colorScheme.background
                 )
             )
-            Box(Modifier.fillMaxSize().padding(top = titleBar)) {
+            Box(Modifier.fillMaxSize()) {
             if (wide) {
                 // Desktop / large windows: sidebar, content panel, side panel and a player bar.
                 Scaffold(

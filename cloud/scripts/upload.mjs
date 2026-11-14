@@ -25,6 +25,22 @@ const BUCKET = "vanity-music";
 const CLOUD_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const CACHE_FILE = path.join(CLOUD_DIR, ".upload-cache.json");
 const AUDIO = { ".mp3": "audio/mpeg", ".flac": "audio/flac", ".m4a": "audio/mp4", ".ogg": "audio/ogg", ".wav": "audio/wav" };
+/**
+ * Which row of the artist page an album goes in. Put a release inside a folder with one of these
+ * names (anywhere above the files) to file it there; everything else is a "custom" album.
+ */
+const ALBUM_TYPES = [
+  [/^(released|released albums?|albums?|studio albums?)$/i, "released"],
+  [/^(eps?|e\.p\.s?)$/i, "ep"],
+  [/^(singles?)$/i, "single"],
+];
+function albumTypeFor(rel) {
+  for (const part of rel.split("/").slice(0, -1)) {
+    for (const [pattern, type] of ALBUM_TYPES) if (pattern.test(part.trim())) return type;
+  }
+  return "custom";
+}
+
 const COVER_NAMES = ["cover", "folder", "front", "album", "albumart"];
 const CONCURRENCY = 4;
 
@@ -164,7 +180,7 @@ async function main() {
         const st = await stat(file);
         const stamp = `${st.size}:${Math.round(st.mtimeMs)}`;
         const rel = path.relative(ROOT, file).split(path.sep).join("/");
-        let entry = cache[file]?.stamp === stamp ? cache[file].song : null;
+        let entry = cache[file]?.stamp === stamp && cache[file].song.year !== undefined ? cache[file].song : null;
         if (!entry || (entry.coverId && !knownCovers.has(entry.coverId))) {
           const id = (await sha256File(file)).slice(0, 32);
           const meta = await parseFile(file, { duration: true });
@@ -193,12 +209,13 @@ async function main() {
             mime: AUDIO[ext],
             ext: ext.slice(1),
             coverId,
+            year: c.year ?? 0,
             path: rel,
           };
           cache[file] = { stamp, song: entry };
         }
         // Keep the original "added" date for songs that are already in the cloud.
-        songs.push({ ...entry, path: rel, addedAt: existing.get(entry.id)?.addedAt ?? now, file });
+        songs.push({ ...entry, path: rel, albumType: albumTypeFor(rel), addedAt: existing.get(entry.id)?.addedAt ?? now, file });
       } catch (e) {
         failed++;
         console.warn(`  Skipped (unreadable): ${file}\n    ${e.message}`);

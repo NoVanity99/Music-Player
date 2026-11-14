@@ -228,9 +228,6 @@ class LibraryViewModel(
     suspend fun artistBio(artist: String): ArtistBio? =
         if (settings.artistBios.value) bios?.bio(artist) else null
 
-    /** The artist's real studio albums (MusicBrainz), or null/empty when unknown or turned off. */
-    suspend fun artistAlbums(artist: String): List<com.novanity.musicplayer.data.RealAlbum>? =
-        if (settings.artistBios.value) bios?.albums(artist) else null
 
     /** Returns false when there was nothing to go back to. */
     fun back(): Boolean {
@@ -473,7 +470,12 @@ class LibraryViewModel(
 
     fun setLiked(song: Song, liked: Boolean) {
         viewModelScope.launch { favorites.setLiked(song.id, liked) }
+        // Optional: liking a cloud song also saves it for offline play.
+        if (liked && settings.downloadLiked.value) download(listOf(song))
     }
+
+    val downloadLiked: StateFlow<Boolean> = settings.downloadLiked
+    fun setDownloadLiked(enabled: Boolean) = settings.setDownloadLiked(enabled)
 
     // ---- Playlists ----
 
@@ -542,6 +544,8 @@ class LibraryViewModel(
                 },
                 songs = sorted,
                 dateAdded = sorted.maxOf { it.dateAdded },
+                kind = sorted.first().albumKind,
+                year = sorted.maxOf { it.year },
             )
         }
 

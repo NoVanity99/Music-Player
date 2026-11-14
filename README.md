@@ -5,8 +5,8 @@ Compose Multiplatform (Material 3) UI, Room database, Media3 playback on Android
 JavaCV) playback on desktop. No ads and no analytics. The only network access is checking GitHub
 for updates and, with Discord Rich Presence on, uploading the playing song's own cover art (from the
 file's tags or folder) to Litterbox, a temporary image host that deletes it after 72 hours, because
-Discord can only show images from the web. Artist pages look up a short bio on English Wikipedia by artist name,
-and that artist's studio albums on MusicBrainz (both cached, and can be turned off in Settings).
+Discord can only show images from the web. Artist pages look up a short bio on English Wikipedia by artist name
+(cached, and can be turned off in Settings).
 
 ## Features
 
@@ -19,8 +19,8 @@ and that artist's studio albums on MusicBrainz (both cached, and can be turned o
   duration or play count, plus a "Liked only" filter
 - Collaborations: credits like "Drake & Future" or "A feat. B" link to each artist separately (or
   say the artist isn't in your library); band names like "Mumford & Sons" stay whole. Artist pages
-  show their songs, the songs they appear on, their discography, a short Wikipedia bio and their real
-  studio albums (from MusicBrainz, with the ones you own marked)
+  show a short Wikipedia bio and their music in four rows: custom albums, released albums, EPs
+  and singles
 - Your stats: time listened, plays, streak, a listening personality with an hour-of-day chart, and
   top artists, songs and albums for 7 days, 30 days or all time
 - Made for you: daily mixes (Forgotten favorites, Deep cuts, Time machine, Never played)

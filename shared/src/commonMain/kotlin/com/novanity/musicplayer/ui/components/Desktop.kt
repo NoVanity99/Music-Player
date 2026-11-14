@@ -1,5 +1,6 @@
 package com.novanity.musicplayer.ui.components
 
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -112,3 +113,10 @@ fun <T> CardRow(
         }
     }
 }
+
+/** Room to leave at the end of a top-of-window header for the floating window buttons. */
+val LocalTopEndInset = compositionLocalOf { 0.dp }
+
+/** Keeps a header that reaches the window's top-right corner clear of the window buttons. */
+@Composable
+fun Modifier.clearOfWindowControls(): Modifier = padding(end = LocalTopEndInset.current)
