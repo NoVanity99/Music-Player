@@ -9,6 +9,11 @@
  * - --prune    also removes songs from the cloud whose files are no longer in the folder.
  * - --local    writes to Wrangler's local R2 simulator (for `npm run dev`), not Cloudflare.
  * - --dry-run  shows what would happen without uploading anything.
+ * - --type=released|unreleased|ep|single|custom  files everything in this folder in that
+ *                artist-page row, whatever the folders are called.
+ * - --order="oldest album, next album, ..., newest album"  sets the order of those albums on the
+ *                artist page (matched by album name or folder name, ignoring case).
+ * - --artist="Name"  the artist for files whose tags don't name one.
  *
  * Uses `wrangler r2 object`, so it needs `npx wrangler login` (or CLOUDFLARE_API_TOKEN) first.
  */
@@ -46,7 +51,15 @@ const COVER_NAMES = ["cover", "folder", "front", "album", "albumart"];
 const CONCURRENCY = 4;
 
 const args = process.argv.slice(2);
-const flags = new Set(args.filter((a) => a.startsWith("--")));
+const flags = new Set(args.filter((a) => a.startsWith("--")).map((a) => a.split("=")[0]));
+const option = (name) => args.find((a) => a.startsWith(`--${name}=`))?.slice(name.length + 3).trim() || null;
+const TYPE = option("type")?.toLowerCase() ?? null;
+const ORDER = (option("order") ?? "").split(",").map((a) => a.trim().toLowerCase()).filter(Boolean);
+const ARTIST = option("artist");
+if (TYPE && !["released", "unreleased", "ep", "single", "custom"].includes(TYPE)) {
+  console.error(`Unknown --type "${TYPE}". Use released, unreleased, ep, single or custom.`);
+  process.exit(1);
+}
 const folderArg = args.find((a) => !a.startsWith("--"));
 const LOCAL = flags.has("--local");
 const DRY = flags.has("--dry-run");
@@ -154,6 +167,37 @@ async function pool(items, worker) {
   );
 }
 
+/**
+ * --order: the app shows an artist's albums newest first, by year and then by date added. Make
+ * both follow the given order (oldest first), keeping the years from the tags where they agree.
+ */
+function applyOrder(songs, now) {
+  if (!ORDER.length) return;
+  const position = (s) => {
+    const names = [s.album, ...s.path.split("/").slice(0, -1)].map((n) => n.trim().toLowerCase());
+    return ORDER.findIndex((name) => names.includes(name));
+  };
+  const groups = ORDER.map(() => []);
+  for (const s of songs) {
+    const i = position(s);
+    if (i >= 0) groups[i].push(s);
+  }
+  const years = groups.map((g) => Math.max(0, ...g.map((s) => s.year || 0)));
+  for (let i = years.length - 2; i >= 0; i--) if (!years[i]) years[i] = years[i + 1]; // unknown: as the next one
+  for (let i = 0; i < years.length; i++) {
+    if (!years[i]) years[i] = i ? years[i - 1] : new Date(now).getFullYear();
+    if (i && years[i] < years[i - 1]) years[i] = years[i - 1];
+  }
+  groups.forEach((g, i) => {
+    if (!g.length) console.warn(`  --order: no songs found for "${ORDER[i]}"`);
+    for (const s of g) {
+      s.year = years[i];
+      s.addedAt = now - (ORDER.length - i) * 60_000;
+    }
+  });
+  console.log(`Order (oldest first): ${ORDER.map((name, i) => `${name} [${groups[i].length} songs, ${years[i]}]`).join(", ")}`);
+}
+
 async function main() {
   const rootStat = await stat(ROOT).catch(() => null);
   if (!rootStat?.isDirectory()) {
@@ -216,12 +260,16 @@ async function main() {
           cache[file] = { stamp, song: entry };
         }
         // Keep the original "added" date for songs that are already in the cloud.
-        songs.push({ ...entry, path: rel, albumType: albumTypeFor(rel), addedAt: existing.get(entry.id)?.addedAt ?? now, file });
+        const song = { ...entry, path: rel, albumType: TYPE ?? albumTypeFor(rel), addedAt: existing.get(entry.id)?.addedAt ?? now, file };
+        if (ARTIST && song.artist === "Unknown artist") song.artist = ARTIST;
+        songs.push(song);
       } catch (e) {
         failed++;
         console.warn(`  Skipped (unreadable): ${file}\n    ${e.message}`);
       }
     });
+
+    applyOrder(songs, now);
 
     // The same file twice in the folder is one song.
     const byId = new Map();

@@ -57,3 +57,13 @@ npm run upload -- "<folder>" --local    # fills the local R2 simulator
 npm run dev                             # http://127.0.0.1:8787
 npm test                                # endpoint checks; BASE=... KEY=... for a deployed Worker
 ```
+
+### Filing and ordering albums from the command line
+
+```
+node scripts/upload.mjs "<folder>" --type=released --artist="Name" --order="oldest album, ..., newest album"
+```
+
+`--type` (released, unreleased, ep, single, custom) files everything in the folder in that row
+whatever the folders are called, `--order` sets the albums' order on the artist page (by album or
+folder name, oldest first), and `--artist` names the artist for files whose tags don't.
