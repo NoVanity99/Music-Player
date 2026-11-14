@@ -40,6 +40,13 @@ class ArtistBios(
     private val lock = Mutex()
     private val json = Json { ignoreUnknownKeys = true }
 
+    /** The bio if it's already saved on this device (no network, no waiting), else null. */
+    fun peek(artist: String): ArtistBio? {
+        val key = artist.trim().lowercase()
+        if (key.isEmpty() || key in UNKNOWN) return null
+        return runCatching { store.getString(STORE_PREFIX + key)?.let(::decode)?.getOrNull() }.getOrNull()
+    }
+
     /** The bio for [artist], or null when there isn't one (or it can't be loaded right now). */
     suspend fun bio(artist: String): ArtistBio? {
         val key = artist.trim().lowercase()

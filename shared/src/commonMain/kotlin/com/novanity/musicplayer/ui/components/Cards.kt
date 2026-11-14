@@ -184,7 +184,12 @@ private fun HoverCard(
                 .then(rightClick)
                 .hoverable(interaction)
                 .clickable(interactionSource = interaction, indication = LocalIndication.current, onClick = onClick)
-                .padding((6 * lift).dp),
+                // Shrinks the content a touch instead of changing its padding: nothing around it moves.
+                .graphicsLayer {
+                    val s = 1f - 0.05f * lift
+                    scaleX = s
+                    scaleY = s
+                },
             horizontalAlignment = if (center) Alignment.CenterHorizontally else Alignment.Start,
         ) {
             Box {
@@ -211,8 +216,13 @@ private fun HoverCard(
 }
 
 @Composable
-fun AlbumCard(album: Album, onClick: () -> Unit, modifier: Modifier = Modifier.width(CardWidth), onPlay: (() -> Unit)? = null) =
-    HoverCard(onClick, onPlay, modifier, art = { m -> AlbumArt(album.songs.first(), m, shape = RoundedCornerShape(8.dp)) }, title = album.title, subtitle = album.artist)
+fun AlbumCard(
+    album: Album,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier.width(CardWidth),
+    onPlay: (() -> Unit)? = null,
+    subtitle: String = album.artist,
+) = HoverCard(onClick, onPlay, modifier, art = { m -> AlbumArt(album.songs.first(), m, shape = RoundedCornerShape(8.dp)) }, title = album.title, subtitle = subtitle)
 
 @Composable
 fun SongCard(song: Song, onClick: () -> Unit, modifier: Modifier = Modifier.width(CardWidth)) =

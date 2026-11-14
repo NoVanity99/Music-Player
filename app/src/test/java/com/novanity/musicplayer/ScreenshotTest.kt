@@ -125,7 +125,7 @@ class ScreenshotTest {
     private val rootUi = RootUiState()
 
     private fun settle() {
-        compose.waitUntil(30_000) { !library.home.value.loading } // generous: CI machines can be slow
+        compose.waitUntil(120_000) { !library.home.value.loading } // generous: the first run after a build is slow
         repeat(6) {
             compose.mainClock.advanceTimeBy(400)
             Thread.sleep(150) // let art colors / Room flows land

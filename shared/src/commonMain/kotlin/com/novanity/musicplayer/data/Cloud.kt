@@ -8,6 +8,11 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -271,7 +276,13 @@ class CloudRepository(
                     if (parsed == null) {
                         CloudStatus.Error("That address isn't a Vanity Player server.")
                     } else {
-                        if (parsed.songs != library.value) setLibrary(parsed.songs)
+                        if (parsed.songs != library.value) {
+                            val before = library.value.mapTo(HashSet()) { it.id }
+                            setLibrary(parsed.songs)
+                            // Not on first load: only what turned up since.
+                            if (before.isNotEmpty()) parsed.songs.filter { it.id !in before }.takeIf { it.isNotEmpty() }?.let { _arrivals.tryEmit(it) }
+                        }
+                        prefetchCovers(parsed.songs)
                         CloudStatus.Online(parsed.songs.size)
                     }
                 }
@@ -299,9 +310,25 @@ class CloudRepository(
         cache.putString(KEY_LIBRARY, if (songs.isEmpty()) null else json.encodeToString(CloudLibraryFile.serializer(), CloudLibraryFile(songs = songs)))
     }
 
+    private val _arrivals = MutableSharedFlow<List<CloudSong>>(extraBufferCapacity = 4)
+
+    /** Songs that appeared on the server since the list was last read. */
+    val arrivals: SharedFlow<List<CloudSong>> = _arrivals.asSharedFlow()
+
+    private var prefetch: Job? = null
+
+    /** Fetches the covers that aren't on the device yet, in the background, so pages open with their artwork. */
+    private fun prefetchCovers(songs: List<CloudSong>) {
+        val ids = songs.mapNotNull { it.coverId }.distinct()
+        prefetch?.cancel()
+        prefetch = scope.launch(Dispatchers.Default) {
+            for (group in ids.chunked(6)) coroutineScope { group.forEach { id -> launch { runCatching { coverFile(id) } } } }
+        }
+    }
+
     private val coverLock = Mutex()
     private val coverJobs = HashMap<String, CompletableDeferred<String?>>()
-    private val coverSlots = Semaphore(4)
+    private val coverSlots = Semaphore(6)
 
     /**
      * The local file for a cover, downloading it first if needed (once, kept for offline use).

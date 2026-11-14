@@ -226,6 +226,9 @@ class LibraryViewModel(
     val canShowBios: Boolean get() = bios != null
 
     /** A short bio for [artist] from Wikipedia, or null (none found, offline, or turned off). */
+    /** The bio when it's already on the device, so the page can show it straight away. */
+    fun cachedArtistBio(artist: String): ArtistBio? = if (settings.artistBios.value) bios?.peek(artist) else null
+
     suspend fun artistBio(artist: String): ArtistBio? =
         if (settings.artistBios.value) bios?.bio(artist) else null
 
@@ -451,6 +454,19 @@ class LibraryViewModel(
     }
 
     init {
+        // Songs that were added to the server while the app is open.
+        viewModelScope.launch {
+            cloud?.arrivals?.collect { added ->
+                val albums = added.map { it.album }.distinct()
+                notify(
+                    when {
+                        albums.size == 1 && added.size == 1 -> "New song added: ${added.first().title}"
+                        albums.size == 1 -> "New music added: ${albums.first()}"
+                        else -> "New music added: ${albums.first()} and ${albums.size - 1} more"
+                    }
+                )
+            }
+        }
         music.startObserving()
         // Every app start: load what Android already knows, then check the folders for new files.
         viewModelScope.launch {

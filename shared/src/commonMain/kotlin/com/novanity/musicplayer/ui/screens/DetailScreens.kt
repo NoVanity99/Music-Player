@@ -64,6 +64,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.material.icons.rounded.Album
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.shadow
@@ -320,7 +322,30 @@ internal fun LazyListScope.songItems(
     source: String,
     trackNumbers: Boolean = false,
     showAlbum: Boolean = true,
+    discHeaders: Boolean = false,
 ) {
+    // Only when the album really has more than one disc.
+    val discs = discHeaders && songs.map { it.disc }.distinct().size > 1
+    if (discs) {
+        songs.forEachIndexed { index, song ->
+            if (index == 0 || song.disc != songs[index - 1].disc) {
+                item(key = "disc-${song.disc}-$index") { DiscHeader(song.disc, songs.count { it.disc == song.disc }) }
+            }
+            item(key = "${song.id}-$index") {
+                val liked = song.id in likedIds
+                SongRow(
+                    modifier = Modifier.animateItem(),
+                    song = song,
+                    liked = liked,
+                    trackNumber = if (trackNumbers) song.track else null,
+                    subtitle = if (showAlbum) "${song.artist} • ${song.album}" else song.artist,
+                    onClick = { actions.play(songs, index, source) },
+                    menu = actions.songMenu(song, liked),
+                )
+            }
+        }
+        return
+    }
     itemsIndexed(songs, key = { i, s -> "${s.id}-$i" }) { index, song ->
         val liked = song.id in likedIds
         SongRow(
@@ -336,6 +361,21 @@ internal fun LazyListScope.songItems(
 }
 
 // ---------- Album ----------
+
+/** "Disc 2 • 11 songs" above each disc of a multi-disc album. */
+@Composable
+private fun DiscHeader(disc: Int, count: Int) {
+    Row(
+        Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 22.dp, bottom = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(androidx.compose.material.icons.Icons.Rounded.Album, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(10.dp))
+        Text(if (disc > 0) "Disc $disc" else "Other tracks", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+        Spacer(Modifier.width(10.dp))
+        Text(songCount(count), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
 
 @Composable
 private fun AlbumScreen(albumId: Long, actions: SongActions, contentPadding: PaddingValues) {
@@ -359,7 +399,7 @@ private fun AlbumScreen(albumId: Long, actions: SongActions, contentPadding: Pad
             )
         }
         item { PlayShuffleRow(album.songs, actions, album.title) }
-        songItems(album.songs, likedIds, actions, album.title, trackNumbers = true, showAlbum = false)
+        songItems(album.songs, likedIds, actions, album.title, trackNumbers = true, showAlbum = false, discHeaders = true)
     }
 }
 
