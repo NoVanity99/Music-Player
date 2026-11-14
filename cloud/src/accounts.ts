@@ -35,6 +35,13 @@ function privacy(raw: any): { bio: boolean; likes: boolean; playlists: boolean; 
   return { bio: raw?.bio === true, likes: raw?.likes === true, playlists: raw?.playlists === true, artists: raw?.artists === true };
 }
 
+/** How long "what they're playing" stays shown after the last report. */
+const PRESENCE_MS = 45_000;
+/** A session ends for its guests when the host hasn't reported for this long. */
+const SESSION_STALE_MS = 45_000;
+/** A request to listen along is offered for this long. */
+const LISTEN_REQUEST_MS = 60_000;
+
 let schemaReady: Promise<void> | null = null;
 
 /** Creates the tables on first use (once per Worker instance; cheap when they exist). */
@@ -54,6 +61,33 @@ function ensureSchema(sql: Sql): Promise<void> {
     // Profiles: an optional bio, and which parts of the profile the owner keeps private.
     await sql`ALTER TABLE vp_users ADD COLUMN IF NOT EXISTS bio TEXT NOT NULL DEFAULT ''`;
     await sql`ALTER TABLE vp_users ADD COLUMN IF NOT EXISTS private JSONB NOT NULL DEFAULT '{}'::jsonb`;
+    // Friends, what each person is playing, and listening together.
+    await sql`ALTER TABLE vp_users ADD COLUMN IF NOT EXISTS now_song TEXT`;
+    await sql`ALTER TABLE vp_users ADD COLUMN IF NOT EXISTS now_next TEXT`;
+    await sql`ALTER TABLE vp_users ADD COLUMN IF NOT EXISTS now_pos BIGINT NOT NULL DEFAULT 0`;
+    await sql`ALTER TABLE vp_users ADD COLUMN IF NOT EXISTS now_playing BOOLEAN NOT NULL DEFAULT false`;
+    await sql`ALTER TABLE vp_users ADD COLUMN IF NOT EXISTS now_at BIGINT NOT NULL DEFAULT 0`;
+    await sql`ALTER TABLE vp_users ADD COLUMN IF NOT EXISTS seen_at BIGINT NOT NULL DEFAULT 0`;
+    await sql`ALTER TABLE vp_users ADD COLUMN IF NOT EXISTS listen_host UUID`;
+    await sql`CREATE TABLE IF NOT EXISTS vp_friends (
+      a UUID NOT NULL REFERENCES vp_users(id) ON DELETE CASCADE,
+      b UUID NOT NULL REFERENCES vp_users(id) ON DELETE CASCADE,
+      status TEXT NOT NULL,
+      created_at BIGINT NOT NULL,
+      PRIMARY KEY (a, b)
+    )`;
+    await sql`CREATE TABLE IF NOT EXISTS vp_listen_requests (
+      id BIGSERIAL PRIMARY KEY,
+      from_id UUID NOT NULL REFERENCES vp_users(id) ON DELETE CASCADE,
+      to_id UUID NOT NULL REFERENCES vp_users(id) ON DELETE CASCADE,
+      created_at BIGINT NOT NULL
+    )`;
+    await sql`CREATE TABLE IF NOT EXISTS vp_listen_adds (
+      id BIGSERIAL PRIMARY KEY,
+      host_id UUID NOT NULL REFERENCES vp_users(id) ON DELETE CASCADE,
+      from_id UUID NOT NULL REFERENCES vp_users(id) ON DELETE CASCADE,
+      song_id TEXT NOT NULL
+    )`;
     await sql`CREATE TABLE IF NOT EXISTS vp_sessions (
       token_hash TEXT PRIMARY KEY,
       user_id UUID NOT NULL REFERENCES vp_users(id) ON DELETE CASCADE,
@@ -241,6 +275,145 @@ export async function accounts(request: Request, env: AccountsEnv, path: string,
     if (!Array.isArray(body?.artists)) return json({ error: "bad_request", message: "Artists are missing or too large." }, 400);
     const clean = [...new Set(body.artists.filter((a: unknown) => typeof a === "string" && a.trim()).map((a: string) => a.trim().slice(0, 200)))].slice(0, 1000);
     await sql`UPDATE vp_users SET artists = ${JSON.stringify(clean)}::jsonb WHERE id = ${userId}`;
+    return json({ ok: true });
+  }
+
+  // ---- Friends and listening together ----
+
+  /** Another account's id by username, or null. */
+  const idOf = async (name: unknown): Promise<string | null> => {
+    if (typeof name !== "string") return null;
+    const rows = await sql`SELECT id FROM vp_users WHERE username = ${name.trim().toLowerCase()}`;
+    return rows[0]?.id ?? null;
+  };
+  const areFriends = async (other: string): Promise<boolean> =>
+    (await sql`SELECT 1 FROM vp_friends WHERE status = 'accepted' AND ((a = ${userId} AND b = ${other}) OR (a = ${other} AND b = ${userId}))`).length > 0;
+
+  // The app calls this every few seconds: it reports what this account is playing and gets back
+  // everything social in one go (friends and what they're playing, requests, the shared session).
+  if (path === "/me/pulse" && method === "POST") {
+    const body = await readJson(request, 8 * 1024);
+    const now = Date.now();
+    const song = typeof body?.songId === "string" && SONG_ID.test(body.songId) ? body.songId : null;
+    const next = typeof body?.nextSongId === "string" && SONG_ID.test(body.nextSongId) ? body.nextSongId : null;
+    const pos = Number.isFinite(body?.positionMs) ? Math.max(0, Math.trunc(body.positionMs)) : 0;
+    const playing = body?.playing === true && song !== null;
+    const share = body?.share !== false;
+    const mine = await sql`UPDATE vp_users SET now_song = ${song}, now_next = ${next}, now_pos = ${pos}, now_playing = ${playing}, now_at = ${share ? now : 0}, seen_at = ${now}
+      WHERE id = ${userId} RETURNING listen_host`;
+    const hostId: string | null = mine[0]?.listen_host ?? null;
+    const [links, asks] = await Promise.all([
+      sql`SELECT u.display_name, u.now_song, u.now_playing, u.now_pos, u.now_at, u.seen_at, f.status, (f.a = ${userId}) AS sent
+        FROM vp_friends f JOIN vp_users u ON u.id = CASE WHEN f.a = ${userId} THEN f.b ELSE f.a END
+        WHERE f.a = ${userId} OR f.b = ${userId} ORDER BY lower(u.display_name)`,
+      sql`SELECT r.id, u.display_name FROM vp_listen_requests r JOIN vp_users u ON u.id = r.from_id
+        WHERE r.to_id = ${userId} AND r.created_at > ${now - LISTEN_REQUEST_MS} ORDER BY r.id`,
+    ]);
+    let session: unknown = null;
+    let adds: unknown[] = [];
+    if (hostId) {
+      const host = await sql`SELECT display_name, now_song, now_next, now_playing, now_pos, seen_at FROM vp_users WHERE id = ${hostId}`;
+      if (host.length === 0 || now - Number(host[0].seen_at) > SESSION_STALE_MS) {
+        await sql`UPDATE vp_users SET listen_host = NULL WHERE id = ${userId}`; // the host went away
+      } else {
+        session = {
+          role: "guest", host: host[0].display_name, songId: host[0].now_song, nextSongId: host[0].now_next, playing: host[0].now_playing,
+          positionMs: Number(host[0].now_pos), ageMs: Math.max(0, now - Number(host[0].seen_at)),
+        };
+      }
+    } else {
+      const members = await sql`SELECT display_name FROM vp_users WHERE listen_host = ${userId} AND seen_at > ${now - SESSION_STALE_MS} ORDER BY lower(display_name)`;
+      if (members.length) {
+        session = { role: "host", members: members.map((m) => m.display_name) };
+        const queued = await sql`DELETE FROM vp_listen_adds a USING vp_users u WHERE a.host_id = ${userId} AND u.id = a.from_id RETURNING a.id, a.song_id, u.display_name`;
+        adds = queued.sort((x, y) => Number(x.id) - Number(y.id)).map((q) => ({ songId: q.song_id, from: q.display_name }));
+      }
+    }
+    const fresh = (at: unknown) => now - Number(at) < PRESENCE_MS;
+    return json({
+      friends: links.filter((l) => l.status === "accepted").map((l) => ({
+        username: l.display_name,
+        online: fresh(l.seen_at),
+        songId: fresh(l.now_at) ? l.now_song : null,
+        playing: fresh(l.now_at) && l.now_playing === true,
+      })),
+      requests: links.filter((l) => l.status === "pending" && !l.sent).map((l) => l.display_name),
+      sent: links.filter((l) => l.status === "pending" && l.sent).map((l) => l.display_name),
+      listenRequests: asks.map((a) => ({ id: Number(a.id), from: a.display_name })),
+      session,
+      adds,
+    });
+  }
+
+  if (path === "/me/friends/request" && method === "POST") {
+    const body = await readJson(request, 4096);
+    const other = await idOf(body?.username);
+    if (!other) return json({ error: "no_such_user", message: "No account with that username." }, 404);
+    if (other === userId) return json({ error: "bad_request", message: "That's you." }, 400);
+    // If they already asked us, this accepts it.
+    const theirs = await sql`UPDATE vp_friends SET status = 'accepted' WHERE a = ${other} AND b = ${userId} RETURNING status`;
+    if (theirs.length === 0) {
+      await sql`INSERT INTO vp_friends (a, b, status, created_at) VALUES (${userId}, ${other}, 'pending', ${Date.now()}) ON CONFLICT DO NOTHING`;
+    }
+    return json({ ok: true, friends: theirs.length > 0 });
+  }
+
+  if (path === "/me/friends/respond" && method === "POST") {
+    const body = await readJson(request, 4096);
+    const other = await idOf(body?.username);
+    if (!other) return json({ error: "no_such_user", message: "No account with that username." }, 404);
+    if (body?.accept === true) await sql`UPDATE vp_friends SET status = 'accepted' WHERE a = ${other} AND b = ${userId}`;
+    else await sql`DELETE FROM vp_friends WHERE a = ${other} AND b = ${userId} AND status = 'pending'`;
+    return json({ ok: true });
+  }
+
+  if (path === "/me/friends/remove" && method === "POST") {
+    const body = await readJson(request, 4096);
+    const other = await idOf(body?.username);
+    if (other) {
+      await sql`DELETE FROM vp_friends WHERE (a = ${userId} AND b = ${other}) OR (a = ${other} AND b = ${userId})`;
+      await sql`UPDATE vp_users SET listen_host = NULL WHERE (id = ${userId} AND listen_host = ${other}) OR (id = ${other} AND listen_host = ${userId})`;
+    }
+    return json({ ok: true });
+  }
+
+  // Ask a friend to let you listen along with them.
+  if (path === "/me/listen/request" && method === "POST") {
+    const body = await readJson(request, 4096);
+    const other = await idOf(body?.username);
+    if (!other || !(await areFriends(other))) return json({ error: "not_friends", message: "You can only listen along with friends." }, 403);
+    await sql`DELETE FROM vp_listen_requests WHERE from_id = ${userId}`;
+    await sql`INSERT INTO vp_listen_requests (from_id, to_id, created_at) VALUES (${userId}, ${other}, ${Date.now()})`;
+    return json({ ok: true });
+  }
+
+  if (path === "/me/listen/respond" && method === "POST") {
+    const body = await readJson(request, 4096);
+    const id = Number.isFinite(body?.id) ? Math.trunc(body.id) : -1;
+    const asked = await sql`DELETE FROM vp_listen_requests WHERE id = ${id} AND to_id = ${userId} RETURNING from_id`;
+    if (asked.length && body?.accept === true) {
+      // The host can't be a guest somewhere else at the same time.
+      await sql`UPDATE vp_users SET listen_host = NULL WHERE id = ${userId}`;
+      await sql`UPDATE vp_users SET listen_host = ${userId} WHERE id = ${asked[0].from_id}`;
+    }
+    return json({ ok: true });
+  }
+
+  if (path === "/me/listen/leave" && method === "POST") {
+    await sql`UPDATE vp_users SET listen_host = NULL WHERE id = ${userId}`;
+    return json({ ok: true });
+  }
+
+  // A guest adds a song to the host's queue; the host's app picks it up on its next pulse.
+  if (path === "/me/listen/add" && method === "POST") {
+    const body = await readJson(request, 4096);
+    const me = await sql`SELECT listen_host FROM vp_users WHERE id = ${userId}`;
+    const host = me[0]?.listen_host;
+    if (!host) return json({ error: "no_session", message: "You're not in a listening session." }, 409);
+    if (typeof body?.songId !== "string" || !SONG_ID.test(body.songId)) return json({ error: "bad_request" }, 400);
+    const waiting = await sql`SELECT count(*)::int AS n FROM vp_listen_adds WHERE host_id = ${host}`;
+    if (waiting[0].n >= 100) return json({ error: "too_many", message: "The queue is full for now." }, 429);
+    await sql`INSERT INTO vp_listen_adds (host_id, from_id, song_id) VALUES (${host}, ${userId}, ${body.songId})`;
     return json({ ok: true });
   }
 

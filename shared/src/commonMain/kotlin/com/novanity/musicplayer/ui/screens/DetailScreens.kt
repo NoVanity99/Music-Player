@@ -118,6 +118,7 @@ fun DetailScreen(destination: Destination, actions: SongActions, contentPadding:
         Destination.Stats -> StatsScreen(actions, contentPadding)
         Destination.Downloads -> DownloadsScreen(actions, contentPadding)
         Destination.Account -> AccountPage(actions, contentPadding)
+        Destination.Friends -> FriendsPage(actions, contentPadding)
         is Destination.Profile -> ProfilePage(destination.username, actions, contentPadding)
         is Destination.MixDetail -> MixScreen(destination.kind, actions, contentPadding)
     }

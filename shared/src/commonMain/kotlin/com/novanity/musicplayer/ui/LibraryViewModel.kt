@@ -127,6 +127,7 @@ sealed interface Destination {
     data object Downloads : Destination
     /** Your own account page. */
     data object Account : Destination
+    data object Friends : Destination
     /** Someone else's public profile. */
     data class Profile(val username: String) : Destination
     data class MixDetail(val kind: com.novanity.musicplayer.data.MixKind) : Destination
@@ -143,7 +144,25 @@ class LibraryViewModel(
     private val cloud: CloudRepository? = null,
     private val downloads: DownloadsRepository? = null,
     private val account: AccountRepository? = null,
+    private val social: com.novanity.musicplayer.data.SocialRepository? = null,
 ) : ViewModel() {
+
+    // ---- Friends and listening together ----
+
+    val socialAvailable: Boolean get() = social != null
+    val socialState: StateFlow<com.novanity.musicplayer.data.SocialState> = social?.state ?: MutableStateFlow(com.novanity.musicplayer.data.SocialState())
+    fun addFriend(username: String) { social?.addFriend(username) }
+    fun answerFriend(username: String, accept: Boolean) { social?.answerFriend(username, accept) }
+    fun removeFriend(username: String) { social?.removeFriend(username) }
+    fun askToListen(username: String) { social?.askToListen(username) }
+    fun answerListen(request: com.novanity.musicplayer.data.ListenRequest, accept: Boolean) { social?.answerListen(request, accept) }
+    fun leaveSession() { social?.leave() }
+    fun refreshSocial() { viewModelScope.launch { runCatching { social?.pulse() } } }
+    val shareListening: StateFlow<Boolean> = settings.shareListening
+    fun setShareListening(enabled: Boolean) = settings.setShareListening(enabled)
+    /** The library's song for one of the server's song ids. */
+    fun songForCloudId(id: String?): Song? = id?.let { music.songsById[com.novanity.musicplayer.data.CloudRepository.songIdFor(it)] }
+
 
     // ---- Account ----
 
@@ -498,6 +517,7 @@ class LibraryViewModel(
     }
 
     init {
+        viewModelScope.launch { social?.messages?.collect { notify(it) } }
         // Songs that were added to the server while the app is open.
         viewModelScope.launch {
             cloud?.arrivals?.collect { added ->

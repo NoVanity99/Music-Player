@@ -202,6 +202,44 @@ internal fun AccountPage(actions: SongActions, contentPadding: PaddingValues) {
                 VisibilityChip(profile.private.artists) { update { it.copy(private = it.private.copy(artists = !it.private.artists)) } }
             }
         }
+        if (vm.socialAvailable) {
+            item {
+                val social by vm.socialState.collectAsStateWithLifecycle()
+                val listening = social.friends.count { it.playing }
+                AccountRow(
+                    Icons.Rounded.Person, "Friends",
+                    (if (social.friends.size == 1) "1 friend" else "${social.friends.size} friends") +
+                        (if (listening > 0) " \u2022 $listening listening now" else "") +
+                        (if (social.requests.isNotEmpty()) " \u2022 ${social.requests.size} new request${if (social.requests.size == 1) "" else "s"}" else ""),
+                    { vm.open(Destination.Friends) },
+                )
+            }
+            // Your friends, with what each is playing, right on your account page.
+            item {
+                val social by vm.socialState.collectAsStateWithLifecycle()
+                Column {
+                    social.friends.take(6).forEach { friend ->
+                        val song = vm.songForCloudId(friend.songId)
+                        Row(
+                            Modifier.fillMaxWidth().clickable { vm.open(Destination.Profile(friend.username)) }.padding(start = 70.dp, end = 24.dp, top = 6.dp, bottom = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Initial(friend.username, 32.dp)
+                            Spacer(Modifier.width(12.dp))
+                            Column {
+                                Text(friend.username, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                                Text(
+                                    if (song != null && friend.playing) "Listening to ${song.title} \u2022 ${song.artist}" else if (friend.online) "Online" else "Offline",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = if (song != null && friend.playing) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
         item {
             val total = plays.values.sum()
             AccountRow(Icons.Rounded.Insights, "Your stats", if (total == 1) "1 play" else "$total plays • only you can see these", { vm.open(Destination.Stats) })
@@ -300,5 +338,196 @@ internal fun ProfilePage(username: String, actions: SongActions, contentPadding:
             else songItems(songs, likedIds, actions, "${profile.username}'s liked songs")
         }
         item { Spacer(Modifier.height(32.dp)) }
+    }
+}
+
+// ---------- Friends ----------
+
+@Composable
+private fun Initial(name: String, size: androidx.compose.ui.unit.Dp = 44.dp) {
+    Box(Modifier.size(size).background(Brush.linearGradient(listOf(ProfileTint, MaterialTheme.colorScheme.primary)), CircleShape), contentAlignment = Alignment.Center) {
+        Text(name.take(1).uppercase(), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color.White)
+    }
+}
+
+/** Your friends, what each is listening to right now, and requests. */
+@Composable
+internal fun FriendsPage(actions: SongActions, contentPadding: PaddingValues) {
+    val vm = actions.library
+    val social by vm.socialState.collectAsStateWithLifecycle()
+    val share by vm.shareListening.collectAsStateWithLifecycle()
+    var add by rememberSaveable { mutableStateOf("") }
+    androidx.compose.runtime.LaunchedEffect(Unit) { vm.refreshSocial() }
+
+    CollectionScaffold("Friends", ProfileTint, { vm.back() }, emptyList(), contentPadding) {
+        item {
+            Column(
+                Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(ProfileTint.copy(alpha = 0.55f), Color.Transparent)))
+                    .padding(start = 24.dp, end = 24.dp, top = 76.dp, bottom = 8.dp),
+            ) {
+                Text("Friends", style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold)
+                Text("See what your friends are playing and listen along.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        item {
+            val go = { if (add.isNotBlank()) { vm.addFriend(add); add = "" } }
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                OutlinedTextField(
+                    value = add,
+                    onValueChange = { add = it.take(40) },
+                    placeholder = { Text("Add a friend by username") },
+                    leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                    keyboardActions = KeyboardActions(onSend = { go() }),
+                    modifier = Modifier.weight(1f),
+                )
+                Spacer(Modifier.width(12.dp))
+                Button(onClick = go, enabled = add.isNotBlank()) { Text("Send request") }
+            }
+        }
+        if (social.requests.isNotEmpty()) {
+            item { SectionHeader("Friend requests") }
+            items(social.requests, key = { "req-$it" }) { name ->
+                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Initial(name)
+                    Spacer(Modifier.width(14.dp))
+                    Text(name, style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+                    TextButton(onClick = { vm.answerFriend(name, false) }) { Text("Decline") }
+                    Spacer(Modifier.width(4.dp))
+                    Button(onClick = { vm.answerFriend(name, true) }) { Text("Accept") }
+                }
+            }
+        }
+        item { SectionHeader(if (social.friends.isEmpty()) "Your friends" else "Your friends  •  ${social.friends.size}") }
+        if (social.friends.isEmpty()) {
+            item {
+                Text(
+                    "No friends yet. Send a request with their username; once they accept, they show up here.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 24.dp),
+                )
+            }
+        }
+        items(social.friends, key = { "fr-${it.username}" }) { friend ->
+            val song = vm.songForCloudId(friend.songId)
+            val inSession = social.session != null
+            Row(
+                Modifier.fillMaxWidth().clickable { vm.open(Destination.Profile(friend.username)) }.padding(horizontal = 16.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box {
+                    Initial(friend.username)
+                    // A green dot while they have the player open.
+                    if (friend.online) Box(Modifier.align(Alignment.BottomEnd).size(12.dp).background(MaterialTheme.colorScheme.background, CircleShape).padding(2.dp).background(Color(0xFF30D158), CircleShape))
+                }
+                Spacer(Modifier.width(14.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(friend.username, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(
+                        when {
+                            song != null && friend.playing -> "Listening to ${song.title} • ${song.artist}"
+                            song != null -> "Paused on ${song.title} • ${song.artist}"
+                            friend.online -> "Online"
+                            else -> "Offline"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (song != null && friend.playing) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                if (song != null && friend.playing && !inSession) {
+                    Button(onClick = { vm.askToListen(friend.username) }) { Text("Listen along") }
+                    Spacer(Modifier.width(4.dp))
+                }
+                TextButton(onClick = { vm.removeFriend(friend.username) }) { Text("Remove", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            }
+        }
+        if (social.sent.isNotEmpty()) {
+            item { SectionHeader("Waiting for an answer") }
+            items(social.sent, key = { "sent-$it" }) { name ->
+                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Initial(name)
+                    Spacer(Modifier.width(14.dp))
+                    Text(name, style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+                    TextButton(onClick = { vm.removeFriend(name) }) { Text("Cancel") }
+                }
+            }
+        }
+        item {
+            Row(Modifier.fillMaxWidth().clickable { vm.setShareListening(!share) }.padding(horizontal = 24.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Show friends what I'm listening to", style = MaterialTheme.typography.titleSmall)
+                    Text("Turn off to listen privately. Friends can still see when you're online.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                androidx.compose.material3.Switch(checked = share, onCheckedChange = vm::setShareListening)
+            }
+        }
+        item { Spacer(Modifier.height(32.dp)) }
+    }
+}
+
+/**
+ * Small cards that slide in at the top of the window: a friend asking to listen along (Accept or
+ * Decline; it goes away by itself after a while), and a pill while you're in a shared session.
+ */
+@Composable
+fun SocialOverlay(vm: com.novanity.musicplayer.ui.LibraryViewModel, modifier: Modifier = Modifier) {
+    val social by vm.socialState.collectAsStateWithLifecycle()
+    val request = social.listenRequests.firstOrNull()
+    val session = social.session
+    Column(modifier.padding(top = 46.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        androidx.compose.animation.AnimatedVisibility(
+            visible = session != null,
+            enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.slideInVertically { -it },
+            exit = androidx.compose.animation.fadeOut() + androidx.compose.animation.slideOutVertically { -it },
+        ) {
+            val s = session ?: remember { mutableStateOf(session) }.value
+            Surface(shape = RoundedCornerShape(50), color = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary, shadowElevation = 8.dp) {
+                Row(Modifier.padding(start = 16.dp, end = 6.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Rounded.Person, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        when {
+                            s == null -> ""
+                            s.isGuest -> "Listening with ${s.host}"
+                            s.members.size == 1 -> "${s.members.first()} is listening with you"
+                            else -> "${s.members.size} friends are listening with you"
+                        },
+                        style = MaterialTheme.typography.labelLarge,
+                        maxLines = 1,
+                    )
+                    if (s?.isGuest == true) {
+                        Spacer(Modifier.width(8.dp))
+                        TextButton(onClick = { vm.leaveSession() }) { Text("Leave session", color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold) }
+                    } else {
+                        Spacer(Modifier.width(12.dp).height(40.dp))
+                    }
+                }
+            }
+        }
+        androidx.compose.animation.AnimatedVisibility(
+            visible = request != null,
+            enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.slideInVertically { -it },
+            exit = androidx.compose.animation.fadeOut() + androidx.compose.animation.slideOutVertically { -it },
+        ) {
+            if (request != null) {
+                Surface(shape = RoundedCornerShape(18.dp), color = MaterialTheme.colorScheme.surfaceContainerHighest, shadowElevation = 12.dp) {
+                    Row(Modifier.padding(start = 14.dp, end = 10.dp, top = 10.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Initial(request.from, 36.dp)
+                        Spacer(Modifier.width(12.dp))
+                        Column {
+                            Text(request.from, style = MaterialTheme.typography.titleSmall)
+                            Text("wants to listen along with you", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Spacer(Modifier.width(16.dp))
+                        TextButton(onClick = { vm.answerListen(request, false) }) { Text("Decline") }
+                        Button(onClick = { vm.answerListen(request, true) }) { Text("Accept") }
+                    }
+                }
+            }
+        }
     }
 }

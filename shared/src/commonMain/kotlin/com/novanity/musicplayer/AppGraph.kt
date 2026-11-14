@@ -68,5 +68,8 @@ class AppGraph(
         )
     }
 
+    /** Friends and listening together; needs an account. */
+    val social = account?.let { com.novanity.musicplayer.data.SocialRepository(it, cloud, musicRepository, settings, appScope) }
+
     val artistBios = httpGet?.let { get -> com.novanity.musicplayer.data.ArtistBios(storeFactory("artist_bios"), { url -> get(url, emptyMap()) }) }
 }

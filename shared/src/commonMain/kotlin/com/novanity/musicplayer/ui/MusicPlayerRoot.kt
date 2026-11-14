@@ -1,5 +1,7 @@
 package com.novanity.musicplayer.ui
 
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.zIndex
 import com.novanity.musicplayer.ui.components.LocalTopEndInset
 import com.novanity.musicplayer.ui.screens.AccountScreen
 import com.novanity.musicplayer.data.AccountState
@@ -156,6 +158,8 @@ fun MusicPlayerRoot(
                 )
             )
             Box(Modifier.fillMaxSize()) {
+            // Listen-along requests and the shared-session pill float above everything.
+            if (library.socialAvailable) com.novanity.musicplayer.ui.screens.SocialOverlay(library, Modifier.align(Alignment.TopCenter).zIndex(20f))
             if (wide) {
                 // Desktop / large windows: sidebar, content panel, side panel and a player bar.
                 Scaffold(

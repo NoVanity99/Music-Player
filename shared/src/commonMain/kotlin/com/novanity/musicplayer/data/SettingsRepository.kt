@@ -123,6 +123,15 @@ class SettingsRepository(private val prefs: KeyValueStore) {
         prefs.putBoolean(KEY_ADVANCED_TRANSITIONS, enabled)
     }
 
+    /** Let friends see what you're listening to. */
+    private val _shareListening = MutableStateFlow(prefs.getBoolean(KEY_SHARE_LISTENING, true))
+    val shareListening: StateFlow<Boolean> = _shareListening.asStateFlow()
+
+    fun setShareListening(enabled: Boolean) {
+        _shareListening.value = enabled
+        prefs.putBoolean(KEY_SHARE_LISTENING, enabled)
+    }
+
     fun setArtistBios(enabled: Boolean) {
         _artistBios.value = enabled
         prefs.putBoolean(KEY_ARTIST_BIOS, enabled)
@@ -213,6 +222,7 @@ class SettingsRepository(private val prefs: KeyValueStore) {
         const val KEY_LAST_PROMPTED = "last_prompted_version"
         const val KEY_DISCORD = "discord_presence"
         const val KEY_ARTIST_BIOS = "artist_bios"
+        const val KEY_SHARE_LISTENING = "share_listening"
         const val KEY_ADVANCED_TRANSITIONS = "advanced_transitions"
         const val KEY_VISUALIZER = "visualizer"
         const val KEY_DOWNLOAD_LIKED = "download_liked"

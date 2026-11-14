@@ -46,7 +46,7 @@ class MainActivity : ComponentActivity() {
         viewModelFactory {
             initializer {
                 val g = appContainer
-                LibraryViewModel(g.musicRepository, g.playlistRepository, g.historyRepository, g.favoritesRepository, g.settings, g.artistBios, g.cloud, g.downloads, g.account)
+                LibraryViewModel(g.musicRepository, g.playlistRepository, g.historyRepository, g.favoritesRepository, g.settings, g.artistBios, g.cloud, g.downloads, g.account, g.social)
             }
         }
     }
@@ -54,7 +54,7 @@ class MainActivity : ComponentActivity() {
         viewModelFactory {
             initializer {
                 val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
-                PlayerViewModel(Media3PlayerController(applicationContext, appContainer.musicRepository, scope), appContainer.settings)
+                PlayerViewModel(Media3PlayerController(applicationContext, appContainer.musicRepository, scope).let { appContainer.social?.wrap(it) ?: it }, appContainer.settings)
             }
         }
     }

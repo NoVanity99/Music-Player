@@ -297,6 +297,9 @@ class AccountRepository(
         return response
     }
 
+    /** A signed-in request to the server for other parts of the app (null when signed out). */
+    suspend fun call(method: String, path: String, body: String?): HttpText? = authed(method, path, body)
+
     // ---- Favourite artists ----
 
     private val _favoriteArtists = MutableStateFlow(
