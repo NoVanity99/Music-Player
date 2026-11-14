@@ -48,6 +48,9 @@ data class CloudSong(
 )
 
 @Serializable
+data class CloudLibraryVersion(val version: String = "")
+
+@Serializable
 data class CloudLibraryFile(val version: Int = 1, val songs: List<CloudSong> = emptyList())
 
 @Immutable
@@ -120,6 +123,8 @@ class CloudRepository(
     downloads: Flow<List<DownloadEntity>>,
     /** A server and key built into the app: used as they are, and can't be changed or removed. */
     private val builtIn: CloudConfig? = null,
+    /** How often to look for songs added to the server. */
+    private val pollMs: Long = POLL_MS,
 ) {
     val isBuiltIn: Boolean get() = builtIn != null
 
@@ -167,10 +172,15 @@ class CloudRepository(
     init {
         scope.launch {
             refresh()
-            // Come back by itself when the connection does.
+            // Every minute: come back by itself when the connection does, and pick up songs
+            // that were added to the server, so new music appears without an app update.
             while (true) {
-                delay(RETRY_OFFLINE_MS)
-                if (_status.value is CloudStatus.Offline) refresh()
+                delay(pollMs)
+                when (_status.value) {
+                    is CloudStatus.Offline -> refresh()
+                    is CloudStatus.Online -> checkForChanges()
+                    else -> Unit
+                }
             }
         }
     }
@@ -221,6 +231,30 @@ class CloudRepository(
         _status.value = CloudStatus.NotConfigured
     }
 
+    /** The server's library version when the song list was last fetched after asking for it. */
+    private var seenVersion: String? = null
+
+    /**
+     * Asks the server whether the song list changed (a tiny request) and fetches it again if so.
+     * A failure here changes nothing: playback and [refresh] decide when we're offline.
+     */
+    suspend fun checkForChanges() {
+        val config = _config.value
+        if (!config.isSet) return
+        val version = try {
+            val response = httpGet("${config.serverUrl}/library/version", mapOf(KEY_HEADER to config.key))
+            if (response.status != 200) return
+            json.decodeFromString(CloudLibraryVersion.serializer(), response.body).version
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            return
+        }
+        if (version == seenVersion) return
+        refresh()
+        if (_status.value is CloudStatus.Online && _config.value == config) seenVersion = version
+    }
+
     /** Fetches the song list. Never throws; the outcome is in [status]. */
     suspend fun refresh() = refreshMutex.withLock {
         val config = _config.value
@@ -237,7 +271,7 @@ class CloudRepository(
                     if (parsed == null) {
                         CloudStatus.Error("That address isn't a Vanity Player server.")
                     } else {
-                        setLibrary(parsed.songs)
+                        if (parsed.songs != library.value) setLibrary(parsed.songs)
                         CloudStatus.Online(parsed.songs.size)
                     }
                 }
@@ -329,7 +363,7 @@ class CloudRepository(
         private const val KEY_KEY = "access_key"
         private const val KEY_LIBRARY = "library"
         private const val KEY_CONNECTED = "connected"
-        private const val RETRY_OFFLINE_MS = 60_000L
+        private const val POLL_MS = 60_000L
 
         /** Cloud songs get negative ids, so they can never collide with a local song's id. */
         fun songIdFor(cloudId: String): Long =

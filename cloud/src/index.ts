@@ -2,6 +2,7 @@
  * Vanity Player cloud: serves a music library from the R2 bucket `vanity-music`.
  *
  *   GET /library      the song list (library.json)
+ *   GET /library/version   changes whenever the song list does
  *   GET /stream/:id   a song's audio, with HTTP Range support
  *   GET /cover/:id    cover art
  *
@@ -58,6 +59,7 @@ export default {
       return json({ error: "method_not_allowed" }, 405, { Allow: "GET, HEAD, OPTIONS" });
     }
     if (path === "/library") return library(request, env);
+    if (path === "/library/version") return libraryVersion(env);
 
     const stream = path.match(/^\/stream\/([^/]+)$/);
     if (stream) return media(request, env, ctx, `audio/${stream[1]}`, stream[1], "application/octet-stream");
@@ -107,6 +109,15 @@ async function library(request: Request, env: Env): Promise<Response> {
   }
   headers.set("Content-Length", String(object.size));
   return new Response(request.method === "HEAD" ? null : object.body, { headers });
+}
+
+/**
+ * A few bytes that change whenever the song list does. The apps ask for this every minute and
+ * fetch the whole list only when it changed, so new uploads show up without an app update.
+ */
+async function libraryVersion(env: Env): Promise<Response> {
+  const object = await env.MUSIC.head("library.json");
+  return json({ version: object?.etag ?? "" });
 }
 
 /** Audio or a cover: from the edge cache when it's there, otherwise from R2. */
