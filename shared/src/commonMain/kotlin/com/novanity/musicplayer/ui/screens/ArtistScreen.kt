@@ -82,6 +82,10 @@ import com.novanity.musicplayer.ui.components.mouseDragScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.foundation.layout.wrapContentSize
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.lerp
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
@@ -242,14 +246,7 @@ private fun PlayAndAbout(songs: List<Song>, yourTop: List<Song>, rank: Int?, bio
         }
         // "#3": this artist's place among your ten most played artists.
         val rankBadge: @Composable () -> Unit = {
-            if (rank != null) {
-                Box(
-                    Modifier.size(48.dp).background(MaterialTheme.colorScheme.primary, CircleShape).semantics { contentDescription = "Number $rank of your most played artists" },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text("$rank", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.onPrimary)
-                }
-            }
+            if (rank != null) RankRibbon(rank)
         }
         if (wide) {
             Row(
@@ -384,5 +381,56 @@ private fun EmptyRow(text: String) {
         Icon(Icons.Rounded.Album, contentDescription = null, tint = outline, modifier = Modifier.size(28.dp))
         Spacer(Modifier.width(14.dp))
         Text(text, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+
+/**
+ * An award ribbon with the artist's place among your most played: gold for 1, silver for 2,
+ * bronze for 3, and the app's accent colour for 4 to 10.
+ */
+@Composable
+private fun RankRibbon(rank: Int) {
+    val accent = MaterialTheme.colorScheme.primary
+    // light, main, dark, number colour
+    val (light, main, dark, ink) = when (rank) {
+        1 -> listOf(Color(0xFFFFF0A8), Color(0xFFF5C33B), Color(0xFFB8860B), Color(0xFF4A3500))
+        2 -> listOf(Color(0xFFF7F8FA), Color(0xFFC3C9D1), Color(0xFF858D98), Color(0xFF2B3038))
+        3 -> listOf(Color(0xFFF3C9A0), Color(0xFFCD7F32), Color(0xFF8A4F1B), Color(0xFF3B1F06))
+        else -> listOf(lerp(accent, Color.White, 0.35f), accent, lerp(accent, Color.Black, 0.35f), Color.White)
+    }
+    Box(
+        Modifier.size(width = 46.dp, height = 60.dp).semantics { contentDescription = "Number $rank of your most played artists" }.drawBehind {
+            val w = size.width
+            val r = w / 2
+            val center = Offset(r, r)
+            // The two tails, each with a notch cut out of its end.
+            fun tail(x0: Float, x1: Float, lean: Float, color: Color) {
+                val top = r * 1.25f
+                val bottom = size.height
+                drawPath(
+                    Path().apply {
+                        moveTo(x0, top); lineTo(x1, top)
+                        lineTo(x1 + lean, bottom); lineTo((x0 + x1) / 2 + lean, bottom - w * 0.14f); lineTo(x0 + lean, bottom)
+                        close()
+                    },
+                    color,
+                )
+            }
+            tail(w * 0.20f, w * 0.50f, -w * 0.08f, dark)
+            tail(w * 0.50f, w * 0.80f, w * 0.08f, lerp(dark, main, 0.35f))
+            // The medal: a soft rim, a shaded face and a fine inner ring.
+            drawCircle(dark, r, center)
+            drawCircle(Brush.linearGradient(listOf(light, main, dark), Offset(0f, 0f), Offset(w, w)), r * 0.90f, center)
+            drawCircle(light.copy(alpha = 0.55f), r * 0.70f, center, style = Stroke(width = 1.dp.toPx()))
+        },
+    ) {
+        Text(
+            "$rank",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.ExtraBold,
+            color = ink,
+            modifier = Modifier.size(46.dp).wrapContentSize(Alignment.Center),
+        )
     }
 }
