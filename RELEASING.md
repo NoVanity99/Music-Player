@@ -41,6 +41,8 @@ The `Release` workflow (`.github/workflows/release.yml`) does all of this for yo
    |---|---|
    | `VanityPlayer-1.4.0.apk` | Signed Android app (sideload, and what Android updates install) |
    | `VanityPlayer-1.4.0-Setup.exe` | Windows installer for first-time installs |
+   | `VanityPlayer-Installer.exe` | Small Windows program that downloads and installs whatever the newest release is |
+   | `VanityPlayer-Installer.apk` | The same for Android |
    | `VanityPlayer-1.4.0.msi` | Windows installer that desktop updates install silently |
    | `latest.json` | Update manifest (version, notes, URLs, SHA-256, sizes) |
    | `latest.json.sig` | Ed25519 signature of `latest.json` (base64) |
@@ -96,3 +98,17 @@ To sign a manifest by hand: `openssl pkeyutl -sign -inkey keystore/update-signin
   the installed version instead of installing a second copy.
 - On Android, the first update asks the user to allow "Install unknown apps" for Vanity Player.
   The app sends them to that setting and picks the update back up when they return.
+
+## The online installers
+
+`VanityPlayer-Installer.exe` (source: `installer-windows/Installer.cs`) and
+`VanityPlayer-Installer.apk` (the `:installer` module) are the files to hand out. They contain no
+copy of the player: each reads `latest.json` from the newest release, downloads that version,
+checks its SHA-256 and installs it. Their names never change, so these links always work:
+
+- https://github.com/NoVanity99/Music-Player/releases/latest/download/VanityPlayer-Installer.exe
+- https://github.com/NoVanity99/Music-Player/releases/latest/download/VanityPlayer-Installer.apk
+
+The Android one also checks the manifest's signature; the Windows one relies on HTTPS to GitHub.
+Neither is signed with a paid certificate, so Windows SmartScreen shows "More info > Run anyway"
+and Android asks to allow installs from the installer.

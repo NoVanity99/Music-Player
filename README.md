@@ -8,6 +8,13 @@ file's tags or folder) to Litterbox, a temporary image host that deletes it afte
 Discord can only show images from the web. Artist pages look up a short bio on English Wikipedia by artist name
 (cached, and can be turned off in Settings).
 
+## Install
+
+- Windows: [VanityPlayer-Installer.exe](https://github.com/NoVanity99/Music-Player/releases/latest/download/VanityPlayer-Installer.exe)
+- Android: [VanityPlayer-Installer.apk](https://github.com/NoVanity99/Music-Player/releases/latest/download/VanityPlayer-Installer.apk)
+
+Both download and install the newest release; after that the player updates itself.
+
 ## Features
 
 - Streaming-app style UI: Home, Search and Library, with pages tinted by the album art. Phones get

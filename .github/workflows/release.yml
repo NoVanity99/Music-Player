@@ -67,10 +67,13 @@ jobs:
           keyPassword=$KEYSTORE_PASSWORD
           PROPS
       - name: Build release APK
-        run: ./gradlew :app:assembleRelease --stacktrace
+        run: ./gradlew :app:assembleRelease :installer:assembleRelease --stacktrace
       - run: |
           mkdir -p out
           cp app/build/outputs/apk/release/app-release.apk "out/VanityPlayer-${{ needs.prepare.outputs.version }}.apk"
+          # The small "always installs the newest version" app. Same name every release, so
+          # releases/latest/download/VanityPlayer-Installer.apk is a link that never changes.
+          cp installer/build/outputs/apk/release/installer-release.apk out/VanityPlayer-Installer.apk
       - uses: actions/upload-artifact@v4
         with: { name: android, path: out/* }
 
@@ -92,6 +95,13 @@ jobs:
           mkdir -p out
           cp desktopApp/build/compose/binaries/main-release/exe/*.exe "out/VanityPlayer-$v-Setup.exe"
           cp desktopApp/build/compose/binaries/main-release/msi/*.msi "out/VanityPlayer-$v.msi"
+      - name: Build the online installer
+        shell: cmd
+        run: |
+          rem The C# compiler that ships with Windows: the result runs on any PC with nothing to install.
+          "%WINDIR%\Microsoft.NET\Framework64\v4.0.30319\csc.exe" /nologo /target:winexe /optimize+ /platform:anycpu ^
+            /win32icon:branding\icon.ico /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.Web.Extensions.dll ^
+            /out:out\VanityPlayer-Installer.exe installer-windows\Installer.cs
       - uses: actions/upload-artifact@v4
         with: { name: windows, path: out/* }
 

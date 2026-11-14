@@ -20,4 +20,4 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "MusicPlayer"
-include(":app", ":shared", ":desktopApp", ":updatecore")
+include(":app", ":shared", ":desktopApp", ":updatecore", ":installer")
