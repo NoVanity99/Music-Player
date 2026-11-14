@@ -1,5 +1,6 @@
 package com.novanity.musicplayer.ui
 
+import androidx.compose.material.icons.rounded.DownloadDone
 import com.novanity.musicplayer.platform.LocalPlatform
 import androidx.compose.material.icons.rounded.PictureInPictureAlt
 import androidx.compose.material.icons.rounded.Insights
@@ -187,6 +188,9 @@ private fun Sidebar(library: LibraryViewModel, actions: SongActions, uiState: Ro
     val liked by library.likedSongs.collectAsStateWithLifecycle()
     var creating by remember { mutableStateOf(false) }
     val top = library.backStack.lastOrNull()
+    val cloudConfig by library.cloudConfig.collectAsStateWithLifecycle()
+    val downloadStates by library.downloadStates.collectAsStateWithLifecycle()
+    val hasCloud = cloudConfig.isSet || downloadStates.isNotEmpty()
 
     Column(modifier.background(MaterialTheme.colorScheme.surfaceContainerLow).padding(vertical = 12.dp)) {
         Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -231,6 +235,7 @@ private fun Sidebar(library: LibraryViewModel, actions: SongActions, uiState: Ro
                 ) { library.open(Destination.PlaylistDetail(p.id)) }
             }
         }
+        if (hasCloud) NavRow(Icons.Rounded.DownloadDone, Icons.Rounded.DownloadDone, "Downloads", top == Destination.Downloads) { library.open(Destination.Downloads) }
         NavRow(Icons.Rounded.Insights, Icons.Rounded.Insights, "Your stats", top == Destination.Stats) { library.open(Destination.Stats) }
         NavRow(Icons.Rounded.Keyboard, Icons.Rounded.Keyboard, "Shortcuts", false) { uiState.showShortcuts = true }
         NavRow(Icons.Rounded.Settings, Icons.Rounded.Settings, "Settings", top == Destination.Settings) { library.open(Destination.Settings) }

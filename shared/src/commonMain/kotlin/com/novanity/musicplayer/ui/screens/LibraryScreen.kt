@@ -1,5 +1,7 @@
 package com.novanity.musicplayer.ui.screens
 
+import androidx.compose.material.icons.rounded.DownloadDone
+import com.novanity.musicplayer.data.SongSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -188,7 +190,11 @@ private fun SongsList(actions: SongActions, padding: PaddingValues) {
     val lib by vm.library.collectAsStateWithLifecycle()
     val likedIds by vm.likedIds.collectAsStateWithLifecycle()
     val likedOnly by vm.likedOnly.collectAsStateWithLifecycle()
-    val songs = if (likedOnly) lib.songs.filter { it.id in likedIds } else lib.songs
+    val offlineOnly by vm.offlineOnly.collectAsStateWithLifecycle()
+    val hasCloud = remember(lib.songs) { lib.songs.any { it.source != SongSource.LOCAL } }
+    val songs = remember(lib.songs, likedOnly, offlineOnly, likedIds) {
+        lib.songs.filter { (!likedOnly || it.id in likedIds) && (!offlineOnly || it.source != SongSource.CLOUD) }
+    }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = padding) {
         item(key = "filter") {
             Row(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
@@ -199,6 +205,16 @@ private fun SongsList(actions: SongActions, padding: PaddingValues) {
                     leadingIcon = { Icon(Icons.Rounded.Favorite, contentDescription = null, modifier = Modifier.size(16.dp)) },
                     shape = CircleShape,
                 )
+                if (hasCloud || offlineOnly) {
+                    Spacer(Modifier.width(8.dp))
+                    FilterChip(
+                        selected = offlineOnly,
+                        onClick = { vm.offlineOnly.value = !offlineOnly },
+                        label = { Text("Offline") },
+                        leadingIcon = { Icon(Icons.Rounded.DownloadDone, contentDescription = null, modifier = Modifier.size(16.dp)) },
+                        shape = CircleShape,
+                    )
+                }
             }
         }
         item(key = "shuffle") {

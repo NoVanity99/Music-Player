@@ -13,12 +13,12 @@ import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
 import java.io.File
 
-/** Upgrading from 1.0 (schema v1) must keep playlists and add Liked Songs without crashing. */
+/** Upgrading from 1.0 (schema v1) must keep playlists and add Liked Songs and downloads without crashing. */
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [35])
 class MigrationTest {
     @Test
-    fun migrate1To2() = runBlocking {
+    fun migrate1To3() = runBlocking {
         val context = ApplicationProvider.getApplicationContext<MusicApp>()
         val dbFile = context.getDatabasePath("music.db").apply { parentFile?.mkdirs(); delete() }
 
@@ -43,11 +43,14 @@ class MigrationTest {
         }
 
         val room = androidx.room.Room.databaseBuilder<AppDatabase>(context, dbFile.absolutePath)
-            .addMigrations(AppDatabase.MIGRATION_1_2)
+            .addMigrations(AppDatabase.MIGRATION_1_2, AppDatabase.MIGRATION_2_3)
             .build()
         assertEquals(listOf("Old mix"), room.playlistDao().observePlaylists().first().map { it.name })
         room.favoritesDao().insert(com.novanity.musicplayer.data.db.FavoriteEntity(42))
         assertEquals(listOf(42L), room.favoritesDao().observeSongIds().first())
+        // v3: the downloads table (Room also checks it matches the entity exactly).
+        room.downloadsDao().upsert(com.novanity.musicplayer.data.db.DownloadEntity("abc", "/x", 5, 1, 1, "{}"))
+        assertEquals(listOf("abc"), room.downloadsDao().all().map { it.cloudId })
         room.close()
     }
 }

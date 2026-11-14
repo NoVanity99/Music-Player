@@ -241,6 +241,7 @@ class PlaybackService : MediaSessionService() {
                     else -> "The cloud server had a problem (HTTP $status)."
                 }
                 Toast.makeText(this@PlaybackService, message, Toast.LENGTH_LONG).show()
+                scope.launch { container.cloud.refresh() } // if the server is gone, switch the library to offline
                 consecutiveErrors = 0
                 player.pause()
                 player.prepare() // so pressing play tries again

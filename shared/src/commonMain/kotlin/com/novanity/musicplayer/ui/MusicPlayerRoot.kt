@@ -1,5 +1,7 @@
 package com.novanity.musicplayer.ui
 
+import com.novanity.musicplayer.ui.components.LocalDownloadTap
+import com.novanity.musicplayer.ui.components.LocalDownloadStates
 import com.novanity.musicplayer.ui.components.AppBackHandler
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -87,7 +89,11 @@ fun MusicPlayerRoot(
     val titleBar = com.novanity.musicplayer.platform.LocalPlatform.current.titleBarHeight
 
     // No folder chosen yet: nothing is auto-detected, so ask where the music lives.
-    if (includedFolders.isEmpty()) {
+    val cloudConfig by library.cloudConfig.collectAsStateWithLifecycle()
+    val downloadStates by library.downloadStates.collectAsStateWithLifecycle()
+    // A cloud library (or downloads from one) is enough to use the app without a local folder.
+    val cloudReady by library.cloudEverConnected.collectAsStateWithLifecycle()
+    if (includedFolders.isEmpty() && !(cloudConfig.isSet && cloudReady) && downloadStates.isEmpty()) {
         Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(top = titleBar)) {
             FolderSetupScreen(actions)
         }
@@ -124,7 +130,11 @@ fun MusicPlayerRoot(
         }
     }
 
-    CompositionLocalProvider(LocalNowPlaying provides NowPlayingInfo(state.current?.songId, state.isPlaying)) {
+    CompositionLocalProvider(
+        LocalNowPlaying provides NowPlayingInfo(state.current?.songId, state.isPlaying),
+        LocalDownloadStates provides downloadStates,
+        LocalDownloadTap provides actions::onDownloadTap,
+    ) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val wide = maxWidth >= WideLayoutMinWidth
             // Strip behind the desktop title bar, in the colour of the layout below it.

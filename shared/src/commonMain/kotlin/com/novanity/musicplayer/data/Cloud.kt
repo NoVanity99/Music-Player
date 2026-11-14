@@ -40,6 +40,8 @@ data class CloudSong(
     val ext: String = "",
     val coverId: String? = null,
     val addedAt: Long = 0,
+    /** The file's path inside the uploaded folder. */
+    val path: String = "",
 )
 
 @Serializable
@@ -123,6 +125,16 @@ class CloudRepository(
         cache.getString(KEY_LIBRARY)?.let { runCatching { json.decodeFromString(CloudLibraryFile.serializer(), it).songs }.getOrNull() }.orEmpty()
     )
 
+    private val _everConnected = MutableStateFlow(_config.value.isSet && cache.getBoolean(KEY_CONNECTED, false))
+
+    /** True once these settings have worked at least once (so a first-time typo isn't treated as set up). */
+    val everConnected: StateFlow<Boolean> = _everConnected.asStateFlow()
+
+    private fun setEverConnected(value: Boolean) {
+        _everConnected.value = value
+        cache.putBoolean(KEY_CONNECTED, value)
+    }
+
     private val _status = MutableStateFlow<CloudStatus>(if (_config.value.isSet) CloudStatus.Loading else CloudStatus.NotConfigured)
     val status: StateFlow<CloudStatus> = _status.asStateFlow()
 
@@ -168,6 +180,7 @@ class CloudRepository(
         secure.putString(KEY_URL, config.serverUrl)
         secure.putString(KEY_KEY, config.key)
         if (config.serverUrl != _config.value.serverUrl) setLibrary(emptyList())
+        if (config != _config.value) setEverConnected(false)
         _config.value = config
         _status.value = if (config.isSet) CloudStatus.Loading else CloudStatus.NotConfigured
         scope.launch { refresh() }
@@ -178,6 +191,7 @@ class CloudRepository(
         secure.putString(KEY_URL, null)
         secure.putString(KEY_KEY, null)
         _config.value = CloudConfig("", "")
+        setEverConnected(false)
         setLibrary(emptyList())
         _status.value = CloudStatus.NotConfigured
     }
@@ -202,7 +216,7 @@ class CloudRepository(
                         CloudStatus.Online(parsed.songs.size)
                     }
                 }
-                401, 403 -> CloudStatus.Error("The server rejected the access key. Check it in Settings.")
+                401, 403 -> CloudStatus.Error("The server rejected the access key. Check the key and try again.")
                 404 -> CloudStatus.Error("No Vanity Player server found at that address.")
                 else -> CloudStatus.Error("The server had a problem (HTTP ${response.status}). Try again later.")
             }
@@ -212,7 +226,10 @@ class CloudRepository(
             CloudStatus.Offline("Can't reach the server. Showing downloaded songs only.")
         }
         // The settings may have changed while we were waiting.
-        if (_config.value == config) _status.value = result
+        if (_config.value == config) {
+            if (result is CloudStatus.Online && !_everConnected.value) setEverConnected(true)
+            _status.value = result
+        }
     }
 
     private fun setLibrary(songs: List<CloudSong>) {
@@ -260,7 +277,9 @@ class CloudRepository(
         title = title.ifBlank { "Unknown title" },
         artist = artist.ifBlank { "Unknown artist" },
         album = album.ifBlank { "Unknown album" },
-        albumId = albumIdFor(albumArtist.ifBlank { artist }, album),
+        // Without an album-artist tag, songs in the same folder with the same album name are one
+        // album, so a "feat." track doesn't split off into its own copy.
+        albumId = albumIdFor(albumArtist.ifBlank { path.substringBeforeLast('/', "").ifEmpty { artist } }, album),
         durationMs = durationMs,
         track = track,
         disc = disc,
@@ -279,6 +298,7 @@ class CloudRepository(
         private const val KEY_URL = "server_url"
         private const val KEY_KEY = "access_key"
         private const val KEY_LIBRARY = "library"
+        private const val KEY_CONNECTED = "connected"
         private const val RETRY_OFFLINE_MS = 60_000L
 
         /** Cloud songs get negative ids, so they can never collide with a local song's id. */

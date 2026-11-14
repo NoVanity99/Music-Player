@@ -90,6 +90,7 @@ fun HomeScreen(actions: SongActions, contentPadding: PaddingValues) {
             home.loading -> CircularProgressIndicator(Modifier.align(Alignment.Center))
             home.isEmpty -> Column(Modifier.statusBarsPadding()) {
                 HomeHeader(onSettings = { vm.open(Destination.Settings) }, onStats = { vm.open(Destination.Stats) })
+                CloudProblemBanner(vm)
                 EmptyState(
                     icon = Icons.Rounded.LibraryMusic,
                     title = "No music yet",
@@ -107,6 +108,7 @@ fun HomeScreen(actions: SongActions, contentPadding: PaddingValues) {
                 item { Spacer(Modifier.statusBarsPadding()) }
                 item { HomeHeader(onSettings = { vm.open(Destination.Settings) }, onStats = { vm.open(Destination.Stats) }) }
                 if (syncing) item { SyncingBanner() }
+                item { CloudProblemBanner(vm) }
                 item {
                     QuickPicksGrid(home.quickPicks) { pick ->
                         when (pick) {

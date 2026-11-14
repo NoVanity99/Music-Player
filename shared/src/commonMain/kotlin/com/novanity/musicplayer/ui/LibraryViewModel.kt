@@ -1,5 +1,11 @@
 package com.novanity.musicplayer.ui
 
+import com.novanity.musicplayer.data.SongSource
+import com.novanity.musicplayer.data.DownloadState
+import com.novanity.musicplayer.data.CloudConfig
+import com.novanity.musicplayer.data.CloudStatus
+import com.novanity.musicplayer.data.DownloadsRepository
+import com.novanity.musicplayer.data.CloudRepository
 import com.novanity.musicplayer.data.ArtistBios
 import com.novanity.musicplayer.data.ArtistBio
 import com.novanity.musicplayer.data.ArtistPart
@@ -115,6 +121,7 @@ sealed interface Destination {
     data object Settings : Destination
     data object Equalizer : Destination
     data object Stats : Destination
+    data object Downloads : Destination
     data class MixDetail(val kind: com.novanity.musicplayer.data.MixKind) : Destination
 }
 
@@ -126,7 +133,39 @@ class LibraryViewModel(
     private val favorites: FavoritesRepository,
     private val settings: SettingsRepository,
     private val bios: ArtistBios? = null,
+    private val cloud: CloudRepository? = null,
+    private val downloads: DownloadsRepository? = null,
 ) : ViewModel() {
+
+    // ---- Cloud library and offline downloads ----
+
+    val cloudAvailable: Boolean get() = cloud != null
+    val cloudStatus: StateFlow<CloudStatus> = cloud?.status ?: MutableStateFlow(CloudStatus.NotConfigured)
+    val cloudConfig: StateFlow<CloudConfig> = cloud?.config ?: MutableStateFlow(CloudConfig("", ""))
+    /** The cloud settings have worked at least once. */
+    val cloudEverConnected: StateFlow<Boolean> = cloud?.everConnected ?: MutableStateFlow(false)
+    fun connectCloud(serverUrl: String, key: String) { cloud?.connect(serverUrl, key) }
+    fun disconnectCloud() { cloud?.disconnect() }
+    fun refreshCloud() { viewModelScope.launch { cloud?.refresh() } }
+
+    /** Download state per cloud song id. */
+    val downloadStates: StateFlow<Map<String, DownloadState>> = downloads?.states ?: MutableStateFlow(emptyMap())
+    val downloadStorageUsed: StateFlow<Long> = downloads?.storageUsed ?: MutableStateFlow(0L)
+
+    /** Queues the cloud songs among [songs] for download; returns how many were queued. */
+    fun download(songs: List<Song>): Int {
+        val wanted = songs.filter { it.source == SongSource.CLOUD && downloadStates.value[it.cloudId].let { s -> s == null || s is DownloadState.Failed } }
+        if (wanted.isNotEmpty()) downloads?.enqueue(wanted)
+        return wanted.size
+    }
+    fun cancelDownload(song: Song) { song.cloudId?.let { downloads?.cancel(it) } }
+    fun deleteDownload(song: Song) { song.cloudId?.let { downloads?.delete(it) } }
+    fun cancelAllDownloads() { downloads?.cancelAll() }
+    fun deleteAllDownloads() { downloads?.deleteAll() }
+
+    /** Songs tab: show only songs that play without internet (local and downloaded). */
+    val offlineOnly = MutableStateFlow(false)
+
 
     // ---- Navigation: one back stack per bottom-bar tab ----
 

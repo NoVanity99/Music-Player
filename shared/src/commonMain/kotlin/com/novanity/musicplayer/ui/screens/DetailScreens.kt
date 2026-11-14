@@ -114,6 +114,7 @@ fun DetailScreen(destination: Destination, actions: SongActions, contentPadding:
         Destination.MostPlayed -> MostPlayedScreen(actions, contentPadding)
         Destination.Equalizer -> EqualizerScreen(actions, contentPadding)
         Destination.Stats -> StatsScreen(actions, contentPadding)
+        Destination.Downloads -> DownloadsScreen(actions, contentPadding)
         is Destination.MixDetail -> MixScreen(destination.kind, actions, contentPadding)
     }
 }

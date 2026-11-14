@@ -1,5 +1,10 @@
 package com.novanity.musicplayer.ui
 
+import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.DeleteOutline
+import com.novanity.musicplayer.data.DownloadState
+import com.novanity.musicplayer.data.SongSource
 import com.novanity.musicplayer.ui.components.artistMenuLabels
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
@@ -52,7 +57,55 @@ class SongActions(
         },
         MenuAction("Add to playlist", Icons.AutoMirrored.Rounded.PlaylistAdd) { library.requestAddToPlaylist(listOf(song)) },
         MenuAction("Go to album", Icons.Rounded.Album) { library.open(Destination.AlbumDetail(song.albumId)) },
-    ) + artistMenu(song.artist) + extra
+    ) + artistMenu(song.artist) + downloadMenu(song) + extra
+
+    /** Download / cancel / remove, depending on where a cloud song is. */
+    private fun downloadMenu(song: Song): List<MenuAction> {
+        if (song.source == SongSource.LOCAL) return emptyList()
+        val state = library.downloadStates.value[song.cloudId]
+        return listOf(
+            when {
+                song.source == SongSource.DOWNLOADED -> MenuAction("Remove download", Icons.Rounded.DeleteOutline) {
+                    library.deleteDownload(song)
+                    toast("Removed from this device")
+                }
+                state is DownloadState.Queued || state is DownloadState.Downloading -> MenuAction("Cancel download", Icons.Rounded.Close) {
+                    library.cancelDownload(song)
+                }
+                else -> MenuAction(if (state is DownloadState.Failed) "Try download again" else "Download", Icons.Rounded.Download) {
+                    library.download(listOf(song))
+                    toast("Downloading “${song.title}”")
+                }
+            }
+        )
+    }
+
+    /** The status icon on a cloud song was tapped. */
+    fun onDownloadTap(song: Song, state: DownloadState?) {
+        when (state) {
+            is DownloadState.Queued, is DownloadState.Downloading -> {
+                library.cancelDownload(song)
+                toast("Download cancelled")
+            }
+            DownloadState.Done -> Unit
+            else -> {
+                library.download(listOf(song))
+                toast("Downloading “${song.title}”")
+            }
+        }
+    }
+
+    /** Downloads every cloud song in [songs] that isn't on the device yet. */
+    fun downloadAll(songs: List<Song>) {
+        val n = library.download(songs)
+        toast(
+            when (n) {
+                0 -> "Everything here is already downloaded"
+                1 -> "Downloading 1 song"
+                else -> "Downloading $n songs"
+            }
+        )
+    }
 
     /** "Go to artist", or "Go to Drake" / "Go to Future" for a collaboration. */
     fun artistMenu(credit: String, before: () -> Unit = {}): List<MenuAction> =
@@ -70,5 +123,5 @@ class SongActions(
             toast("Added to queue")
         },
         MenuAction("Add to playlist", Icons.AutoMirrored.Rounded.PlaylistAdd) { library.requestAddToPlaylist(songs) },
-    ) + extra
+    ) + (if (songs.any { it.source == SongSource.CLOUD }) listOf(MenuAction("Download", Icons.Rounded.Download) { downloadAll(songs) }) else emptyList()) + extra
 }

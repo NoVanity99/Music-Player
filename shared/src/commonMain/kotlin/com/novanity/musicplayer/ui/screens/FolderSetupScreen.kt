@@ -1,5 +1,6 @@
 package com.novanity.musicplayer.ui.screens
 
+import androidx.compose.material3.TextButton
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -39,6 +40,8 @@ import com.novanity.musicplayer.ui.components.ShuffleGradient
 @Composable
 fun FolderSetupScreen(actions: SongActions) {
     var browsing by rememberSaveable { mutableStateOf(false) }
+    var connectingCloud by rememberSaveable { mutableStateOf(false) }
+    if (connectingCloud) CloudConnectDialog(actions.library) { connectingCloud = false }
     val accentWash = MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
 
     Box(
@@ -75,6 +78,10 @@ fun FolderSetupScreen(actions: SongActions) {
                 Icon(Icons.Rounded.CreateNewFolder, contentDescription = null)
                 Spacer(Modifier.size(10.dp))
                 Text("Choose a folder", style = MaterialTheme.typography.titleMedium)
+            }
+            if (actions.library.cloudAvailable) {
+                Spacer(Modifier.height(10.dp))
+                TextButton(onClick = { connectingCloud = true }) { Text("Or connect a cloud library") }
             }
             Spacer(Modifier.height(16.dp))
             Text(

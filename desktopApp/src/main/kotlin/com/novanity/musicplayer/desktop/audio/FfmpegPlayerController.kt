@@ -324,6 +324,7 @@ class FfmpegPlayerController(
         if (streamed) {
             // A stream that won't open is a connection or key problem: skipping ahead wouldn't help.
             onError("Can't stream “$title”. Check your connection and the cloud settings.")
+            scope.launch { graph.cloud.refresh() } // if the server is gone, switch the library to offline
             closeVoices()
             errorStreak = 0
             playing = false

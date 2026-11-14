@@ -172,6 +172,26 @@ fun SettingsScreen(actions: SongActions, contentPadding: PaddingValues) {
             }
         }
 
+        // ---- Cloud library ----
+        if (vm.cloudAvailable) {
+            item { GroupLabel("Cloud library") }
+            item {
+                SettingsCard {
+                    Column(Modifier.padding(16.dp)) {
+                        Text(
+                            "Stream your own music from your Vanity Player server and download it for offline play.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Spacer(Modifier.height(14.dp))
+                        CloudConnectForm(vm)
+                        Spacer(Modifier.height(14.dp))
+                        DownloadsSummaryRow(actions)
+                    }
+                }
+            }
+        }
+
         // ---- Playback ----
         item { GroupLabel("Playback") }
         item {

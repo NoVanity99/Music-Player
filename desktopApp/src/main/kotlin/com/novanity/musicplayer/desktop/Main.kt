@@ -73,7 +73,16 @@ class DesktopApp {
                 .configure()
                 .build()
         },
-        storeFactory = { name -> PropertiesStore(File(DesktopPaths.dataDir, "$name.properties")) },
+        storeFactory = { name ->
+            val file = File(DesktopPaths.dataDir, "$name.properties")
+            // The cloud address and key: readable by this user account only.
+            if (name == "cloud_secure") runCatching {
+                if (!file.exists()) file.createNewFile()
+                file.setReadable(false, false); file.setWritable(false, false)
+                file.setReadable(true, true); file.setWritable(true, true)
+            }
+            PropertiesStore(file)
+        },
         librarySource = FileLibrarySource(File(DesktopPaths.cacheDir, "library.json")),
         appScope = scope,
         httpGet = { url, headers ->
@@ -85,7 +94,7 @@ class DesktopApp {
         },
         cloudFiles = DesktopCloudFiles(DesktopPaths.dataDir),
     )
-    val library = LibraryViewModel(graph.musicRepository, graph.playlistRepository, graph.historyRepository, graph.favoritesRepository, graph.settings, graph.artistBios)
+    val library = LibraryViewModel(graph.musicRepository, graph.playlistRepository, graph.historyRepository, graph.favoritesRepository, graph.settings, graph.artistBios, graph.cloud, graph.downloads)
     val player = PlayerViewModel(FfmpegPlayerController(graph, scope) { message -> library.notify(message) }, graph.settings)
     val rootUi = RootUiState()
     private val artwork = DesktopArtworkProvider { coverId -> graph.cloud.coverFile(coverId) }
@@ -178,10 +187,15 @@ class DesktopApp {
     }
 
     /** Keyboard shortcuts for the whole window (only keys the focused control didn't use). */
+    /** Set by main(): true while a text field has the keyboard, so typing never triggers shortcuts. */
+    var isTyping: () -> Boolean = { false }
+
     fun onKey(event: KeyEvent): Boolean {
         if (event.type != KeyEventType.KeyDown) return false
         val ctrl = event.isCtrlPressed
         val shift = event.isShiftPressed
+        // While typing, only Escape, the media keys and Ctrl shortcuts are ours.
+        if (isTyping() && !ctrl && event.key !in setOf(Key.Escape, Key.MediaPlayPause, Key.MediaNext, Key.MediaPrevious, Key.F1)) return false
         when (event.key) {
             Key.Spacebar, Key.MediaPlayPause -> if (!MediaKeys.active || event.key == Key.Spacebar) player.togglePlayPause()
             Key.DirectionRight -> if (ctrl) player.nextTrack() else player.seekBy(if (shift) 30_000 else 5_000)
@@ -245,6 +259,8 @@ fun main() {
             onKeyEvent = app::onKey,
         ) {
             window.minimumSize = Dimension(400, 640)
+            // Compose gives its AWT component input-method requests only while a text field is focused.
+            app.isTyping = { runCatching { window.mostRecentFocusOwner?.inputMethodRequests != null }.getOrDefault(false) }
             val frame = remember { WindowFrame(window) }
             val platform = remember { DesktopPlatformUi(window, app.presence?.status, openMiniPlayer = { app.miniPlayer = true }) }
             val themeMode by app.graph.settings.themeMode.collectAsStateWithLifecycle()

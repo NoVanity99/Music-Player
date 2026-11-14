@@ -1,5 +1,11 @@
 package com.novanity.musicplayer
 
+import android.content.pm.PackageManager
+import android.Manifest
+import android.os.Build
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import androidx.lifecycle.lifecycleScope
 import android.content.Intent
 import android.graphics.Color
 import android.media.AudioManager
@@ -41,7 +47,7 @@ class MainActivity : ComponentActivity() {
         viewModelFactory {
             initializer {
                 val g = appContainer
-                LibraryViewModel(g.musicRepository, g.playlistRepository, g.historyRepository, g.favoritesRepository, g.settings, g.artistBios)
+                LibraryViewModel(g.musicRepository, g.playlistRepository, g.historyRepository, g.favoritesRepository, g.settings, g.artistBios, g.cloud, g.downloads)
             }
         }
     }
@@ -64,6 +70,15 @@ class MainActivity : ComponentActivity() {
         if (savedInstanceState == null) updates.checkOnLaunch()
 
         val container = appContainer
+        // The first download: ask to show its progress notification (Android 13+).
+        lifecycleScope.launch {
+            container.downloads.states.first { it.isNotEmpty() }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+            ) {
+                requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 41)
+            }
+        }
         setContent {
             val themeMode by container.settings.themeMode.collectAsStateWithLifecycle()
             val dynamicColor by container.settings.dynamicColor.collectAsStateWithLifecycle()

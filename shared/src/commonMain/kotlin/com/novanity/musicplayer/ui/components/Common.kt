@@ -1,5 +1,15 @@
 package com.novanity.musicplayer.ui.components
 
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.rounded.CloudDownload
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material.icons.rounded.CloudQueue
+import androidx.compose.material.icons.rounded.ErrorOutline
+import androidx.compose.material.icons.rounded.ArrowDownward
+import androidx.compose.material.icons.rounded.DownloadDone
+import androidx.compose.runtime.staticCompositionLocalOf
+import com.novanity.musicplayer.data.DownloadState
+import com.novanity.musicplayer.data.SongSource
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -207,9 +217,51 @@ fun SongRow(
                 )
             }
         }
+        if (song.source != SongSource.LOCAL) {
+            val state = LocalDownloadStates.current[song.cloudId]
+            val onTap = LocalDownloadTap.current
+            // The icon is the download button: tap a cloud to download, tap a running download to cancel.
+            val tappable = song.source == SongSource.CLOUD
+            CloudStatusIcon(
+                song, state,
+                Modifier.size(40.dp).clip(CircleShape).then(if (tappable) Modifier.clickable { onTap(song, state) } else Modifier),
+            )
+        }
         OverflowMenu(menu)
         trailing?.invoke()
     }
+    }
+}
+
+/** What tapping a cloud song's status icon does (download, or cancel a running download). */
+val LocalDownloadTap = staticCompositionLocalOf<(Song, DownloadState?) -> Unit> { { _, _ -> } }
+
+/** Download state of every queued or downloaded cloud song, by cloud id. */
+val LocalDownloadStates = staticCompositionLocalOf<Map<String, DownloadState>> { emptyMap() }
+
+/** Where a cloud song is: in the cloud, queued, downloading (with progress), downloaded or failed. */
+@Composable
+fun CloudStatusIcon(song: Song, state: DownloadState?, modifier: Modifier = Modifier) {
+    val muted = MaterialTheme.colorScheme.onSurfaceVariant
+    Box(modifier, contentAlignment = Alignment.Center) {
+        when {
+            song.source == SongSource.DOWNLOADED || state is DownloadState.Done ->
+                Icon(Icons.Rounded.DownloadDone, contentDescription = "Downloaded", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+            state is DownloadState.Downloading -> {
+                CircularProgressIndicator(
+                    progress = { state.progress },
+                    modifier = Modifier.size(20.dp),
+                    strokeWidth = 2.5.dp,
+                    trackColor = muted.copy(alpha = 0.25f),
+                )
+                Icon(Icons.Rounded.ArrowDownward, contentDescription = "Downloading ${(state.progress * 100).toInt()}%", tint = muted, modifier = Modifier.size(10.dp))
+            }
+            state is DownloadState.Queued ->
+                CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = muted)
+            state is DownloadState.Failed ->
+                Icon(Icons.Rounded.ErrorOutline, contentDescription = state.message, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
+            else -> Icon(Icons.Rounded.CloudDownload, contentDescription = "Download", tint = muted, modifier = Modifier.size(20.dp))
+        }
     }
 }
 
