@@ -211,6 +211,7 @@ async function main() {
     console.log(`Found ${files.length} audio file${files.length === 1 ? "" : "s"}. Reading the cloud library...`);
     const library = await currentLibrary(tmp);
     const existing = new Map(library.songs.map((s) => [s.id, s]));
+    const removed = new Set(library.removed ?? []);
     const knownCovers = new Set(library.songs.map((s) => s.coverId).filter(Boolean));
 
     // Hashing and tag reading are cached by path + size + modified time.
@@ -263,7 +264,9 @@ async function main() {
         const song = { ...entry, path: rel, albumType: TYPE ?? albumTypeFor(rel), addedAt: existing.get(entry.id)?.addedAt ?? now, file };
         // Names corrected in the cloud by hand (marked "edited") win over the file's tags.
         const kept = existing.get(entry.id);
-        if (kept?.edited) Object.assign(song, { title: kept.title, artist: kept.artist, albumArtist: kept.albumArtist, album: kept.album, edited: true });
+        if (kept?.edited) Object.assign(song, { title: kept.title, artist: kept.artist, albumArtist: kept.albumArtist, album: kept.album, track: kept.track, disc: kept.disc, edited: true });
+        // Songs taken out of the cloud library on purpose stay out, even if the file is still in the folder.
+        if (removed.has(entry.id)) return;
         if (ARTIST && song.artist === "Unknown artist") song.artist = ARTIST;
         songs.push(song);
       } catch (e) {
@@ -305,7 +308,7 @@ async function main() {
       .map(({ file, ...s }) => s)
       .sort((a, b) => (a.albumArtist || a.artist).localeCompare(b.albumArtist || b.artist) || a.album.localeCompare(b.album) || a.disc - b.disc || a.track - b.track || a.title.localeCompare(b.title));
     const out = path.join(tmp, "library.out.json");
-    await writeFile(out, JSON.stringify({ version: 1, updatedAt: new Date().toISOString(), songs: finalSongs }));
+    await writeFile(out, JSON.stringify({ version: 1, updatedAt: new Date().toISOString(), songs: finalSongs, ...(removed.size ? { removed: [...removed] } : {}) }));
     await put("library.json", out, "application/json");
 
     // Delete old objects only after the new library is live. Covers still in use are kept.

@@ -234,9 +234,15 @@ fun SongRow(
             val onTap = LocalDownloadTap.current
             // The icon is the download button: tap a cloud to download, tap a running download to cancel.
             val tappable = song.source == SongSource.CLOUD
+            // Hovering lights it up as a download button; clicking starts (or cancels) the download.
+            val cloudHover = remember { MutableInteractionSource() }
+            val overCloud by cloudHover.collectIsHoveredAsState()
             CloudStatusIcon(
                 song, state,
-                Modifier.size(40.dp).clip(CircleShape).then(if (tappable) Modifier.clickable { onTap(song, state) } else Modifier),
+                Modifier.size(40.dp).clip(CircleShape)
+                    .then(if (tappable && overCloud) Modifier.background(MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)) else Modifier)
+                    .then(if (tappable) Modifier.hoverable(cloudHover).clickable { onTap(song, state) } else Modifier),
+                highlighted = tappable && overCloud,
             )
         }
         OverflowMenu(menu)
@@ -253,7 +259,7 @@ val LocalDownloadStates = staticCompositionLocalOf<Map<String, DownloadState>> {
 
 /** Where a cloud song is: in the cloud, queued, downloading (with progress), downloaded or failed. */
 @Composable
-fun CloudStatusIcon(song: Song, state: DownloadState?, modifier: Modifier = Modifier) {
+fun CloudStatusIcon(song: Song, state: DownloadState?, modifier: Modifier = Modifier, highlighted: Boolean = false) {
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     Box(modifier, contentAlignment = Alignment.Center) {
         when {
@@ -272,6 +278,7 @@ fun CloudStatusIcon(song: Song, state: DownloadState?, modifier: Modifier = Modi
                 CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = muted)
             state is DownloadState.Failed ->
                 Icon(Icons.Rounded.ErrorOutline, contentDescription = state.message, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
+            highlighted -> Icon(Icons.Rounded.ArrowDownward, contentDescription = "Download", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
             else -> Icon(Icons.Rounded.CloudDownload, contentDescription = "Download", tint = muted, modifier = Modifier.size(20.dp))
         }
     }

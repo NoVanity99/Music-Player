@@ -1,5 +1,8 @@
 package com.novanity.musicplayer.ui.screens
 
+import com.novanity.musicplayer.data.SongSource
+import androidx.compose.material.icons.rounded.DownloadDone
+import androidx.compose.material.icons.rounded.Download
 import com.novanity.musicplayer.ui.components.clearOfWindowControls
 import com.novanity.musicplayer.data.Album
 import androidx.compose.ui.draw.clip
@@ -323,6 +326,28 @@ internal fun PlayShuffleRow(songs: List<Song>, actions: SongActions, source: Str
                 Icon(Icons.Rounded.Shuffle, contentDescription = null)
                 Spacer(Modifier.width(6.dp))
                 Text("Shuffle", style = MaterialTheme.typography.titleSmall)
+            }
+            // Download everything on this page that isn't on the device yet.
+            if (songs.any { it.source == SongSource.CLOUD }) {
+                androidx.compose.material3.OutlinedButton(
+                    onClick = { actions.downloadAll(songs) },
+                    shape = RoundedCornerShape(12.dp),
+                    contentPadding = PaddingValues(vertical = 14.dp, horizontal = if (wide) 18.dp else 14.dp),
+                ) {
+                    Icon(Icons.Rounded.Download, contentDescription = if (wide) null else "Download all")
+                    if (wide) {
+                        Spacer(Modifier.width(6.dp))
+                        Text("Download", style = MaterialTheme.typography.titleSmall)
+                    }
+                }
+            } else if (songs.isNotEmpty() && songs.all { it.source == SongSource.DOWNLOADED }) {
+                Row(Modifier.align(Alignment.CenterVertically), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Rounded.DownloadDone, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                    if (wide) {
+                        Spacer(Modifier.width(6.dp))
+                        Text("Downloaded", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
             }
         }
     }

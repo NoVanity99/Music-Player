@@ -229,6 +229,12 @@ private enum class Edge(val cursor: Int, val left: Boolean = false, val top: Boo
 @Composable
 fun BoxScope.ResizeEdges(frame: WindowFrame, window: Window) {
     if (frame.maximized) return
+    ResizeEdges(window)
+}
+
+/** The same borders for a window that is never maximized (the mini player). */
+@Composable
+fun BoxScope.ResizeEdges(window: Window) {
     val t = 5.dp
     val c = 12.dp
     @Composable

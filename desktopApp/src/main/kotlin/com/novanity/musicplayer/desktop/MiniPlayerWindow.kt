@@ -1,5 +1,9 @@
 package com.novanity.musicplayer.desktop
 
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.background
 import androidx.compose.foundation.window.WindowDraggableArea
 import androidx.compose.foundation.layout.Box
@@ -70,7 +74,7 @@ fun MiniPlayerWindow(app: DesktopApp, icon: Painter?, onExpand: () -> Unit) {
         icon = icon,
         undecorated = true,
         alwaysOnTop = true,
-        resizable = false,
+        resizable = true,
         onKeyEvent = { e ->
             if (e.type != KeyEventType.KeyDown) return@Window false
             when (e.key) {
@@ -81,12 +85,18 @@ fun MiniPlayerWindow(app: DesktopApp, icon: Painter?, onExpand: () -> Unit) {
             true
         },
     ) {
+        // Small enough to be just the cover; never so small it can't be grabbed.
+        remember { window.minimumSize = java.awt.Dimension(96, 96); true }
         val platform = remember { DesktopPlatformUi(window) }
         CompositionLocalProvider(LocalPlatform provides platform) {
             val accent by app.graph.settings.accent.collectAsStateWithLifecycle()
             MusicPlayerTheme(darkTheme = true, dynamicColor = false, accent = accent) {
-                WindowDraggableArea {
-                    MiniPlayerContent(app, onExpand)
+                Box(Modifier.fillMaxSize()) {
+                    WindowDraggableArea {
+                        MiniPlayerContent(app, onExpand)
+                    }
+                    // Drag any edge or corner to resize.
+                    ResizeEdges(window)
                 }
             }
         }
@@ -104,46 +114,92 @@ private fun MiniPlayerContent(app: DesktopApp, onExpand: () -> Unit) {
     val tint by rememberArtColor(song, Color(0xFF3A1C2E))
     val liked = song != null && song.id in likedIds
 
-    Box(
+    androidx.compose.foundation.layout.BoxWithConstraints(
         Modifier
             .fillMaxSize()
             .background(Brush.horizontalGradient(listOf(tint, Color(0xFF121212)))),
     ) {
-        Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
-            AlbumArt(song, Modifier.size(MiniSize.height).padding(10.dp).clip(RoundedCornerShape(8.dp)), shape = RoundedCornerShape(8.dp))
-            Column(Modifier.weight(1f).fillMaxHeight().padding(vertical = 12.dp), verticalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceBetween) {
-                Row(verticalAlignment = Alignment.Top) {
-                    Column(Modifier.weight(1f)) {
-                        Text(ui.current?.title ?: "Nothing playing", color = Color.White, style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text(ui.current?.artist.orEmpty(), color = Color.White.copy(alpha = 0.7f), style = MaterialTheme.typography.bodySmall,
-                            maxLines = 1, overflow = TextOverflow.Ellipsis)
+        // Shrunk right down, the mini player is just the cover: click it to play or pause,
+        // double-click to go back to the full player.
+        if (maxWidth < 250.dp || maxHeight < 84.dp) {
+            Box(
+                Modifier.fillMaxSize().pointerInput(Unit) {
+                    detectTapGestures(onTap = { player.togglePlayPause() }, onDoubleTap = { onExpand() })
+                },
+                contentAlignment = Alignment.Center,
+            ) {
+                AlbumArt(song, Modifier.fillMaxSize(), shape = RoundedCornerShape(0.dp), large = true)
+                if (!ui.isPlaying) {
+                    Box(Modifier.size(40.dp).clip(RoundedCornerShape(50)).background(Color.Black.copy(alpha = 0.55f)), contentAlignment = Alignment.Center) {
+                        Icon(Icons.Rounded.PlayArrow, contentDescription = "Play", tint = Color.White)
                     }
-                    IconButton(onClick = onExpand, modifier = Modifier.size(28.dp)) {
-                        Icon(Icons.Rounded.OpenInFull, contentDescription = "Back to the full player", tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(16.dp))
-                    }
-                    Spacer(Modifier.width(6.dp))
                 }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = { song?.let { app.library.currentLikeToggle(player) } }, enabled = song != null, modifier = Modifier.size(32.dp)) {
-                        Icon(if (liked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder, contentDescription = if (liked) "Unlike" else "Like",
-                            tint = if (liked) MaterialTheme.colorScheme.primary else Color.White, modifier = Modifier.size(18.dp))
+            }
+            return@BoxWithConstraints
+        }
+        // Taller than it is wide: the cover on top, everything else underneath.
+        val tall = maxHeight >= 300.dp && maxHeight > maxWidth * 0.9f
+        val bigCover = maxHeight > 200.dp
+        val info: @Composable (Modifier) -> Unit = { m ->
+            Column(m) {
+                Text(ui.current?.title ?: "Nothing playing", color = Color.White, style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold, maxLines = 1, modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE))
+                Text(ui.current?.artist.orEmpty(), color = Color.White.copy(alpha = 0.75f), style = MaterialTheme.typography.bodySmall,
+                    maxLines = 1, modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE))
+                if (song != null && song.album.isNotBlank()) {
+                    Text(song.album, color = Color.White.copy(alpha = 0.5f), style = MaterialTheme.typography.bodySmall,
+                        maxLines = 1, modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE))
+                }
+            }
+        }
+        val expand: @Composable () -> Unit = {
+            IconButton(onClick = onExpand, modifier = Modifier.size(28.dp)) {
+                Icon(Icons.Rounded.OpenInFull, contentDescription = "Back to the full player", tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(16.dp))
+            }
+        }
+        val controls: @Composable () -> Unit = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = { song?.let { app.library.currentLikeToggle(player) } }, enabled = song != null, modifier = Modifier.size(32.dp)) {
+                    Icon(if (liked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder, contentDescription = if (liked) "Unlike" else "Like",
+                        tint = if (liked) MaterialTheme.colorScheme.primary else Color.White, modifier = Modifier.size(18.dp))
+                }
+                Spacer(Modifier.weight(1f))
+                IconButton(onClick = player::previous, modifier = Modifier.size(36.dp)) {
+                    Icon(Icons.Rounded.SkipPrevious, contentDescription = "Previous", tint = Color.White)
+                }
+                IconButton(
+                    onClick = player::togglePlayPause,
+                    modifier = Modifier.size(38.dp).clip(RoundedCornerShape(50)).background(Color.White),
+                ) {
+                    Icon(if (ui.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                        contentDescription = if (ui.isPlaying) "Pause" else "Play", tint = Color.Black)
+                }
+                IconButton(onClick = player::nextTrack, enabled = ui.hasNext, modifier = Modifier.size(36.dp)) {
+                    Icon(Icons.Rounded.SkipNext, contentDescription = "Next", tint = Color.White)
+                }
+                Spacer(Modifier.width(if (tall) 0.dp else 14.dp))
+                if (tall) Spacer(Modifier.weight(1f))
+                if (tall) expand()
+            }
+        }
+        if (tall) {
+            Column(Modifier.fillMaxSize().padding(12.dp)) {
+                AlbumArt(song, Modifier.weight(1f).fillMaxWidth().clip(RoundedCornerShape(10.dp)), shape = RoundedCornerShape(10.dp), large = true)
+                Spacer(Modifier.height(10.dp))
+                info(Modifier.fillMaxWidth())
+                Spacer(Modifier.height(6.dp))
+                controls()
+            }
+        } else {
+            Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
+                AlbumArt(song, Modifier.fillMaxHeight().aspectRatio(1f).padding(10.dp).clip(RoundedCornerShape(8.dp)), shape = RoundedCornerShape(8.dp), large = bigCover)
+                Column(Modifier.weight(1f).fillMaxHeight().padding(vertical = 10.dp), verticalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceBetween) {
+                    Row(verticalAlignment = Alignment.Top) {
+                        info(Modifier.weight(1f))
+                        expand()
+                        Spacer(Modifier.width(6.dp))
                     }
-                    Spacer(Modifier.weight(1f))
-                    IconButton(onClick = player::previous, modifier = Modifier.size(36.dp)) {
-                        Icon(Icons.Rounded.SkipPrevious, contentDescription = "Previous", tint = Color.White)
-                    }
-                    IconButton(
-                        onClick = player::togglePlayPause,
-                        modifier = Modifier.size(38.dp).clip(RoundedCornerShape(50)).background(Color.White),
-                    ) {
-                        Icon(if (ui.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                            contentDescription = if (ui.isPlaying) "Pause" else "Play", tint = Color.Black)
-                    }
-                    IconButton(onClick = player::nextTrack, enabled = ui.hasNext, modifier = Modifier.size(36.dp)) {
-                        Icon(Icons.Rounded.SkipNext, contentDescription = "Next", tint = Color.White)
-                    }
-                    Spacer(Modifier.width(14.dp))
+                    controls()
                 }
             }
         }

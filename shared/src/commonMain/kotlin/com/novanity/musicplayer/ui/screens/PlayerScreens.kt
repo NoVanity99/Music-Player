@@ -169,8 +169,8 @@ fun MiniPlayer(
                 AlbumArt(song, Modifier.size(44.dp).graphicsLayer { translationX = swipe.offset }, shape = RoundedCornerShape(6.dp))
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f).graphicsLayer { translationX = swipe.offset }) {
-                    Text(current.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleSmall, color = Color.White)
-                    Text(if (song != null && song.album.isNotBlank()) "${current.artist} \u2022 ${song.album}" else current.artist, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall, color = Muted)
+                    Text(current.title, maxLines = 1, style = MaterialTheme.typography.titleSmall, color = Color.White, modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE))
+                    Text(if (song != null && song.album.isNotBlank()) "${current.artist} \u2022 ${song.album}" else current.artist, maxLines = 1, style = MaterialTheme.typography.bodySmall, color = Muted, modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE))
                 }
                 if (song != null) {
                     IconButton(onClick = { actions.toggleLike(song, liked) }) {
@@ -242,8 +242,7 @@ fun NowPlayingScreen(
                 .fillMaxSize()
                 .graphicsLayer { translationY = dismiss.offset }
                 .clip(RoundedCornerShape((dismiss.progress * 160f).coerceAtMost(28f).dp))
-                .background(Color.Black)
-                .dismissDrag(dismiss, onCollapse),
+                .background(Color.Black),
         ) {
             // Backdrop: blurred artwork (Android 12+) under a wash of the art's color.
             if (LocalPlatform.current.supportsBlur) {
@@ -280,7 +279,7 @@ fun NowPlayingScreen(
                 val artSwipe = rememberTrackSwipeState(current.key)
                 Box(
                     artModifier
-                        .padding(vertical = 20.dp)
+                        .padding(vertical = if (wide) 28.dp else 14.dp)
                         .trackSwipe(artSwipe, state.hasNext, state.hasPrevious, player::nextTrack, player::previousTrack),
                     contentAlignment = Alignment.Center,
                 ) {
@@ -312,6 +311,17 @@ fun NowPlayingScreen(
                             modifier = Modifier.basicMarquee(),
                         )
                         ArtistLinks(current.artist, actions.library, MaterialTheme.typography.titleMedium, color = Muted, onOpen = onCollapse)
+                        if (song != null && song.album.isNotBlank()) {
+                            Text(
+                                song.album,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = Muted.copy(alpha = 0.8f),
+                                maxLines = 1,
+                                modifier = Modifier
+                                    .clickable { onCollapse(); actions.library.open(Destination.AlbumDetail(song.albumId)) }
+                                    .basicMarquee(),
+                            )
+                        }
                     }
                     if (song != null) {
                         IconButton(onClick = { actions.toggleLike(song, liked) }) {
@@ -331,11 +341,10 @@ fun NowPlayingScreen(
                 Spacer(Modifier.height(12.dp))
                 if (isDesktop) {
                     VolumeRow(player)
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(4.dp))
                 }
-                }
-                val bottomButtons: @Composable () -> Unit = {
-                    Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), horizontalArrangement = Arrangement.Center) {
+                    // Up next and Lyrics sit right under the volume bar, centred.
+                    Row(Modifier.fillMaxWidth().padding(bottom = 4.dp), horizontalArrangement = Arrangement.Center) {
                         TextButton(onClick = { showQueue = true }) {
                             Icon(Icons.AutoMirrored.Rounded.QueueMusic, contentDescription = null, tint = Color.White)
                             Spacer(Modifier.width(8.dp))
@@ -350,9 +359,11 @@ fun NowPlayingScreen(
                     }
                 }
                 Column(Modifier.fillMaxSize().padding(horizontal = if (wide) 48.dp else 24.dp)) {
-                // Grabber + header
-                Box(Modifier.fillMaxWidth().padding(top = 6.dp), contentAlignment = Alignment.Center) {
-                    Box(Modifier.size(width = 36.dp, height = 5.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.35f)))
+                // The bar at the top (handle and "Playing from") is the only place that drags the
+                // player down; the handle sits a little lower so it's easy to see and grab.
+                Column(Modifier.fillMaxWidth().dismissDrag(dismiss, onCollapse)) {
+                Box(Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 6.dp), contentAlignment = Alignment.Center) {
+                    Box(Modifier.size(width = 44.dp, height = 5.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.45f)))
                 }
                 Row(Modifier.fillMaxWidth().clearOfWindowControls(), verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = onCollapse) {
@@ -396,6 +407,7 @@ fun NowPlayingScreen(
                         Spacer(Modifier.size(48.dp))
                     }
                 }
+                }
 
                     if (wide) {
                         Row(Modifier.weight(1f).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -409,12 +421,11 @@ fun NowPlayingScreen(
                                     LyricsView(song, player, Modifier.weight(1f).fillMaxWidth(), Color.White, Muted)
                                 } else if (spectrum != null && visualizerOn) {
                                     Visualizer(spectrum, state.isPlaying, MaterialTheme.colorScheme.primary, Color.White,
-                                        Modifier.fillMaxWidth().height(150.dp).padding(bottom = 28.dp))
+                                        Modifier.fillMaxWidth().height(170.dp).padding(bottom = 24.dp))
                                 }
                                 details()
                             }
                         }
-                        bottomButtons()
                     } else {
                         if (showLyrics) {
                             LyricsView(song, player, Modifier.weight(1f).fillMaxWidth().padding(vertical = 12.dp), Color.White, Muted)
@@ -424,9 +435,8 @@ fun NowPlayingScreen(
                         details()
                         if (!showLyrics && spectrum != null && visualizerOn) {
                             Visualizer(spectrum, state.isPlaying, MaterialTheme.colorScheme.primary, Color.White,
-                                Modifier.fillMaxWidth().height(56.dp).padding(bottom = 8.dp))
+                                Modifier.fillMaxWidth().height(64.dp).padding(bottom = 8.dp))
                         }
-                        bottomButtons()
                     }
                 }
             }

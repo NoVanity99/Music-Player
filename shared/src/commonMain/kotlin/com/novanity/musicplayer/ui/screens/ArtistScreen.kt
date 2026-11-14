@@ -1,5 +1,6 @@
 package com.novanity.musicplayer.ui.screens
 
+import androidx.compose.material.icons.rounded.Download
 import com.novanity.musicplayer.ui.components.SongCard
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
@@ -261,6 +262,15 @@ private fun PlayAndAbout(songs: List<Song>, yourTop: List<Song>, rank: Int?, bio
                 Text("Your top 10 songs", style = MaterialTheme.typography.titleSmall, maxLines = 1)
             }
         }
+        val download: @Composable () -> Unit = {
+            if (songs.any { it.source == com.novanity.musicplayer.data.SongSource.CLOUD }) {
+                OutlinedButton(onClick = { actions.downloadAll(songs) }, shape = RoundedCornerShape(12.dp), contentPadding = PaddingValues(vertical = 14.dp, horizontal = 16.dp)) {
+                    Icon(androidx.compose.material.icons.Icons.Rounded.Download, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Download", style = MaterialTheme.typography.titleSmall, maxLines = 1)
+                }
+            }
+        }
         // "#3": this artist's place among your ten most played artists.
         val rankBadge: @Composable () -> Unit = {
             if (rank != null) RankRibbon(rank)
@@ -273,6 +283,7 @@ private fun PlayAndAbout(songs: List<Song>, yourTop: List<Song>, rank: Int?, bio
             ) {
                 buttons(Modifier.width(150.dp))
                 top(Modifier)
+                download()
                 rankBadge()
                 if (bio != null) {
                     Spacer(Modifier.width(12.dp))
@@ -287,6 +298,8 @@ private fun PlayAndAbout(songs: List<Song>, yourTop: List<Song>, rank: Int?, bio
                     top(Modifier.weight(1f))
                     rankBadge()
                 }
+                Spacer(Modifier.height(10.dp))
+                download()
                 if (bio != null) {
                     Spacer(Modifier.height(14.dp))
                     About(bio, Modifier.fillMaxWidth(), collapsedLines = 4)

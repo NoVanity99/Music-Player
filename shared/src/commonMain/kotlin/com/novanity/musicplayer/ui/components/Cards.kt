@@ -1,5 +1,6 @@
 package com.novanity.musicplayer.ui.components
 
+import androidx.compose.foundation.basicMarquee
 import com.novanity.musicplayer.data.Mix
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.LocalIndication
@@ -138,13 +139,13 @@ fun PlayCircleButton(
 @Composable
 private fun CardText(title: String, subtitle: String?, center: Boolean = false) {
     Spacer(Modifier.height(8.dp))
+    // A title too long for its card scrolls past a few times instead of being cut off.
     Text(
         title,
         style = MaterialTheme.typography.titleSmall,
         maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
         textAlign = if (center) TextAlign.Center else TextAlign.Start,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().basicMarquee(iterations = 3),
     )
     if (subtitle != null) {
         Text(
@@ -176,7 +177,8 @@ private fun HoverCard(
     title: String,
     subtitle: String?,
 ) {
-    @Suppress("NAME_SHADOWING") val center = center || LocalCenterCards.current
+    // Text sits centred under the artwork everywhere.
+    @Suppress("NAME_SHADOWING", "UNUSED_VARIABLE") val center = true
     val interaction = remember { MutableInteractionSource() }
     val hovered by interaction.collectIsHoveredAsState()
     val lift by animateFloatAsState(if (hovered) 1f else 0f, label = "lift")
