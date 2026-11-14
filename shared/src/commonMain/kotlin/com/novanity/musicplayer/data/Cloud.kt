@@ -64,7 +64,12 @@ data class CloudOwnerConfig(val advancedTransitions: List<CloudAlbumRef> = empty
 data class CloudLibraryVersion(val version: String = "")
 
 @Serializable
-data class CloudLibraryFile(val version: Int = 1, val songs: List<CloudSong> = emptyList())
+data class CloudLibraryFile(
+    val version: Int = 1,
+    val songs: List<CloudSong> = emptyList(),
+    /** Songs the owner took out of the library on purpose: they disappear even where they were downloaded. */
+    val removed: List<String> = emptyList(),
+)
 
 @Immutable
 data class CloudConfig(val serverUrl: String, val key: String) {
@@ -181,6 +186,23 @@ class CloudRepository(
         }
     }
 
+    /** Ids the owner removed from the library (kept from the last time the server was reached). */
+    private val removedIds = MutableStateFlow(
+        cache.getString(KEY_REMOVED)?.split(',')?.filter { it.isNotBlank() }?.toSet().orEmpty()
+    )
+
+    /** Set by the downloads side: deletes a downloaded file that's no longer wanted. */
+    var deleteDownload: ((cloudId: String) -> Unit)? = null
+
+    private fun setRemoved(ids: Set<String>) {
+        if (ids != removedIds.value) {
+            removedIds.value = ids
+            cache.putString(KEY_REMOVED, ids.joinToString(",").ifEmpty { null })
+        }
+        // Take their files off the device too.
+        ids.forEach { id -> runCatching { deleteDownload?.invoke(id) } }
+    }
+
     private val _everConnected = MutableStateFlow(builtIn != null || (_config.value.isSet && cache.getBoolean(KEY_CONNECTED, false)))
 
     /** True once these settings have worked at least once (so a first-time typo isn't treated as set up). */
@@ -195,8 +217,9 @@ class CloudRepository(
     val status: StateFlow<CloudStatus> = _status.asStateFlow()
 
     /** Cloud songs for the library: everything when online, only downloads otherwise. */
-    val songs: StateFlow<List<Song>> = combine(library, _status, downloads, _config) { all, status, rows, config ->
-        val done = rows.filter { it.status == DownloadEntity.STATUS_DONE && files.exists(it.filePath) }.associateBy { it.cloudId }
+    val songs: StateFlow<List<Song>> = combine(library, _status, downloads, _config, removedIds) { all, status, rows, config, removed ->
+        // A downloaded copy of a song the owner removed is not shown (and is deleted).
+        val done = rows.filter { it.status == DownloadEntity.STATUS_DONE && it.cloudId !in removed && files.exists(it.filePath) }.associateBy { it.cloudId }
         val reachable = config.isSet && (status is CloudStatus.Online || status is CloudStatus.Loading)
         val listed = if (reachable) all else emptyList()
         val listedIds = listed.mapTo(HashSet()) { it.id }
@@ -318,6 +341,7 @@ class CloudRepository(
                             // Not on first load: only what turned up since.
                             if (before.isNotEmpty()) parsed.songs.filter { it.id !in before }.takeIf { it.isNotEmpty() }?.let { _arrivals.tryEmit(it) }
                         }
+                        setRemoved(parsed.removed.toSet())
                         prefetchCovers(parsed.songs)
                         loadOwnerConfig(config)
                         CloudStatus.Online(parsed.songs.size)
@@ -426,6 +450,7 @@ class CloudRepository(
         private const val KEY_URL = "server_url"
         private const val KEY_KEY = "access_key"
         private const val KEY_LIBRARY = "library"
+        private const val KEY_REMOVED = "removed"
         private const val KEY_OWNER_CONFIG = "owner_config"
         private const val KEY_CONNECTED = "connected"
         private const val POLL_MS = 60_000L

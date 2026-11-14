@@ -44,7 +44,7 @@ class AppGraph(
         scope = appScope,
         downloads = downloads.rows,
         builtIn = builtInCloud?.takeIf { it.isSet },
-    ).also { downloads.cloud = it }
+    ).also { downloads.cloud = it; it.deleteDownload = { id -> downloads.delete(id) } }
 
     val musicRepository = MusicRepository(librarySource, appScope, settings.includedFolders, settings.excludedFolders, cloud.songs)
     val playlistRepository by lazy { PlaylistRepository(database.playlistDao()) }
