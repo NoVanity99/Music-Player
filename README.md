@@ -44,6 +44,14 @@ to set up. That key is therefore public (it's in this repository and in every co
 apps never hold R2 credentials. To change it: `npx wrangler secret put APP_KEY`, update
 `gradle.properties`, and publish a release.
 
+## Accounts
+
+The app is used signed in. Each account has its own liked songs, playlists and play history (which
+the stats and mixes are built from), stored in Neon Postgres and mirrored on the device; the song
+library is shared. The app talks only to the Worker (`/auth/*`, `/me/*`), which alone holds the
+database connection string (`npx wrangler secret put DATABASE_URL`). Passwords are stored as
+salted PBKDF2 hashes and sessions as hashed tokens.
+
 ## Project layout
 
 ```

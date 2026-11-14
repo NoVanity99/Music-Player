@@ -174,6 +174,19 @@ class CloudRepository(
 
     fun cloudSong(cloudId: String): CloudSong? = library.value.firstOrNull { it.id == cloudId }
 
+    private var idMapFor: List<Song>? = null
+    private var idMap: Map<Long, String> = emptyMap()
+
+    /** The server's id for a song in the library, or null if it isn't a (currently listed) cloud song. */
+    fun cloudIdOf(songId: Long): String? {
+        val current = songs.value
+        if (idMapFor !== current) {
+            idMap = current.mapNotNull { s -> s.cloudId?.let { s.id to it } }.toMap()
+            idMapFor = current
+        }
+        return idMap[songId]
+    }
+
     val authHeaders: Map<String, String> get() = mapOf(KEY_HEADER to _config.value.key)
 
     /** True for URLs on the user's server: the access key is only ever sent there. */

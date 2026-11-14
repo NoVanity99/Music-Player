@@ -55,6 +55,12 @@ class MusicApp : Application() {
                     com.novanity.musicplayer.data.HttpText(status, body)
                 }
             },
+            httpSend = { method, url, headers, body ->
+                kotlinx.coroutines.withContext(Dispatchers.IO) {
+                    val (status, text) = com.novanity.musicplayer.updatecore.UpdateCore.sendJson(method, url, headers, body, BIO_USER_AGENT)
+                    com.novanity.musicplayer.data.HttpText(status, text)
+                }
+            },
             cloudFiles = AndroidCloudFiles(appContext.filesDir),
             builtInCloud = com.novanity.musicplayer.data.CloudConfig(BuildConfig.CLOUD_SERVER_URL, BuildConfig.CLOUD_APP_KEY),
         )

@@ -36,9 +36,14 @@ class HistoryRepository(private val dao: HistoryDao) {
     /** Every remembered play, newest first (the last 5,000). */
     val events: Flow<List<com.novanity.musicplayer.data.db.PlayEvent>> = dao.observeEvents()
 
+    /** Told about every play, so the signed-in account can remember it. */
+    var onPlay: ((songId: Long, at: Long) -> Unit)? = null
+
     suspend fun record(songId: Long) {
-        dao.insert(PlayHistoryEntity(songId = songId, playedAt = nowMillis()))
+        val at = nowMillis()
+        dao.insert(PlayHistoryEntity(songId = songId, playedAt = at))
         dao.prune(keep = 5_000)
+        onPlay?.invoke(songId, at)
     }
 }
 
@@ -46,7 +51,12 @@ class FavoritesRepository(private val dao: FavoritesDao) {
     /** Liked song ids, most recently liked first. */
     val songIds: Flow<List<Long>> = dao.observeSongIds()
 
+    /** Told about every like and unlike, so the signed-in account can remember it. */
+    var onLike: ((songId: Long, liked: Boolean, at: Long) -> Unit)? = null
+
     suspend fun setLiked(songId: Long, liked: Boolean) {
-        if (liked) dao.insert(FavoriteEntity(songId)) else dao.delete(songId)
+        val at = nowMillis()
+        if (liked) dao.insert(FavoriteEntity(songId, at)) else dao.delete(songId)
+        onLike?.invoke(songId, liked, at)
     }
 }

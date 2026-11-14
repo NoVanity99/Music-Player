@@ -93,6 +93,12 @@ fun SettingsScreen(actions: SongActions, contentPadding: PaddingValues) {
             }
         }
 
+        // ---- Account ----
+        if (vm.accountsAvailable) {
+            item { GroupLabel("Account") }
+            item { SettingsCard { AccountSettingsRow(vm, actions::toast) } }
+        }
+
         // ---- Cloud library ----
         if (vm.cloudAvailable) {
             item { GroupLabel("Cloud library") }

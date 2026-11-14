@@ -1,5 +1,7 @@
 package com.novanity.musicplayer.ui
 
+import com.novanity.musicplayer.data.AccountState
+import com.novanity.musicplayer.data.AccountRepository
 import com.novanity.musicplayer.data.SongSource
 import com.novanity.musicplayer.data.DownloadState
 import com.novanity.musicplayer.data.CloudConfig
@@ -135,7 +137,24 @@ class LibraryViewModel(
     private val bios: ArtistBios? = null,
     private val cloud: CloudRepository? = null,
     private val downloads: DownloadsRepository? = null,
+    private val account: AccountRepository? = null,
 ) : ViewModel() {
+
+    // ---- Account ----
+
+    /** Accounts are part of this build: the app is used signed in. */
+    val accountsAvailable: Boolean get() = account != null
+    val accountState: StateFlow<AccountState> = account?.state ?: MutableStateFlow(AccountState.SignedOut)
+
+    /** Signs in or creates an account; [onResult] gets null on success or a message to show. */
+    fun authenticate(create: Boolean, username: String, password: String, onResult: (String?) -> Unit) {
+        viewModelScope.launch {
+            onResult(if (create) account?.signUp(username, password) else account?.signIn(username, password))
+        }
+    }
+    fun signOut() { viewModelScope.launch { account?.signOut() } }
+    fun deleteAccount(onResult: (String?) -> Unit) { viewModelScope.launch { onResult(account?.deleteAccount()) } }
+
 
     // ---- Cloud library and offline downloads ----
 
@@ -148,7 +167,7 @@ class LibraryViewModel(
     val cloudEverConnected: StateFlow<Boolean> = cloud?.everConnected ?: MutableStateFlow(false)
     fun connectCloud(serverUrl: String, key: String) { cloud?.connect(serverUrl, key) }
     fun disconnectCloud() { cloud?.disconnect() }
-    fun refreshCloud() { viewModelScope.launch { cloud?.refresh() } }
+    fun refreshCloud() { viewModelScope.launch { cloud?.refresh(); account?.sync() } }
 
     /** Download state per cloud song id. */
     val downloadStates: StateFlow<Map<String, DownloadState>> = downloads?.states ?: MutableStateFlow(emptyMap())

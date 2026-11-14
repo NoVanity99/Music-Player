@@ -91,10 +91,16 @@ class DesktopApp {
                 com.novanity.musicplayer.data.HttpText(status, body)
             }
         },
+        httpSend = { method, url, headers, body ->
+            kotlinx.coroutines.withContext(Dispatchers.IO) {
+                val (status, text) = com.novanity.musicplayer.updatecore.UpdateCore.sendJson(method, url, headers, body, BIO_USER_AGENT)
+                com.novanity.musicplayer.data.HttpText(status, text)
+            }
+        },
         cloudFiles = DesktopCloudFiles(DesktopPaths.dataDir),
         builtInCloud = com.novanity.musicplayer.data.CloudConfig(System.getProperty("cloud.serverUrl").orEmpty(), System.getProperty("cloud.appKey").orEmpty()),
     )
-    val library = LibraryViewModel(graph.musicRepository, graph.playlistRepository, graph.historyRepository, graph.favoritesRepository, graph.settings, graph.artistBios, graph.cloud, graph.downloads)
+    val library = LibraryViewModel(graph.musicRepository, graph.playlistRepository, graph.historyRepository, graph.favoritesRepository, graph.settings, graph.artistBios, graph.cloud, graph.downloads, graph.account)
     val player = PlayerViewModel(FfmpegPlayerController(graph, scope) { message -> library.notify(message) }, graph.settings)
     val rootUi = RootUiState()
     private val artwork = DesktopArtworkProvider { coverId -> graph.cloud.coverFile(coverId) }

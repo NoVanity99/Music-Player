@@ -1,5 +1,7 @@
 package com.novanity.musicplayer.ui
 
+import com.novanity.musicplayer.ui.screens.AccountScreen
+import com.novanity.musicplayer.data.AccountState
 import com.novanity.musicplayer.ui.components.LocalDownloadTap
 import com.novanity.musicplayer.ui.components.LocalDownloadStates
 import com.novanity.musicplayer.ui.components.AppBackHandler
@@ -86,6 +88,15 @@ fun MusicPlayerRoot(
     }
 
     val titleBar = com.novanity.musicplayer.platform.LocalPlatform.current.titleBarHeight
+
+    // Everyone uses the app signed in: likes, history and playlists belong to the account.
+    val accountState by library.accountState.collectAsStateWithLifecycle()
+    if (library.accountsAvailable && accountState is AccountState.SignedOut) {
+        Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(top = titleBar)) {
+            AccountScreen(library)
+        }
+        return
+    }
 
     // No folder chosen yet: nothing is auto-detected, so ask where the music lives.
     val cloudConfig by library.cloudConfig.collectAsStateWithLifecycle()

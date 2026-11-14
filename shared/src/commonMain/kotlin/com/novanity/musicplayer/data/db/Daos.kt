@@ -31,6 +31,29 @@ abstract class PlaylistDao {
     @Insert
     abstract suspend fun insertPlaylist(playlist: PlaylistEntity): Long
 
+    @Query("SELECT * FROM playlists ORDER BY createdAt, id")
+    abstract suspend fun allPlaylists(): List<PlaylistEntity>
+
+    @Query("SELECT * FROM playlist_songs ORDER BY playlistId, position")
+    abstract suspend fun allEntries(): List<PlaylistSongEntity>
+
+    @Query("DELETE FROM playlist_songs")
+    abstract suspend fun deleteAllEntries()
+
+    @Query("DELETE FROM playlists")
+    abstract suspend fun deleteAllPlaylistRows()
+
+    /** Replaces every playlist (account sync): each pair is a playlist and its song ids in order. */
+    @Transaction
+    open suspend fun replaceAll(playlists: List<Pair<PlaylistEntity, List<Long>>>) {
+        deleteAllEntries()
+        deleteAllPlaylistRows()
+        for ((playlist, songIds) in playlists) {
+            val id = insertPlaylist(playlist.copy(id = 0))
+            insertEntries(songIds.mapIndexed { i, songId -> PlaylistSongEntity(playlistId = id, songId = songId, position = i) })
+        }
+    }
+
     @Query("UPDATE playlists SET name = :name WHERE id = :id")
     abstract suspend fun rename(id: Long, name: String)
 
@@ -86,6 +109,21 @@ abstract class HistoryDao {
 
     @Query("DELETE FROM play_history WHERE id NOT IN (SELECT id FROM play_history ORDER BY playedAt DESC LIMIT :keep)")
     abstract suspend fun prune(keep: Int)
+
+    @Query("SELECT songId, playedAt FROM play_history ORDER BY playedAt DESC")
+    abstract suspend fun all(): List<PlayEvent>
+
+    @Query("DELETE FROM play_history")
+    abstract suspend fun deleteAll()
+
+    @Insert
+    abstract suspend fun insertAll(entries: List<PlayHistoryEntity>)
+
+    @Transaction
+    open suspend fun replaceAll(entries: List<PlayHistoryEntity>) {
+        deleteAll()
+        insertAll(entries)
+    }
 }
 
 @Dao
@@ -98,6 +136,21 @@ abstract class FavoritesDao {
 
     @Query("DELETE FROM favorites WHERE songId = :songId")
     abstract suspend fun delete(songId: Long)
+
+    @Query("SELECT * FROM favorites")
+    abstract suspend fun all(): List<FavoriteEntity>
+
+    @Query("DELETE FROM favorites")
+    abstract suspend fun deleteAll()
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    abstract suspend fun insertAll(entries: List<FavoriteEntity>)
+
+    @Transaction
+    open suspend fun replaceAll(entries: List<FavoriteEntity>) {
+        deleteAll()
+        insertAll(entries)
+    }
 }
 
 @Dao

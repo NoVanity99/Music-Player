@@ -25,6 +25,16 @@ npx wrangler secret put APP_KEY         # choose a long random key; the app asks
 
 Then put the Worker URL and the key into the app: Settings → Cloud library.
 
+## Accounts (Neon)
+
+`/auth/signup`, `/auth/login`, `/auth/logout`, `/me/sync`, `/me/ops`, `/me/playlists` and
+`DELETE /me` keep each account's likes, plays and playlists in Neon Postgres. Create a Neon
+project, copy its connection string, and store it as a secret; the tables are created on first use:
+
+```sh
+npx wrangler secret put DATABASE_URL
+```
+
 ## Uploading music
 
 ```sh

@@ -23,6 +23,8 @@ class AppGraph(
     librarySource: LibrarySource = LibrarySource.None,
     /** HTTP GET (artist bios, the cloud library); null leaves both off (tests). */
     httpGet: (suspend (url: String, headers: Map<String, String>) -> com.novanity.musicplayer.data.HttpText)? = null,
+    /** HTTP with a method and JSON body (accounts); null leaves accounts off (tests). */
+    httpSend: (suspend (method: String, url: String, headers: Map<String, String>, body: String?) -> com.novanity.musicplayer.data.HttpText)? = null,
     /** Private storage for downloads and covers. */
     cloudFiles: CloudFiles = CloudFiles.None,
     /** The server and key this build ships with; when set, there's nothing for the user to connect. */
@@ -49,5 +51,22 @@ class AppGraph(
     val historyRepository by lazy { HistoryRepository(database.historyDao()) }
     val favoritesRepository by lazy { FavoritesRepository(database.favoritesDao()) }
     val playbackStateStore = PlaybackStateStore(storeFactory("playback_state"))
+    /** Sign-in and each account's own likes, history and playlists (kept on the server). */
+    val account = httpSend?.let { send ->
+        com.novanity.musicplayer.data.AccountRepository(
+            secure = storeFactory("cloud_secure"),
+            queueStore = storeFactory("account_sync"),
+            send = send,
+            cloud = cloud,
+            favorites = favoritesRepository,
+            history = historyRepository,
+            playlistRepo = playlistRepository,
+            favoritesDao = { database.favoritesDao() },
+            historyDao = { database.historyDao() },
+            playlistDao = { database.playlistDao() },
+            scope = appScope,
+        )
+    }
+
     val artistBios = httpGet?.let { get -> com.novanity.musicplayer.data.ArtistBios(storeFactory("artist_bios"), { url -> get(url, emptyMap()) }) }
 }

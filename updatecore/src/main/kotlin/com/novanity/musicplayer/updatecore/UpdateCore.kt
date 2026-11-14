@@ -75,6 +75,36 @@ object UpdateCore {
         }
     }
 
+    /**
+     * Sends a JSON request ([method] POST, PUT, DELETE or GET; [body] may be null) and returns the
+     * status code and response text. Throws only when there's no answer at all.
+     */
+    fun sendJson(method: String, url: String, headers: Map<String, String>, body: String?, userAgent: String, maxBytes: Int = 8_000_000): Pair<Int, String> {
+        requireSafe(url)
+        val c = URL(url).openConnection() as HttpURLConnection
+        try {
+            c.requestMethod = method
+            c.connectTimeout = 10_000
+            c.readTimeout = 20_000
+            c.instanceFollowRedirects = false
+            c.setRequestProperty("User-Agent", userAgent)
+            c.setRequestProperty("Accept", "application/json")
+            headers.forEach { (k, v) -> c.setRequestProperty(k, v) }
+            if (body != null) {
+                c.doOutput = true
+                c.setRequestProperty("Content-Type", "application/json; charset=utf-8")
+                c.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
+            }
+            val code = c.responseCode
+            val stream = (if (code in 200..299) c.inputStream else c.errorStream) ?: return code to ""
+            val bytes = stream.use { it.readNBytesCompat(maxBytes + 1) }
+            if (bytes.size > maxBytes) throw IOException("Response too large")
+            return code to bytes.toString(Charsets.UTF_8)
+        } finally {
+            c.disconnect()
+        }
+    }
+
     /** HTTPS only, except for a server on this machine (development and tests). */
     private fun requireSafe(url: String) {
         val local = Regex("""^http://(localhost|127\.0\.0\.1|10\.0\.2\.2)(:\d+)?(/.*)?$""").matches(url)
