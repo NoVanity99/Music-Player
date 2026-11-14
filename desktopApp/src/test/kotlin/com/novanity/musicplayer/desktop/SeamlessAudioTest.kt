@@ -73,6 +73,26 @@ class SeamlessAudioTest {
         assertTrue(readAll(pause, reader, trim = true, trimStart = false).size >= OUT_RATE * 640 / 1000 * OUT_CHANNELS, "at most the padding allowance is removed")
     }
 
+    @Test
+    fun aSongDecodedAheadPlaysTheSameAudioFromTheStart() {
+        val file = wav("d.wav", leadMs = 0, toneMs = 900, tailMs = 0)
+        fun all(prime: Boolean): ShortArray = Decoder.open(file.path, 1f).use { d ->
+            if (prime) {
+                d.prime(300)
+                assertEquals(0, d.positionMs, "still at the start: nothing has been played")
+            }
+            val out = ArrayList<Short>()
+            val buf = ShortArray(4096)
+            while (true) {
+                val n = d.fill(buf)
+                if (n == 0) break
+                for (i in 0 until n) out += buf[i]
+            }
+            out.toShortArray()
+        }
+        assertTrue(all(prime = false).contentEquals(all(prime = true)), "priming changes nothing that's heard")
+    }
+
     private fun rms(hz: Double, levels: List<Int>?): Double {
         val n = OUT_RATE * OUT_CHANNELS // one second
         val buf = ShortArray(n) { i -> (6000 * sin(2 * PI * hz * (i / OUT_CHANNELS) / OUT_RATE)).toInt().toShort() }

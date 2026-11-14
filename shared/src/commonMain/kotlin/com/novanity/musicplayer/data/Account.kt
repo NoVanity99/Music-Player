@@ -68,7 +68,11 @@ private data class SyncResponse(
     val likes: List<Stamp> = emptyList(),
     val plays: List<Stamp> = emptyList(),
     val playlists: List<RemotePlaylist> = emptyList(),
+    val artists: List<String> = emptyList(),
 )
+
+@Serializable
+private data class ArtistsBody(val artists: List<String>)
 
 /**
  * The signed-in account. Liked songs, play history (which the stats and mixes are built from) and
@@ -215,6 +219,8 @@ class AccountRepository(
         pendingLock.withLock { setPending(emptyList()) }
         syncedPlaylists = null
         queueStore.putBoolean(KEY_PLAYLISTS_DIRTY, false)
+        queueStore.putBoolean(KEY_ARTISTS_DIRTY, false)
+        storeFavoriteArtists(emptySet())
         favoritesDao().deleteAll()
         historyDao().deleteAll()
         playlistDao().replaceAll(emptyList())
@@ -267,6 +273,46 @@ class AccountRepository(
         return response
     }
 
+    // ---- Favourite artists ----
+
+    private val _favoriteArtists = MutableStateFlow(
+        queueStore.getString(KEY_FAV_ARTISTS)?.let { runCatching { json.decodeFromString(ArtistsBody.serializer(), it).artists.toSet() }.getOrNull() }.orEmpty()
+    )
+
+    /** The artists this account has hearted (shown as "Your artists" on Home). */
+    val favoriteArtists: StateFlow<Set<String>> = _favoriteArtists.asStateFlow()
+
+    private fun storeFavoriteArtists(names: Set<String>) {
+        _favoriteArtists.value = names
+        queueStore.putString(KEY_FAV_ARTISTS, if (names.isEmpty()) null else json.encodeToString(ArtistsBody.serializer(), ArtistsBody(names.toList())))
+    }
+
+    fun setFavoriteArtist(name: String, favorite: Boolean) {
+        val current = _favoriteArtists.value
+        val next = if (favorite) current + name else current - name
+        if (next == current) return
+        storeFavoriteArtists(next)
+        queueStore.putBoolean(KEY_ARTISTS_DIRTY, true)
+        scope.launch(Dispatchers.IO) { runCatching { syncLock.withLock { pushArtists() } } }
+    }
+
+    /** Uploads the favourite artists. Returns false if it couldn't (it stays marked for later). */
+    private suspend fun pushArtists(): Boolean {
+        if (_state.value !is AccountState.SignedIn) return false
+        val body = json.encodeToString(ArtistsBody.serializer(), ArtistsBody(_favoriteArtists.value.toList()))
+        val response = try {
+            authed("PUT", "/me/artists", body)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            null
+        }
+        if (response == null || response.status !in 200..299) return false
+        // Unless another change came in while this one was on its way.
+        if (body == json.encodeToString(ArtistsBody.serializer(), ArtistsBody(_favoriteArtists.value.toList()))) queueStore.putBoolean(KEY_ARTISTS_DIRTY, false)
+        return true
+    }
+
     // ---- Syncing ----
 
     /**
@@ -280,6 +326,7 @@ class AccountRepository(
                 syncLock.withLock {
                     if (!flush()) return@withLock
                     if (queueStore.getBoolean(KEY_PLAYLISTS_DIRTY, false) && !pushPlaylists(force = true)) return@withLock
+                    if (queueStore.getBoolean(KEY_ARTISTS_DIRTY, false) && !pushArtists()) return@withLock
                     val response = authed("GET", "/me/sync", null) ?: return@withLock
                     if (response.status != 200) return@withLock
                     val remote = runCatching { json.decodeFromString(SyncResponse.serializer(), response.body) }.getOrNull() ?: return@withLock
@@ -293,6 +340,7 @@ class AccountRepository(
                         }
                     )
                     syncedPlaylists = json.encodeToString(PlaylistsBody.serializer(), PlaylistsBody(remote.playlists))
+                    if (!queueStore.getBoolean(KEY_ARTISTS_DIRTY, false)) storeFavoriteArtists(remote.artists.toSet())
                 }
             }
         } catch (e: CancellationException) {
@@ -344,6 +392,8 @@ class AccountRepository(
     }
 
     private companion object {
+        const val KEY_FAV_ARTISTS = "favorite_artists"
+        const val KEY_ARTISTS_DIRTY = "favorite_artists_dirty"
         const val KEY_TOKEN = "session_token"
         const val KEY_USER_ID = "user_id"
         const val KEY_USERNAME = "username"

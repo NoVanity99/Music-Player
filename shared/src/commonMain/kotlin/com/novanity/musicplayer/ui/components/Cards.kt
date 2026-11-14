@@ -162,6 +162,9 @@ private fun CardText(title: String, subtitle: String?, center: Boolean = false) 
 /**
  * Square-art card. On hover (mouse) it lifts slightly and shows a round play button, Spotify-style.
  */
+/** True where card titles sit centred under their artwork (Home). */
+val LocalCenterCards = androidx.compose.runtime.compositionLocalOf { false }
+
 @Composable
 private fun HoverCard(
     onClick: () -> Unit,
@@ -173,6 +176,7 @@ private fun HoverCard(
     title: String,
     subtitle: String?,
 ) {
+    @Suppress("NAME_SHADOWING") val center = center || LocalCenterCards.current
     val interaction = remember { MutableInteractionSource() }
     val hovered by interaction.collectIsHoveredAsState()
     val lift by animateFloatAsState(if (hovered) 1f else 0f, label = "lift")

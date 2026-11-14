@@ -261,6 +261,9 @@ async function main() {
         }
         // Keep the original "added" date for songs that are already in the cloud.
         const song = { ...entry, path: rel, albumType: TYPE ?? albumTypeFor(rel), addedAt: existing.get(entry.id)?.addedAt ?? now, file };
+        // Names corrected in the cloud by hand (marked "edited") win over the file's tags.
+        const kept = existing.get(entry.id);
+        if (kept?.edited) Object.assign(song, { title: kept.title, artist: kept.artist, albumArtist: kept.albumArtist, album: kept.album, edited: true });
         if (ARTIST && song.artist === "Unknown artist") song.artist = ARTIST;
         songs.push(song);
       } catch (e) {

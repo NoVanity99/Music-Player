@@ -319,7 +319,10 @@ class FfmpegPlayerController(
 
     private companion object {
         /** How long before the end of a song the next one is opened for a seamless join. */
-        const val PRELOAD_MS = 20_000L
+        const val PRELOAD_MS = 30_000L
+
+        /** How much of the next song is decoded ahead of the join. */
+        const val PRIME_MS = 6_000
     }
 
     private fun clip(v: Double): Short = v.coerceIn(Short.MIN_VALUE.toDouble(), Short.MAX_VALUE.toDouble()).toInt().toShort()
@@ -380,7 +383,8 @@ class FfmpegPlayerController(
         dropPreload()
         preloadKey = entry.key
         Thread({
-            val d = runCatching { openSong(entry.song) }.getOrNull()
+            // Open it and decode its first seconds into memory: the join then needs no network at all.
+            val d = runCatching { openSong(entry.song).also { it.prime(PRIME_MS) } }.getOrNull()
             post { if (d != null && preloadKey == entry.key && preloaded == null) preloaded = d else d?.close() }
         }, "audio-preload").apply { isDaemon = true }.start()
     }

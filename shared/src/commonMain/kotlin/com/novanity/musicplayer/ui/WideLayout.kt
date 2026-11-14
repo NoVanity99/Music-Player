@@ -351,7 +351,19 @@ private fun NowPlayingBar(
                 Column(Modifier.weight(1f, fill = false)) {
                     Text(current.title, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.clickable { song?.let { actions.library.open(Destination.AlbumDetail(it.albumId)) } })
-                    ArtistLinks(current.artist, actions.library, MaterialTheme.typography.bodySmall, color = muted)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        ArtistLinks(current.artist, actions.library, MaterialTheme.typography.bodySmall, color = muted)
+                        if (song != null && song.album.isNotBlank()) {
+                            Text(
+                                " \u2022 ${song.album}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = muted,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f, fill = false).clickable { actions.library.open(Destination.AlbumDetail(song.albumId)) },
+                            )
+                        }
+                    }
                 }
                 if (song != null) {
                     val liked = song.id in likedIds

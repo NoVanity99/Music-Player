@@ -17,9 +17,15 @@ class Decoder private constructor(private val grabber: FFmpegFrameGrabber, speed
     /** Track length from the container (0 if unknown). */
     val durationMs: Long = (grabber.lengthInTime / 1000).coerceAtLeast(0)
 
+    /** Source-time position of the end of what has been decoded so far. */
+    private var decodedMs: Long = 0
+
     /** Source-time position of the next sample [fill] will return. */
-    var positionMs: Long = 0
-        private set
+    val positionMs: Long
+        get() {
+            val waiting = leftover?.let { it.size - leftoverPos } ?: 0
+            return (decodedMs - (waiting / OUT_CHANNELS * 1000L / OUT_RATE * speed).toLong()).coerceAtLeast(0)
+        }
 
     var speed: Float = speed
         private set
@@ -54,7 +60,7 @@ class Decoder private constructor(private val grabber: FFmpegFrameGrabber, speed
 
     fun seek(ms: Long) {
         grabber.setTimestamp(ms.coerceAtLeast(0) * 1000L)
-        positionMs = ms.coerceAtLeast(0)
+        decodedMs = ms.coerceAtLeast(0)
         leftover = null
         eof = false
         configureFilter()
@@ -77,7 +83,7 @@ class Decoder private constructor(private val grabber: FFmpegFrameGrabber, speed
             val raw = frame.shorts() ?: continue
             // Source-time position at the end of this frame.
             val frameStartMs = frame.timestamp / 1000
-            positionMs = frameStartMs + raw.size / OUT_CHANNELS * 1000L / OUT_RATE
+            decodedMs = frameStartMs + raw.size / OUT_CHANNELS * 1000L / OUT_RATE
             val f = filter ?: return raw
             f.push(frame)
             val out = generateSequence { f.pullSamples() }.mapNotNull { it.shorts() }.toList()
@@ -114,6 +120,19 @@ class Decoder private constructor(private val grabber: FFmpegFrameGrabber, speed
             written += n
         }
         return written
+    }
+
+    /**
+     * Decodes the first [ms] of audio now and keeps it in memory, so playing it later needs no
+     * reading (from disk or the network) at the moment it starts.
+     */
+    fun prime(ms: Int) {
+        val ahead = ShortArray(OUT_RATE * OUT_CHANNELS / 1000 * ms)
+        val n = fill(ahead)
+        // Whatever was still waiting behind those samples goes after them.
+        val rest = leftover?.let { it.copyOfRange(leftoverPos.coerceAtMost(it.size), it.size) } ?: ShortArray(0)
+        leftover = ahead.copyOf(n) + rest
+        leftoverPos = 0
     }
 
     override fun close() {

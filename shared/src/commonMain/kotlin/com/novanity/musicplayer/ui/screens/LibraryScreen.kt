@@ -131,9 +131,8 @@ fun LibraryScreen(actions: SongActions, contentPadding: PaddingValues) {
                 vm.libraryFilter == LibraryFilter.PLAYLISTS -> PlaylistsList(actions, listPadding, onCreate = { creating = true })
                 lib.isEmpty -> EmptyState(
                     Icons.Rounded.LibraryMusic,
-                    "No songs in your folders",
-                    "Copy music into your chosen folder, or change folders in Settings.",
-                    action = { Button(onClick = { vm.open(Destination.Settings) }) { Text("Music folder settings") } },
+                    "No songs yet",
+                    "Songs appear here as soon as the library has loaded.",
                 )
                 else -> when (vm.libraryFilter) {
                     LibraryFilter.SONGS -> SongsList(actions, listPadding)

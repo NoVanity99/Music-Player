@@ -1,6 +1,5 @@
 package com.novanity.musicplayer.ui.components
 
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.animation.core.animateDecay
 import kotlinx.coroutines.launch
 import androidx.compose.ui.composed
@@ -154,6 +153,15 @@ fun SongRow(
     val isCurrent = nowPlaying.songId == song.id
     val interaction = remember { MutableInteractionSource() }
     val hovered by interaction.collectIsHoveredAsState()
+    // The song's length sits right after the artist: "slayr • 3:12 • Gaia".
+    @Suppress("NAME_SHADOWING") val subtitle = remember(subtitle, song.durationMs, song.artist) {
+        val length = if (song.durationMs > 0) formatDuration(song.durationMs) else null
+        when {
+            length == null -> subtitle
+            subtitle.startsWith(song.artist) -> song.artist + " \u2022 " + length + subtitle.removePrefix(song.artist)
+            else -> "$subtitle \u2022 $length"
+        }
+    }
     RightClickMenu(menu) { rightClick ->
     Row(
         modifier = modifier
@@ -521,29 +529,22 @@ val CardWidth: Dp = 148.dp
  * Lets a row be dragged sideways with the mouse (click, hold and slide), with a little momentum
  * on release. Touch already scrolls rows; this is for the desktop, where a mouse otherwise can't.
  */
-fun Modifier.mouseDragScroll(state: androidx.compose.foundation.lazy.LazyListState): Modifier = composed {
+@Composable
+fun Modifier.mouseDragScroll(state: androidx.compose.foundation.lazy.LazyListState): Modifier {
+    var fling by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<kotlinx.coroutines.Job?>(null) }
     val scope = androidx.compose.runtime.rememberCoroutineScope()
-    pointerInput(state) {
-        val tracker = androidx.compose.ui.input.pointer.util.VelocityTracker()
-        var fling: kotlinx.coroutines.Job? = null
-        detectHorizontalDragGestures(
-            onDragStart = { fling?.cancel(); tracker.resetTracking() },
-            onDragEnd = {
-                val velocity = -tracker.calculateVelocity().x
-                fling = scope.launch {
-                    var last = 0f
-                    androidx.compose.animation.core.AnimationState(0f, velocity).animateDecay(androidx.compose.animation.core.exponentialDecay(frictionMultiplier = 2.2f)) {
-                        state.dispatchRawDelta(value - last)
-                        last = value
-                    }
+    return steadyDraggable(
+        orientation = androidx.compose.foundation.gestures.Orientation.Horizontal,
+        mouseOnly = true,
+        onDelta = { dx -> fling?.cancel(); state.dispatchRawDelta(-dx) },
+        onStopped = { velocity ->
+            fling = scope.launch {
+                var last = 0f
+                androidx.compose.animation.core.AnimationState(0f, -velocity).animateDecay(androidx.compose.animation.core.exponentialDecay(frictionMultiplier = 2.2f)) {
+                    state.dispatchRawDelta(value - last)
+                    last = value
                 }
-            },
-        ) { change, dx ->
-            if (change.type == androidx.compose.ui.input.pointer.PointerType.Mouse) {
-                change.consume()
-                tracker.addPosition(change.uptimeMillis, change.position)
-                state.dispatchRawDelta(-dx)
             }
-        }
-    }
+        },
+    )
 }

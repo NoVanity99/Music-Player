@@ -415,15 +415,36 @@ private fun AlbumScreen(albumId: Long, actions: SongActions, contentPadding: Pad
     val advancedOn by vm.advancedTransitions.collectAsStateWithLifecycle()
     val ownerConfig = vm.ownerConfig?.collectAsStateWithLifecycle()?.value
     val advanced = remember(album, advancedOn, ownerConfig) { advancedOn && vm.hasAdvancedTransitions(album) }
+    var showCover by remember { mutableStateOf(false) }
+    if (showCover) {
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = { showCover = false },
+            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
+        ) {
+            Box(
+                Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.92f))
+                    .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) { showCover = false }
+                    .padding(24.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                androidx.compose.foundation.layout.BoxWithConstraints(contentAlignment = Alignment.Center) {
+                    AlbumArt(album.songs.first(), Modifier.size(minOf(maxWidth, maxHeight)), shape = RoundedCornerShape(12.dp), large = true)
+                }
+            }
+        }
+    }
 
     CollectionScaffold(album.title, tint, { vm.back() }, actions.collectionMenu(album.songs), contentPadding) {
         item {
             Hero(
                 tint = tint,
-                art = { m -> AlbumArt(album.songs.first(), m, shape = RoundedCornerShape(10.dp), large = true) },
+                art = { m ->
+                    // Click the cover to see it full screen.
+                    AlbumArt(album.songs.first(), m.clip(RoundedCornerShape(10.dp)).clickable { showCover = true }, shape = RoundedCornerShape(10.dp), large = true)
+                },
                 title = album.title,
                 subtitle = album.artist,
-                meta = meta("Album", album.songs),
+                meta = meta(if (album.year > 0) "Album \u2022 ${album.year}" else "Album", album.songs),
                 subtitleContent = if (album.artist == "Various artists") null else { align ->
                     ArtistLinks(album.artist, vm, MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary, textAlign = align)
                 },

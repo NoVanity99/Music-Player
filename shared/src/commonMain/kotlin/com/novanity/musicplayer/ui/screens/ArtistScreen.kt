@@ -86,6 +86,8 @@ import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.material.icons.rounded.FavoriteBorder
+import androidx.compose.material3.IconButton
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
@@ -171,7 +173,22 @@ internal fun ArtistScreen(name: String, actions: SongActions, contentPadding: Pa
                     // A wash of the cover's colour, then a fade into the page, so the name always reads.
                     Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Color.Black.copy(alpha = 0.18f), 0.35f to Color.Transparent, 0.72f to tint.copy(alpha = 0.35f), 1f to background)))
                     Column(Modifier.align(Alignment.BottomStart).padding(horizontal = 24.dp, vertical = 12.dp)) {
-                        Text(artist.name, style = MaterialTheme.typography.displayMedium, fontWeight = FontWeight.ExtraBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(artist.name, style = MaterialTheme.typography.displayMedium, fontWeight = FontWeight.ExtraBold, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                            Spacer(Modifier.width(8.dp))
+                            // Heart an artist to keep them in "Your artists" on Home.
+                            val favorites by vm.favoriteArtists.collectAsStateWithLifecycle()
+                            val hearted = artist.name in favorites
+                            val pop by animateFloatAsState(if (hearted) 1.15f else 1f, label = "heart")
+                            IconButton(onClick = { vm.setFavoriteArtist(artist.name, !hearted) }) {
+                                Icon(
+                                    if (hearted) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+                                    contentDescription = if (hearted) "Remove from Your artists" else "Add to Your artists",
+                                    tint = if (hearted) MaterialTheme.colorScheme.primary else Color.White,
+                                    modifier = Modifier.size(30.dp).graphicsLayer { scaleX = pop; scaleY = pop },
+                                )
+                            }
+                        }
                         val releases = byKind.filterKeys { it != AlbumKind.UNRELEASED }.values.sumOf { it.size }
                         Text(
                             "${if (releases == 1) "1 release" else "$releases releases"} • ${songCount(everything.size)}" +

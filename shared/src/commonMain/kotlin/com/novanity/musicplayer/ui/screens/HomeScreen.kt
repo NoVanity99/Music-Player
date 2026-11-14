@@ -70,6 +70,14 @@ private fun greeting(): String = when (Clock.System.now().toLocalDateTime(TimeZo
 
 @Composable
 fun HomeScreen(actions: SongActions, contentPadding: PaddingValues) {
+    // On Home, every card's text is centred under its artwork.
+    androidx.compose.runtime.CompositionLocalProvider(com.novanity.musicplayer.ui.components.LocalCenterCards provides true) {
+        HomeContent(actions, contentPadding)
+    }
+}
+
+@Composable
+private fun HomeContent(actions: SongActions, contentPadding: PaddingValues) {
     val vm = actions.library
     val home by vm.home.collectAsStateWithLifecycle()
     val liked by vm.likedSongs.collectAsStateWithLifecycle()
@@ -154,8 +162,17 @@ fun HomeScreen(actions: SongActions, contentPadding: PaddingValues) {
                         }
                     }
                 }
-                if (home.topArtists.isNotEmpty()) {
-                    item { SectionHeader("Your artists", action = "See all") { vm.showLibrary(LibraryFilter.ARTISTS) } }
+                item { SectionHeader("Your artists", action = "All artists") { vm.showLibrary(LibraryFilter.ARTISTS) } }
+                if (home.topArtists.isEmpty()) {
+                    item {
+                        Text(
+                            "Tap the heart on an artist's page to keep them here.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                        )
+                    }
+                } else {
                     item {
                         CardRow(home.topArtists, key = { it.name }, minCardWidth = CardWidth - 16.dp) { artist, m ->
                             ArtistCard(artist, onClick = { vm.open(Destination.ArtistDetail(artist.name)) }, modifier = m,

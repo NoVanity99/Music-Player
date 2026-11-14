@@ -6,8 +6,15 @@ import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.gestures.Orientation
-import androidx.compose.foundation.gestures.draggable
-import androidx.compose.foundation.gestures.rememberDraggableState
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.input.pointer.PointerType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.ui.input.pointer.util.VelocityTracker
+import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.State
@@ -103,11 +110,11 @@ fun Modifier.trackSwipe(
     state.fling = FLING_DP_PER_SECOND * LocalDensity.current.density
     return this
         .onSizeChanged { state.width = it.width.toFloat().coerceAtLeast(1f) }
-        .draggable(
+        .steadyDraggable(
             orientation = Orientation.Horizontal,
             enabled = !state.busy,
-            state = rememberDraggableState { delta -> state.drag(delta, latestNext, latestPrevious) },
-            onDragStopped = { velocity -> state.settle(velocity, latestNext, latestPrevious, next, previous) },
+            onDelta = { delta -> state.drag(delta, latestNext, latestPrevious) },
+            onStopped = { velocity -> state.settle(velocity, latestNext, latestPrevious, next, previous) },
         )
 }
 
@@ -157,10 +164,69 @@ fun Modifier.dismissDrag(state: DismissDragState, onDismiss: () -> Unit): Modifi
     state.fling = FLING_DP_PER_SECOND * LocalDensity.current.density
     return this
         .onSizeChanged { state.height = it.height.toFloat().coerceAtLeast(1f) }
-        .draggable(
+        .steadyDraggable(
             orientation = Orientation.Vertical,
             enabled = !state.settling,
-            state = rememberDraggableState { delta -> state.offset = (state.offset + delta).coerceAtLeast(0f) },
-            onDragStopped = { velocity -> state.settle(velocity, dismiss) },
+            onDelta = { delta -> state.offset = (state.offset + delta).coerceAtLeast(0f) },
+            onStopped = { velocity -> state.settle(velocity, dismiss) },
         )
+}
+
+
+/**
+ * A drag along [orientation], like `draggable`, with one difference that matters on a computer:
+ * the built-in one treats a mouse that moves a single pixel during a click as a drag and swallows
+ * the click, so buttons seem to need two or three tries. Here a mouse has to travel a clear
+ * distance (and mostly in the right direction) before it counts; until then the click is left alone.
+ * Touch keeps its usual feel. With [mouseOnly], touches are ignored (for rows that already scroll).
+ */
+@Composable
+fun Modifier.steadyDraggable(
+    orientation: Orientation,
+    enabled: Boolean = true,
+    mouseOnly: Boolean = false,
+    onDelta: (Float) -> Unit,
+    onStopped: suspend (velocity: Float) -> Unit = {},
+): Modifier {
+    val scope = rememberCoroutineScope()
+    val delta by rememberUpdatedState(onDelta)
+    val stopped by rememberUpdatedState(onStopped)
+    if (!enabled) return this
+    return pointerInput(orientation, mouseOnly) {
+        val mouseSlop = 8.dp.toPx()
+        awaitEachGesture {
+            val down = awaitFirstDown(requireUnconsumed = false)
+            val mouse = down.type == PointerType.Mouse
+            if (mouseOnly && !mouse) return@awaitEachGesture
+            val slop = if (mouse) mouseSlop else viewConfiguration.touchSlop
+            val tracker = VelocityTracker().apply { addPosition(down.uptimeMillis, down.position) }
+            var along = 0f
+            var across = 0f
+            var dragging = false
+            while (true) {
+                val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: break
+                if (!change.pressed) break
+                // Something inside (a slider, a scrolling row) took this movement: it's theirs.
+                if (!dragging && change.isConsumed) return@awaitEachGesture
+                val d = change.positionChange()
+                val a = if (orientation == Orientation.Horizontal) d.x else d.y
+                tracker.addPosition(change.uptimeMillis, change.position)
+                if (!dragging) {
+                    along += a
+                    across += if (orientation == Orientation.Horizontal) d.y else d.x
+                    when {
+                        abs(along) > slop && abs(along) > abs(across) -> dragging = true
+                        abs(across) > slop -> return@awaitEachGesture // heading the other way
+                        else -> continue
+                    }
+                }
+                change.consume()
+                delta(a)
+            }
+            if (dragging) {
+                val v = tracker.calculateVelocity()
+                scope.launch { stopped(if (orientation == Orientation.Horizontal) v.x else v.y) }
+            }
+        }
+    }
 }

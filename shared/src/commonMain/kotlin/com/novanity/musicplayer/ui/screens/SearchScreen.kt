@@ -99,7 +99,6 @@ fun SearchScreen(actions: SongActions, contentPadding: PaddingValues) {
                 BrowseTile("Playlists", listOf(Color(0xFFBF5AF2), Color(0xFF5B21B6)), Icons.AutoMirrored.Rounded.QueueMusic) { vm.showLibrary(LibraryFilter.PLAYLISTS) },
                 BrowseTile("Liked Songs", listOf(Color(0xFF5B2BFF), Color(0xFF8E7BFF)), Icons.Rounded.Favorite) { vm.open(Destination.LikedSongs) },
                 BrowseTile("Recently played", listOf(Color(0xFF30B158), Color(0xFF0F5132)), Icons.Rounded.History) { vm.open(Destination.RecentlyPlayed) },
-                BrowseTile("Folders", listOf(Color(0xFF64D2FF), Color(0xFF0E7490)), Icons.Rounded.Folder) { vm.showLibrary(LibraryFilter.FOLDERS) },
             )
             items(tiles.chunked(2)) { row ->
                 Row(
@@ -199,17 +198,6 @@ fun SearchScreen(actions: SongActions, contentPadding: PaddingValues) {
                     subtitle = "Playlist • ${songCount(p.songCount)}",
                     art = { m -> PlaylistArt(p.covers, m) },
                     onClick = { vm.open(Destination.PlaylistDetail(p.id)) },
-                )
-            }
-        }
-        if (results.folders.isNotEmpty()) {
-            item { SectionHeader("Folders") }
-            items(results.folders, key = { "f-${it.path}" }) { f ->
-                CollectionRow(
-                    title = f.name,
-                    subtitle = "Folder • ${songCount(f.songs.size)}",
-                    art = { m -> GradientArt(FolderGradient, Icons.Rounded.Folder, m) },
-                    onClick = { vm.open(Destination.FolderDetail(f.path)) },
                 )
             }
         }

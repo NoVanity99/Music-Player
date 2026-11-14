@@ -9,6 +9,7 @@
  *   GET    /me/sync                                  -> {user, likes, plays, playlists}
  *   POST   /me/ops        {ops: [{type, songId, at}]}   type: like | unlike | play
  *   PUT    /me/playlists  {playlists: [...]}
+ *   PUT    /me/artists    {artists: [names]}   favourite artists
  *   DELETE /me                                       deletes the account and its data
  */
 import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
@@ -41,6 +42,8 @@ function ensureSchema(sql: Sql): Promise<void> {
       playlists JSONB NOT NULL DEFAULT '[]'::jsonb,
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     )`;
+    // Favourite artists were added later.
+    await sql`ALTER TABLE vp_users ADD COLUMN IF NOT EXISTS artists JSONB NOT NULL DEFAULT '[]'::jsonb`;
     await sql`CREATE TABLE IF NOT EXISTS vp_sessions (
       token_hash TEXT PRIMARY KEY,
       user_id UUID NOT NULL REFERENCES vp_users(id) ON DELETE CASCADE,
@@ -167,13 +170,14 @@ export async function accounts(request: Request, env: AccountsEnv, path: string,
     const [likes, plays, user] = await Promise.all([
       sql`SELECT song_id, liked_at FROM vp_likes WHERE user_id = ${userId} ORDER BY liked_at DESC`,
       sql`SELECT song_id, played_at FROM vp_plays WHERE user_id = ${userId} ORDER BY played_at DESC LIMIT ${MAX_PLAYS_RETURNED}`,
-      sql`SELECT playlists FROM vp_users WHERE id = ${userId}`,
+      sql`SELECT playlists, artists FROM vp_users WHERE id = ${userId}`,
     ]);
     return json({
       user: { id: userId, username: session[0].display_name },
       likes: likes.map((r) => ({ songId: r.song_id, at: Number(r.liked_at) })),
       plays: plays.map((r) => ({ songId: r.song_id, at: Number(r.played_at) })),
       playlists: user[0]?.playlists ?? [],
+      artists: user[0]?.artists ?? [],
     });
   }
 
@@ -218,6 +222,14 @@ export async function accounts(request: Request, env: AccountsEnv, path: string,
       songs: (Array.isArray(p?.songs) ? p.songs : []).filter((s: unknown) => typeof s === "string" && SONG_ID.test(s)).slice(0, 5000),
     }));
     await sql`UPDATE vp_users SET playlists = ${JSON.stringify(clean)}::jsonb WHERE id = ${userId}`;
+    return json({ ok: true });
+  }
+
+  if (path === "/me/artists" && method === "PUT") {
+    const body = await readJson(request, 64 * 1024);
+    if (!Array.isArray(body?.artists)) return json({ error: "bad_request", message: "Artists are missing or too large." }, 400);
+    const clean = [...new Set(body.artists.filter((a: unknown) => typeof a === "string" && a.trim()).map((a: string) => a.trim().slice(0, 200)))].slice(0, 1000);
+    await sql`UPDATE vp_users SET artists = ${JSON.stringify(clean)}::jsonb WHERE id = ${userId}`;
     return json({ ok: true });
   }
 

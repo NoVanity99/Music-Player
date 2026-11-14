@@ -19,7 +19,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.draggable
+import com.novanity.musicplayer.ui.components.steadyDraggable
 import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -157,10 +157,7 @@ fun MiniPlayer(
             .clickable(onClick = onExpand)
             // Swipe sideways to change track, swipe up to open the player.
             .trackSwipe(swipe, state.hasNext, state.hasPrevious, player::nextTrack, player::previousTrack)
-            .draggable(
-                orientation = Orientation.Vertical,
-                state = rememberDraggableState { dy -> if (dy < -8f) onExpand() },
-            ),
+            .steadyDraggable(orientation = Orientation.Vertical, onDelta = { dy -> if (dy < -8f) onExpand() }),
     ) {
         Box {
             Row(
@@ -173,7 +170,7 @@ fun MiniPlayer(
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f).graphicsLayer { translationX = swipe.offset }) {
                     Text(current.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleSmall, color = Color.White)
-                    Text(current.artist, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall, color = Muted)
+                    Text(if (song != null && song.album.isNotBlank()) "${current.artist} \u2022 ${song.album}" else current.artist, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall, color = Muted)
                 }
                 if (song != null) {
                     IconButton(onClick = { actions.toggleLike(song, liked) }) {

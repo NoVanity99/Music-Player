@@ -154,6 +154,15 @@ class LibraryViewModel(
         }
     }
     fun signOut() { viewModelScope.launch { account?.signOut() } }
+
+    /** Artists this account has hearted; without accounts (tests) they're kept for the session. */
+    private val localFavoriteArtists = MutableStateFlow<Set<String>>(emptySet())
+    val favoriteArtists: StateFlow<Set<String>> = account?.favoriteArtists ?: localFavoriteArtists
+    fun setFavoriteArtist(name: String, favorite: Boolean) {
+        if (account != null) account.setFavoriteArtist(name, favorite)
+        else localFavoriteArtists.value = if (favorite) localFavoriteArtists.value + name else localFavoriteArtists.value - name
+        notify(if (favorite) "Added to Your artists" else "Removed from Your artists")
+    }
     fun deleteAccount(onResult: (String?) -> Unit) { viewModelScope.launch { onResult(account?.deleteAccount()) } }
 
 
@@ -399,7 +408,7 @@ class LibraryViewModel(
         ids.mapNotNull(byId::get)
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    val home: StateFlow<HomeUi> = combine(grouped, recentlyPlayed, likedSongs, playlists) { lib, recent, liked, lists ->
+    val home: StateFlow<HomeUi> = combine(grouped, recentlyPlayed, likedSongs, playlists, favoriteArtists) { lib, recent, liked, lists, favArtists ->
         if (lib == null) return@combine HomeUi(loading = true)
         val recentAlbums = recent.asSequence().map { it.albumId }.distinct()
             .mapNotNull(lib.albumsById::get).take(6).toList()
@@ -420,7 +429,8 @@ class LibraryViewModel(
             quickPicks = picks,
             recentlyPlayed = recent.take(20),
             recentlyAdded = recentlyAdded,
-            topArtists = lib.artists.sortedByDescending { it.songs.size }.take(12),
+            // Only the artists you've hearted, in name order.
+            topArtists = lib.artists.filter { it.name in favArtists }.sortedBy { it.name.lowercase() },
             playlists = lists,
         )
     }
@@ -450,7 +460,7 @@ class LibraryViewModel(
                 artists = lib.artists.filter { it.name.hit() }
                     .sortedWith(compareBy<Artist> { it.name.rank() }.thenByDescending { it.songs.size }),
                 playlists = lists.filter { it.name.hit() },
-                folders = lib.folders.filter { it.name.hit() },
+                folders = emptyList(), // folders aren't shown anywhere any more
             )
         }
             .flowOn(Dispatchers.Default)
