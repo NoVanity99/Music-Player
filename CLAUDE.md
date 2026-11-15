@@ -22,3 +22,11 @@ projects. Work here must never change anything in the launcher's repository, eve
 attached to the session and a request sounds like it could be for either. Requests about
 "the launcher", scanning launchers, Trending or Most hyped belong to the launcher's own sessions:
 say so instead of acting on them.
+
+## Filing newly added albums
+
+When music is added to the cloud and the owner doesn't say which artist-page row it goes in, file
+each new album by its size: 1 song goes in Singles, 2-8 songs in EPs, 9-100 songs in Released
+albums. `cloud/scripts/upload.mjs` does this by default; do the same when editing `library.json`
+by hand. An explicit instruction from the owner (or `--type`) still wins, and albums already in the
+cloud keep their row.

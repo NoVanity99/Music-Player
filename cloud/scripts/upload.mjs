@@ -11,6 +11,8 @@
  * - --dry-run  shows what would happen without uploading anything.
  * - --type=released|unreleased|ep|single|custom  files everything in this folder in that
  *                artist-page row, whatever the folders are called.
+ *                Without --type (and without a folder named after a row), a newly added album is
+ *                filed by its size: 1 song is a single, 2-8 an EP, 9-100 a released album.
  * - --order="oldest album, next album, ..., newest album"  sets the order of those albums on the
  *                artist page (matched by album name or folder name, ignoring case).
  * - --artist="Name"  the artist for files whose tags don't name one.
@@ -32,7 +34,7 @@ const CACHE_FILE = path.join(CLOUD_DIR, ".upload-cache.json");
 const AUDIO = { ".mp3": "audio/mpeg", ".flac": "audio/flac", ".m4a": "audio/mp4", ".ogg": "audio/ogg", ".wav": "audio/wav" };
 /**
  * Which row of the artist page an album goes in. Put a release inside a folder with one of these
- * names (anywhere above the files) to file it there; everything else is a "custom" album.
+ * names (anywhere above the files) to file it there; everything else is filed by its size (see sizeType).
  */
 const ALBUM_TYPES = [
   [/^(released|released albums?|albums?|studio albums?)$/i, "released"],
@@ -44,8 +46,16 @@ function albumTypeFor(rel) {
   for (const part of rel.split("/").slice(0, -1)) {
     for (const [pattern, type] of ALBUM_TYPES) if (pattern.test(part.trim())) return type;
   }
+  return null;
+}
+/** The row for a newly added album that nobody filed by hand: by how many songs it has. */
+function sizeType(count) {
+  if (count === 1) return "single";
+  if (count >= 2 && count <= 8) return "ep";
+  if (count >= 9 && count <= 100) return "released";
   return "custom";
 }
+const albumKey = (s) => `${(s.albumArtist || s.artist || "").trim().toLowerCase()}\u0000${(s.album || "").trim().toLowerCase()}`;
 
 const COVER_NAMES = ["cover", "folder", "front", "album", "albumart"];
 const CONCURRENCY = 4;
@@ -281,6 +291,17 @@ async function main() {
     const byId = new Map();
     for (const s of songs) if (!byId.has(s.id)) byId.set(s.id, s);
     const local = [...byId.values()];
+
+    // Albums nobody filed by hand (no --type, no folder named after a row): one already in the
+    // cloud keeps its row; a newly added one is filed by its size.
+    const cloudType = new Map();
+    for (const s of library.songs) if (s.albumType && !cloudType.has(albumKey(s))) cloudType.set(albumKey(s), s.albumType);
+    const sizes = new Map();
+    for (const s of local) sizes.set(albumKey(s), (sizes.get(albumKey(s)) ?? 0) + 1);
+    for (const s of local) {
+      if (s.albumType) continue;
+      s.albumType = existing.get(s.id)?.albumType ?? cloudType.get(albumKey(s)) ?? sizeType(sizes.get(albumKey(s)));
+    }
 
     const toUpload = local.filter((s) => !existing.has(s.id));
     const localPaths = new Map(local.map((s) => [s.path, s.id]));
