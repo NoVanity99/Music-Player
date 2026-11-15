@@ -14,3 +14,11 @@ user-facing change (and running the tests):
    `latest.json.sig`, then give the owner the release link.
 
 See RELEASING.md for the details.
+
+## This project is separate from the Vanity launcher
+
+Vanity Player (this repository) and the Vanity launcher (`NoVanity99/Vanity`) are separate
+projects. Work here must never change anything in the launcher's repository, even when both are
+attached to the session and a request sounds like it could be for either. Requests about
+"the launcher", scanning launchers, Trending or Most hyped belong to the launcher's own sessions:
+say so instead of acting on them.
