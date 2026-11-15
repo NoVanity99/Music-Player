@@ -106,9 +106,11 @@ internal fun ArtistScreen(name: String, actions: SongActions, contentPadding: Pa
     val lib by vm.grouped.collectAsStateWithLifecycle()
     val artist = lib?.artistsByName?.get(name) ?: return Missing(contentPadding, lib == null, { vm.back() })
     val everything = remember(artist) { artist.songs + artist.appearsOn }
-    // Their own releases plus the ones they appear on, newest first (so the newest is on the left).
+    // Only their own releases: albums where they are the album artist. An album they merely
+    // feature on (or share a song credit on) stays on its owner's page. Newest on the left.
     val byKind = remember(artist, lib) {
         everything.map { it.albumId }.distinct().mapNotNull { lib?.albumsById?.get(it) }
+            .filter { vm.ownsAlbum(artist.name, it) }
             .sortedWith(compareByDescending<Album> { it.sortYear() }.thenByDescending { it.dateAdded }.thenBy { it.title.lowercase() })
             .groupBy { it.kind }
     }

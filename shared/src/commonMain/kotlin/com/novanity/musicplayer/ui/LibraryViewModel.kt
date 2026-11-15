@@ -644,6 +644,17 @@ class LibraryViewModel(
 
     // ---- Grouping / sorting ----
 
+    /** True when [album] is this artist's own: they are its album artist, alone or as one of a named pair. */
+    fun ownsAlbum(artistName: String, album: Album): Boolean =
+        grouped.value?.artistIndex?.let { artistName.lowercase() in albumOwners(album, it) } ?: album.artist.equals(artistName, ignoreCase = true)
+
+    /**
+     * Whose album it is, in lower case: the album's artist, or each of them when the album itself
+     * is credited to several ("A & B"). Someone who only features on a song is not an owner.
+     */
+    private fun albumOwners(album: Album, index: ArtistIndex): Set<String> =
+        index.resolve(album.artist).mapTo(HashSet()) { it.name.lowercase() }
+
     private fun group(songs: List<Song>): GroupedLibrary {
         val inAlbumOrder = compareBy<Song>({ it.disc }, { it.track }).thenBy(String.CASE_INSENSITIVE_ORDER) { it.title }
 
@@ -654,10 +665,14 @@ class LibraryViewModel(
             val artists = sorted.map { it.artist }.distinct()
             // "Daft Punk" and "Daft Punk feat. Sol Vega" on one album: the album is Daft Punk's.
             val leads = artists.map { index.resolve(it).first().name }.distinct()
+            val tagged = sorted.map { it.albumArtist }.filter { it.isNotBlank() }.groupingBy { it }.eachCount().maxByOrNull { it.value }?.key
             Album(
                 id = id,
                 title = sorted.first().album,
+                // The album belongs to its album artist when the files name one; otherwise to the
+                // one artist all its songs share (or lead with).
                 artist = when {
+                    tagged != null -> tagged
                     artists.size == 1 -> artists.first()
                     leads.size == 1 -> leads.first()
                     else -> "Various artists"
@@ -680,7 +695,8 @@ class LibraryViewModel(
             Artist(
                 name = name,
                 songs = list.sortedWith(byArtist),
-                albumCount = list.distinctBy { it.albumId }.size,
+                // Only albums that are theirs (see albumOwners), not ones they feature on.
+                albumCount = albums.count { name.lowercase() in albumOwners(it, index) },
                 dateAdded = list.maxOf { it.dateAdded },
                 appearsOn = appearsOn[name].orEmpty().sortedWith(byArtist),
             )

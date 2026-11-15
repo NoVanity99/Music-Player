@@ -29,6 +29,8 @@ data class Song(
     val albumKind: AlbumKind = AlbumKind.CUSTOM,
     /** Release year from the file's tags, or 0 if unknown. */
     val year: Int = 0,
+    /** The album's own artist from the file's tags ("album artist"); empty when the file has none. */
+    val albumArtist: String = "",
 )
 
 /** The four kinds of release an artist page is organised by. */

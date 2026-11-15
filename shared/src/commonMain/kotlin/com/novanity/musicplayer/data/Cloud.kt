@@ -426,6 +426,7 @@ class CloudRepository(
         uri = if (downloaded != null) files.playableUri(downloaded.filePath) else "$base/stream/$id",
         title = title.ifBlank { "Unknown title" },
         artist = artist.ifBlank { "Unknown artist" },
+        albumArtist = albumArtist.trim(),
         album = album.ifBlank { "Unknown album" },
         // Without an album-artist tag, songs in the same folder with the same album name are one
         // album, so a "feat." track doesn't split off into its own copy.
