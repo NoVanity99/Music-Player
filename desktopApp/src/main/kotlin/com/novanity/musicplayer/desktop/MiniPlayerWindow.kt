@@ -46,6 +46,8 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.DpSize
+import androidx.compose.ui.unit.isSpecified
+import kotlinx.coroutines.flow.collectLatest
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.WindowPosition
@@ -65,7 +67,16 @@ private val MiniSize = DpSize(420.dp, 112.dp)
  */
 @Composable
 fun MiniPlayerWindow(app: DesktopApp, icon: Painter?, onExpand: () -> Unit) {
-    val state = rememberWindowState(size = MiniSize, position = bottomRightOfScreen())
+    // Opens where it was left, at the size it was left, also after restarting the app.
+    val saved = remember { MiniPlayerPlace.load() }
+    val state = rememberWindowState(size = saved?.first ?: MiniSize, position = saved?.second ?: bottomRightOfScreen())
+    androidx.compose.runtime.LaunchedEffect(state) {
+        androidx.compose.runtime.snapshotFlow { state.size to state.position }.collectLatest { (size, position) ->
+            kotlinx.coroutines.delay(300) // once a drag or resize settles
+            MiniPlayerPlace.save(size, position)
+        }
+    }
+    androidx.compose.runtime.DisposableEffect(state) { onDispose { MiniPlayerPlace.save(state.size, state.position) } }
     Window(
         onCloseRequest = onExpand,
         state = state,
@@ -208,6 +219,32 @@ private fun MiniPlayerContent(app: DesktopApp, onExpand: () -> Unit) {
             Box(Modifier.fillMaxWidth(progress).fillMaxHeight().background(MaterialTheme.colorScheme.primary))
         }
     }
+}
+
+/** Remembers where the mini player was and how big, in a small file in the app's data folder. */
+private object MiniPlayerPlace {
+    private val store by lazy { PropertiesStore(java.io.File(DesktopPaths.dataDir, "mini_player.properties")) }
+
+    fun save(size: DpSize, position: WindowPosition) {
+        if (!position.isSpecified || !size.isSpecified) return
+        runCatching {
+            store.putString("place", listOf(position.x.value, position.y.value, size.width.value, size.height.value).joinToString(",") { it.toInt().toString() })
+        }
+    }
+
+    /** The saved size and position, or null when there is none or it is no longer on any screen. */
+    fun load(): Pair<DpSize, WindowPosition>? = runCatching {
+        val (x, y, w, h) = store.getString("place")!!.split(",").map { it.toInt() }
+        if (w < 96 || h < 96) return null
+        val window = java.awt.Rectangle(x, y, w, h)
+        // A screen that has since been unplugged: go back to the default corner.
+        val visible = java.awt.GraphicsEnvironment.getLocalGraphicsEnvironment().screenDevices.any { screen ->
+            val shared = screen.defaultConfiguration.bounds.intersection(window)
+            shared.width >= 60 && shared.height >= 40
+        }
+        if (!visible) return null
+        DpSize(w.dp, h.dp) to WindowPosition(x.dp, y.dp)
+    }.getOrNull()
 }
 
 /** Just above the taskbar in the bottom-right corner of the main screen. */
