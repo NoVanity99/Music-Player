@@ -11,7 +11,7 @@
  * - --dry-run  shows what would happen without uploading anything.
  * - --type=released|unreleased|ep|single|custom  files everything in this folder in that
  *                artist-page row, whatever the folders are called.
- *                Without --type (and without a folder named after a row), a newly added album is
+ *                Without --type (and without a folder named after a row), every album is
  *                filed by its size: 1 song is a single, 2-8 an EP, 9 or more a released album.
  * - --order="oldest album, next album, ..., newest album"  sets the order of those albums on the
  *                artist page (matched by album name or folder name, ignoring case).
@@ -48,13 +48,32 @@ function albumTypeFor(rel) {
   }
   return null;
 }
-/** The row for a newly added album that nobody filed by hand: by how many songs it has. */
+/** The row for an album that nobody filed by hand: by how many songs it has. */
 function sizeType(count) {
   if (count === 1) return "single";
   if (count >= 2 && count <= 8) return "ep";
   return "released"; // 9 or more
 }
-const albumKey = (s) => `${(s.albumArtist || s.artist || "").trim().toLowerCase()}\u0000${(s.album || "").trim().toLowerCase()}`;
+/** One album, the way the app groups it: by album artist, else by folder, else by artist. */
+const albumKey = (s) =>
+  `${((s.albumArtist || "").trim() || (s.path || "").split("/").slice(0, -1).join("/") || s.artist || "").toLowerCase()}|${(s.album || "").toLowerCase()}`;
+/**
+ * Files every album in the library by its size (cloud songs included, so an album that grows
+ * moves rows). Left alone: songs filed by hand in this run (--type or a row folder), and
+ * unreleased songs, which aren't albums.
+ */
+function fileBySize(songs, byHand) {
+  const groups = new Map();
+  for (const s of songs) groups.set(albumKey(s), [...(groups.get(albumKey(s)) ?? []), s]);
+  for (const group of groups.values()) {
+    const chosen = group.find((s) => byHand.has(s.id))?.albumType;
+    for (const s of group) {
+      if (byHand.has(s.id)) continue;
+      if (!chosen && s.albumType === "unreleased") continue;
+      s.albumType = chosen ?? sizeType(group.length);
+    }
+  }
+}
 
 const COVER_NAMES = ["cover", "folder", "front", "album", "albumart"];
 const CONCURRENCY = 4;
@@ -291,17 +310,6 @@ async function main() {
     for (const s of songs) if (!byId.has(s.id)) byId.set(s.id, s);
     const local = [...byId.values()];
 
-    // Albums nobody filed by hand (no --type, no folder named after a row): one already in the
-    // cloud keeps its row; a newly added one is filed by its size.
-    const cloudType = new Map();
-    for (const s of library.songs) if (s.albumType && !cloudType.has(albumKey(s))) cloudType.set(albumKey(s), s.albumType);
-    const sizes = new Map();
-    for (const s of local) sizes.set(albumKey(s), (sizes.get(albumKey(s)) ?? 0) + 1);
-    for (const s of local) {
-      if (s.albumType) continue;
-      s.albumType = existing.get(s.id)?.albumType ?? cloudType.get(albumKey(s)) ?? sizeType(sizes.get(albumKey(s)));
-    }
-
     const toUpload = local.filter((s) => !existing.has(s.id));
     const localPaths = new Map(local.map((s) => [s.path, s.id]));
     // Old uploads replaced by a changed file at the same path, plus (with --prune) vanished files.
@@ -325,7 +333,9 @@ async function main() {
     });
 
     const finalSongs = [...local, ...kept]
-      .map(({ file, ...s }) => s)
+      .map(({ file, ...s }) => s);
+    fileBySize(finalSongs, new Set(local.filter((s) => s.albumType).map((s) => s.id)));
+    finalSongs
       .sort((a, b) => (a.albumArtist || a.artist).localeCompare(b.albumArtist || b.artist) || a.album.localeCompare(b.album) || a.disc - b.disc || a.track - b.track || a.title.localeCompare(b.title));
     const out = path.join(tmp, "library.out.json");
     await writeFile(out, JSON.stringify({ version: 1, updatedAt: new Date().toISOString(), songs: finalSongs, ...(removed.size ? { removed: [...removed] } : {}) }));
