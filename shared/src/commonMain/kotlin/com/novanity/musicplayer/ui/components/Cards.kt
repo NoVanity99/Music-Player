@@ -1,6 +1,5 @@
 package com.novanity.musicplayer.ui.components
 
-import androidx.compose.foundation.basicMarquee
 import com.novanity.musicplayer.data.Mix
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.LocalIndication
@@ -139,14 +138,13 @@ fun PlayCircleButton(
 @Composable
 private fun CardText(title: String, subtitle: String?, center: Boolean = false) {
     Spacer(Modifier.height(8.dp))
-    // A title too long for its card scrolls past a few times instead of being cut off.
     Text(
         title,
         style = MaterialTheme.typography.titleSmall,
         maxLines = 1,
         textAlign = if (center) TextAlign.Center else TextAlign.Start,
         overflow = TextOverflow.Ellipsis,
-        modifier = Modifier.fillMaxWidth().then(if (com.novanity.musicplayer.data.Modules.TEXT_SCROLL in LocalHiddenModules.current) Modifier else Modifier.basicMarquee(iterations = 3)),
+        modifier = Modifier.fillMaxWidth(),
     )
     if (subtitle != null) {
         Text(

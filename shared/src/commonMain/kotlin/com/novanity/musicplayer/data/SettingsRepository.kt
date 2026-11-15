@@ -280,6 +280,5 @@ object Modules {
     const val ROW_DURATION = "row.duration"
     const val BAR_ALBUM = "bar.album"
     const val CARD_CENTER = "card.center"
-    const val TEXT_SCROLL = "text.scroll"
     const val CARD_HOVER = "card.hover"
 }

@@ -1,7 +1,6 @@
 package com.novanity.musicplayer.ui
 
 import com.novanity.musicplayer.data.Modules
-import androidx.compose.foundation.basicMarquee
 import androidx.compose.runtime.CompositionLocalProvider
 import com.novanity.musicplayer.ui.components.LocalTopEndInset
 import androidx.compose.material.icons.rounded.DownloadDone
@@ -360,8 +359,8 @@ private fun NowPlayingBar(
                 )
                 Spacer(Modifier.width(14.dp))
                 Column(Modifier.weight(1f, fill = false)) {
-                    Text(current.title, style = MaterialTheme.typography.titleSmall, maxLines = 1,
-                        modifier = Modifier.clickable { song?.let { actions.library.open(Destination.AlbumDetail(it.albumId)) } }.basicMarquee(iterations = Int.MAX_VALUE))
+                    Text(current.title, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                        modifier = Modifier.clickable { song?.let { actions.library.open(Destination.AlbumDetail(it.albumId)) } })
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         ArtistLinks(current.artist, actions.library, MaterialTheme.typography.bodySmall, color = muted)
                         if (song != null && song.album.isNotBlank() && Modules.BAR_ALBUM !in com.novanity.musicplayer.ui.components.LocalHiddenModules.current) {
@@ -370,7 +369,8 @@ private fun NowPlayingBar(
                                 style = MaterialTheme.typography.bodySmall,
                                 color = muted,
                                 maxLines = 1,
-                                modifier = Modifier.weight(1f, fill = false).clickable { actions.library.open(Destination.AlbumDetail(song.albumId)) }.basicMarquee(iterations = Int.MAX_VALUE),
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f, fill = false).clickable { actions.library.open(Destination.AlbumDetail(song.albumId)) },
                             )
                         }
                     }
