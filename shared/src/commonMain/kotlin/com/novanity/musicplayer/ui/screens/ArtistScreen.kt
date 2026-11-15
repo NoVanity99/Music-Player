@@ -204,11 +204,26 @@ internal fun ArtistScreen(name: String, actions: SongActions, contentPadding: Pa
             }
         }
         item { Box(fade) { PlayAndAbout(everything, yourTop, rank, bio, actions, artist.name) } }
-        AlbumKind.entries.forEach { kind ->
+        // A row only shows when the artist has something in it.
+        val rows = AlbumKind.entries.filter { kind -> if (kind == AlbumKind.UNRELEASED) unreleased.isNotEmpty() else !byKind[kind].isNullOrEmpty() }
+        rows.forEach { kind ->
             item(key = "row-$kind") {
                 Box(fade) {
                     if (kind == AlbumKind.UNRELEASED) UnreleasedRow(unreleased, actions, artist.name)
                     else ReleaseRow(kind, byKind[kind].orEmpty(), actions)
+                }
+            }
+        }
+        if (rows.isEmpty()) {
+            // Someone who only appears on other artists' songs: say so instead of leaving a blank page.
+            item(key = "no-releases") {
+                Box(fade) {
+                    Text(
+                        "No releases of their own here yet. Play or Shuffle plays the songs they appear on.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp),
+                    )
                 }
             }
         }
