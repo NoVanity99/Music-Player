@@ -666,7 +666,6 @@ private fun CustomizeSettings(vm: com.novanity.musicplayer.ui.LibraryViewModel, 
         toggle(m.ROW_DURATION, "Song length next to the artist")
         toggle(m.BAR_ALBUM, "Album name in the now-playing bar")
         toggle(m.CARD_CENTER, "Centre text under artwork")
-        toggle(m.TEXT_SCROLL, "Scroll titles that don't fit", "Off cuts them short with \u2026")
         if (desktop) toggle(m.CARD_HOVER, "Cards react when you point at them")
         TextButton(onClick = { vm.resetModules() }, modifier = Modifier.padding(8.dp)) { Text("Reset these options") }
     }

@@ -3,7 +3,6 @@ package com.novanity.musicplayer.desktop
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.background
 import androidx.compose.foundation.window.WindowDraggableArea
 import androidx.compose.foundation.layout.Box
@@ -143,12 +142,12 @@ private fun MiniPlayerContent(app: DesktopApp, onExpand: () -> Unit) {
         val info: @Composable (Modifier) -> Unit = { m ->
             Column(m) {
                 Text(ui.current?.title ?: "Nothing playing", color = Color.White, style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold, maxLines = 1, modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE))
+                    fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                 Text(ui.current?.artist.orEmpty(), color = Color.White.copy(alpha = 0.75f), style = MaterialTheme.typography.bodySmall,
-                    maxLines = 1, modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE))
+                    maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                 if (song != null && song.album.isNotBlank()) {
                     Text(song.album, color = Color.White.copy(alpha = 0.5f), style = MaterialTheme.typography.bodySmall,
-                        maxLines = 1, modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE))
+                        maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                 }
             }
         }

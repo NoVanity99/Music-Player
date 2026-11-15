@@ -14,7 +14,6 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -169,8 +168,8 @@ fun MiniPlayer(
                 AlbumArt(song, Modifier.size(44.dp).graphicsLayer { translationX = swipe.offset }, shape = RoundedCornerShape(6.dp))
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f).graphicsLayer { translationX = swipe.offset }) {
-                    Text(current.title, maxLines = 1, style = MaterialTheme.typography.titleSmall, color = Color.White, modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE))
-                    Text(if (song != null && song.album.isNotBlank() && com.novanity.musicplayer.data.Modules.BAR_ALBUM !in com.novanity.musicplayer.ui.components.LocalHiddenModules.current) "${current.artist} \u2022 ${song.album}" else current.artist, maxLines = 1, style = MaterialTheme.typography.bodySmall, color = Muted, modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE))
+                    Text(current.title, maxLines = 1, style = MaterialTheme.typography.titleSmall, color = Color.White, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                    Text(if (song != null && song.album.isNotBlank() && com.novanity.musicplayer.data.Modules.BAR_ALBUM !in com.novanity.musicplayer.ui.components.LocalHiddenModules.current) "${current.artist} \u2022 ${song.album}" else current.artist, maxLines = 1, style = MaterialTheme.typography.bodySmall, color = Muted, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                 }
                 if (song != null) {
                     IconButton(onClick = { actions.toggleLike(song, liked) }) {
@@ -310,7 +309,7 @@ fun NowPlayingScreen(
                             current.title,
                             style = MaterialTheme.typography.headlineSmall,
                             maxLines = 1,
-                            modifier = Modifier.basicMarquee(),
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                         )
                         ArtistLinks(current.artist, actions.library, MaterialTheme.typography.titleMedium, color = Muted, onOpen = onCollapse)
                         if (song != null && song.album.isNotBlank()) {
@@ -319,9 +318,9 @@ fun NowPlayingScreen(
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = Muted.copy(alpha = 0.8f),
                                 maxLines = 1,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                                 modifier = Modifier
-                                    .clickable { onCollapse(); actions.library.open(Destination.AlbumDetail(song.albumId)) }
-                                    .basicMarquee(),
+                                    .clickable { onCollapse(); actions.library.open(Destination.AlbumDetail(song.albumId)) },
                             )
                         }
                     }
