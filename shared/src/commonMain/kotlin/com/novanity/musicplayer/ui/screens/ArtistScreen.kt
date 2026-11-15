@@ -350,7 +350,13 @@ private fun UnreleasedRow(songs: List<Song>, actions: SongActions, source: Strin
             val rowState = rememberLazyListState()
             LazyRow(Modifier.mouseDragScroll(rowState), state = rowState, contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                 items(songs, key = { it.id }) { song ->
-                    SongCard(song, onClick = { actions.play(songs, songs.indexOf(song), source) }, modifier = Modifier.width(CardWidth).animateItem())
+                    SongCard(
+                        song,
+                        onClick = { actions.play(songs, songs.indexOf(song), source) },
+                        modifier = Modifier.width(CardWidth).animateItem(),
+                        // The year from the song's own tags, when it has one.
+                        subtitle = if (song.year > 0) "${song.year} \u2022 ${song.artist}" else song.artist,
+                    )
                 }
             }
         }

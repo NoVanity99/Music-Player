@@ -233,8 +233,8 @@ fun AlbumCard(
 ) = HoverCard(onClick, onPlay, modifier, art = { m -> AlbumArt(album.songs.first(), m, shape = RoundedCornerShape(8.dp)) }, title = album.title, subtitle = subtitle)
 
 @Composable
-fun SongCard(song: Song, onClick: () -> Unit, modifier: Modifier = Modifier.width(CardWidth)) =
-    HoverCard(onClick, onClick, modifier, art = { m -> AlbumArt(song, m, shape = RoundedCornerShape(8.dp)) }, title = song.title, subtitle = song.artist)
+fun SongCard(song: Song, onClick: () -> Unit, modifier: Modifier = Modifier.width(CardWidth), subtitle: String = song.artist) =
+    HoverCard(onClick, onClick, modifier, art = { m -> AlbumArt(song, m, shape = RoundedCornerShape(8.dp)) }, title = song.title, subtitle = subtitle)
 
 @Composable
 fun ArtistCard(artist: Artist, onClick: () -> Unit, modifier: Modifier = Modifier.width(CardWidth - 16.dp), onPlay: (() -> Unit)? = null, favorite: Boolean = false) =
