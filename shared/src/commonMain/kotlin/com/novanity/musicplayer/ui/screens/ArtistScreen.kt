@@ -28,6 +28,9 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Image
+import androidx.compose.foundation.border
+import com.novanity.musicplayer.ui.components.MenuAction
 import androidx.compose.material.icons.rounded.Album
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Shuffle
@@ -110,7 +113,8 @@ internal fun ArtistScreen(name: String, actions: SongActions, contentPadding: Pa
     // feature on (or share a song credit on) stays on its owner's page. Newest on the left.
     val byKind = remember(artist, lib) {
         everything.map { it.albumId }.distinct().mapNotNull { lib?.albumsById?.get(it) }
-            .filter { vm.ownsAlbum(artist.name, it) }
+            // Singles are the exception: they show for everyone credited on them.
+            .filter { vm.ownsAlbum(artist.name, it) || it.kind == AlbumKind.SINGLE }
             .sortedWith(compareByDescending<Album> { it.sortYear() }.thenByDescending { it.dateAdded }.thenBy { it.title.lowercase() })
             .groupBy { it.kind }
     }
@@ -167,16 +171,28 @@ internal fun ArtistScreen(name: String, actions: SongActions, contentPadding: Pa
     val tint by rememberArtColor(artist.songs.first(), MaterialTheme.colorScheme.surfaceContainerHigh)
     val background = MaterialTheme.colorScheme.background
 
-    CollectionScaffold(artist.name, tint, { vm.back() }, actions.collectionMenu(everything), contentPadding) {
+    var choosingPictures by remember(name) { mutableStateOf(false) }
+    if (choosingPictures) {
+        com.novanity.musicplayer.ui.components.ArtistPicturesDialog(artist, remember(byKind) { byKind.values.flatten() }) { choosingPictures = false }
+    }
+    val pictureMenu = if (vm.canChooseArtistPictures) listOf(MenuAction("Choose pictures", Icons.Rounded.Image) { choosingPictures = true }) else emptyList()
+
+    CollectionScaffold(artist.name, tint, { vm.back() }, actions.collectionMenu(everything, pictureMenu), contentPadding) {
         item {
             // Full-bleed image with the name over a fade. A banner on wide windows.
             BoxWithConstraints(Modifier.fillMaxWidth().then(fade)) {
                 Box(if (maxWidth >= 600.dp) Modifier.fillMaxWidth().height(360.dp) else Modifier.fillMaxWidth().aspectRatio(1.05f)) {
-                    AlbumArt(artist.songs.first(), Modifier.fillMaxSize(), shape = RoundedCornerShape(0.dp), large = true)
+                    com.novanity.musicplayer.ui.components.ArtistPicture(artist, com.novanity.musicplayer.ui.components.SLOT_BANNER, Modifier.fillMaxSize(), shape = RoundedCornerShape(0.dp), large = true)
                     // A wash of the cover's colour, then a fade into the page, so the name always reads.
                     Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Color.Black.copy(alpha = 0.18f), 0.35f to Color.Transparent, 0.72f to tint.copy(alpha = 0.35f), 1f to background)))
                     Column(Modifier.align(Alignment.BottomStart).padding(horizontal = 24.dp, vertical = 12.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
+                            // Their profile picture, ringed so it stands out from the banner behind it.
+                            com.novanity.musicplayer.ui.components.ArtistPicture(
+                                artist, com.novanity.musicplayer.ui.components.SLOT_AVATAR,
+                                Modifier.size(72.dp).border(2.dp, Color.White.copy(alpha = 0.85f), androidx.compose.foundation.shape.CircleShape),
+                            )
+                            Spacer(Modifier.width(14.dp))
                             Text(artist.name, style = MaterialTheme.typography.displayMedium, fontWeight = FontWeight.ExtraBold, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                             Spacer(Modifier.width(8.dp))
                             // Heart an artist to keep them in "Your artists" on Home.

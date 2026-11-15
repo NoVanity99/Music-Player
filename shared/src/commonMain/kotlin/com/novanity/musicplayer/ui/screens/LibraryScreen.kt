@@ -181,7 +181,7 @@ fun LibraryScreen(actions: SongActions, contentPadding: PaddingValues) {
                                 heart = artist.name in favoriteArtists,
                                 title = artist.name,
                                 subtitle = "${if (artist.albumCount == 1) "1 album" else "${artist.albumCount} albums"} • ${songCount(artist.songs.size)}",
-                                art = { m -> AlbumArt(artist.songs.first(), m, shape = CircleShape) },
+                                art = { m -> com.novanity.musicplayer.ui.components.ArtistPicture(artist, com.novanity.musicplayer.ui.components.SLOT_AVATAR, m) },
                                 onClick = { vm.open(Destination.ArtistDetail(artist.name)) },
                                 menu = actions.collectionMenu(artist.songs),
                             )

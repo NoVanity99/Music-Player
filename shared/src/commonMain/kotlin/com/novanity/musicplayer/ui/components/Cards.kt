@@ -236,7 +236,7 @@ fun SongCard(song: Song, onClick: () -> Unit, modifier: Modifier = Modifier.widt
 
 @Composable
 fun ArtistCard(artist: Artist, onClick: () -> Unit, modifier: Modifier = Modifier.width(CardWidth - 16.dp), onPlay: (() -> Unit)? = null, favorite: Boolean = false) =
-    HoverCard(onClick, onPlay, modifier, center = true, art = { m -> AlbumArt(artist.songs.first(), m, shape = CircleShape) }, title = if (favorite) "\u2665 ${artist.name}" else artist.name, subtitle = "Artist")
+    HoverCard(onClick, onPlay, modifier, center = true, art = { m -> ArtistPicture(artist, SLOT_AVATAR, m) }, title = if (favorite) "\u2665 ${artist.name}" else artist.name, subtitle = "Artist")
 
 @Composable
 fun PlaylistTile(playlist: PlaylistCard, onClick: () -> Unit, modifier: Modifier = Modifier.width(CardWidth), onPlay: (() -> Unit)? = null) =

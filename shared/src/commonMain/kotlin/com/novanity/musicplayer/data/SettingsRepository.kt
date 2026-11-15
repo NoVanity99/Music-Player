@@ -151,6 +151,15 @@ class SettingsRepository(private val prefs: KeyValueStore) {
         prefs.putString(KEY_START_TAB, tab)
     }
 
+    /** Look up artist pictures online (only the artist's name is sent). */
+    private val _artistPictures = MutableStateFlow(prefs.getBoolean(KEY_ARTIST_PICTURES, true))
+    val artistPictures: StateFlow<Boolean> = _artistPictures.asStateFlow()
+
+    fun setArtistPictures(enabled: Boolean) {
+        _artistPictures.value = enabled
+        prefs.putBoolean(KEY_ARTIST_PICTURES, enabled)
+    }
+
     /** Let friends see what you're listening to. */
     private val _shareListening = MutableStateFlow(prefs.getBoolean(KEY_SHARE_LISTENING, true))
     val shareListening: StateFlow<Boolean> = _shareListening.asStateFlow()
@@ -251,6 +260,7 @@ class SettingsRepository(private val prefs: KeyValueStore) {
         const val KEY_DISCORD = "discord_presence"
         const val KEY_ARTIST_BIOS = "artist_bios"
         const val KEY_SHARE_LISTENING = "share_listening"
+        const val KEY_ARTIST_PICTURES = "artist_pictures"
         const val KEY_HIDDEN_MODULES = "hidden_modules"
         const val KEY_START_TAB = "start_tab"
         const val KEY_ADVANCED_TRANSITIONS = "advanced_transitions"

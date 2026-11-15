@@ -365,6 +365,16 @@ fun SettingsScreen(actions: SongActions, contentPadding: PaddingValues) {
                         trailing = { Switch(checked = bios, onCheckedChange = vm::setArtistBiosEnabled) },
                     )
                 }
+                if (vm.canChooseArtistPictures) {
+                    val pictures by vm.artistPicturesEnabled.collectAsStateWithLifecycle()
+                    SettingRow(
+                        icon = Icons.Rounded.Person,
+                        title = "Artist pictures",
+                        subtitle = "Find a picture for each artist online. Off, or when none is found, an album cover is used",
+                        onClick = { vm.setArtistPicturesEnabled(!pictures) },
+                        trailing = { Switch(checked = pictures, onCheckedChange = vm::setArtistPicturesEnabled) },
+                    )
+                }
                 SettingRow(Icons.Rounded.Shield, "Private by design", "No ads or tracking. The music comes only from our cloud and is safety checked.")
             }
         }

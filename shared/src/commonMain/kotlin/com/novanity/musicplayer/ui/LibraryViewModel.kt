@@ -150,7 +150,33 @@ class LibraryViewModel(
     private val downloads: DownloadsRepository? = null,
     private val account: AccountRepository? = null,
     private val social: com.novanity.musicplayer.data.SocialRepository? = null,
+    private val artistImages: com.novanity.musicplayer.data.ArtistImages? = null,
 ) : ViewModel() {
+
+    // ---- Artist pictures ----
+
+    val artistPicturesEnabled: StateFlow<Boolean> = settings.artistPictures
+    fun setArtistPicturesEnabled(enabled: Boolean) = settings.setArtistPictures(enabled)
+
+    /** Changes when an artist's picture does, so pictures on screen refresh. */
+    val artistPicturesVersion: StateFlow<Int> = artistImages?.version ?: MutableStateFlow(0)
+
+    /**
+     * The picture to show for an artist's [slot] ("avatar" or "banner") if it's known right now:
+     * a web address, "album:<id>" for a library cover, or null to fall back to an album cover.
+     */
+    fun artistPictureNow(name: String, slot: String): String? =
+        artistImages?.choice(name, slot) ?: if (settings.artistPictures.value) artistImages?.knownAuto(name) else null
+
+    /** Like [artistPictureNow], but looks the artist up online first when that hasn't been done. */
+    suspend fun artistPicture(name: String, slot: String): String? =
+        artistImages?.choice(name, slot) ?: if (settings.artistPictures.value) artistImages?.auto(name) else null
+
+    fun artistPictureChoice(name: String, slot: String): String? = artistImages?.choice(name, slot)
+    fun setArtistPicture(name: String, slot: String, reference: String?) { artistImages?.setChoice(name, slot, reference) }
+    suspend fun searchArtistPictures(query: String): List<com.novanity.musicplayer.data.ArtistImageOption> = artistImages?.search(query).orEmpty()
+    val canChooseArtistPictures: Boolean get() = artistImages != null
+
 
     // ---- Friends and listening together ----
 
@@ -300,8 +326,10 @@ class LibraryViewModel(
 
     /** Opens the artist's page, or says they aren't in the library. */
     fun openArtist(part: ArtistPart) {
-        if (part.inLibrary && grouped.value?.artistsByName?.containsKey(part.name) == true) {
-            open(Destination.ArtistDetail(part.name))
+        // Someone credited only alongside others can have a page too (see group()).
+        val page = grouped.value?.artistsByName?.let { byName -> byName[part.name]?.name ?: byName.keys.firstOrNull { it.equals(part.name, ignoreCase = true) } }
+        if (page != null) {
+            open(Destination.ArtistDetail(page))
         } else {
             notify("${part.text} isn't in your library")
         }
@@ -702,6 +730,32 @@ class LibraryViewModel(
             )
         }
 
+        // Singles belong to everyone credited on them. Anyone credited on a single who has no
+        // page yet (they only ever appear alongside someone else) gets one, holding the songs
+        // they're credited on.
+        val known = artists.mapTo(HashSet()) { it.name.lowercase() }
+        val guests = LinkedHashMap<String, Pair<String, MutableList<Song>>>()
+        for (song in songs) {
+            val parts = index.resolve(song.artist)
+            if (parts.size < 2) continue
+            for (part in parts) {
+                val key = part.name.lowercase()
+                if (key in known || key.isBlank()) continue
+                guests.getOrPut(key) { part.name to ArrayList() }.second += song
+            }
+        }
+        val guestArtists = guests.values
+            .filter { (_, credited) -> credited.any { it.albumKind == com.novanity.musicplayer.data.AlbumKind.SINGLE } }
+            .map { (name, credited) ->
+                Artist(
+                    name = name,
+                    songs = credited.sortedWith(byArtist),
+                    albumCount = albums.count { name.lowercase() in albumOwners(it, index) },
+                    dateAdded = credited.maxOf { it.dateAdded },
+                )
+            }
+        val allArtists = artists + guestArtists
+
         val folders = songs.groupBy { it.folderPath }.map { (path, list) ->
             Folder(
                 path = path,
@@ -711,7 +765,7 @@ class LibraryViewModel(
             )
         }
 
-        return GroupedLibrary(songs, albums, artists, folders, index)
+        return GroupedLibrary(songs, albums, allArtists, folders, index)
     }
 
     private fun sorted(lib: GroupedLibrary, sort: SortOrder, plays: Map<Long, Int>): LibraryUi {

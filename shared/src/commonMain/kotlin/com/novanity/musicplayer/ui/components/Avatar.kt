@@ -37,22 +37,42 @@ object Avatars {
     var fetch: (suspend (url: String) -> ByteArray?)? = null
     var decode: ((ByteArray) -> ImageBitmap?)? = null
 
-    private val cache = HashMap<String, ImageBitmap?>()
+    // Most recently used last. Artist pictures come through here too, so the cache is bounded.
+    private val cache = LinkedHashMap<String, ImageBitmap>()
+    private var bytes = 0L
+    private const val MAX_BYTES = 72L * 1024 * 1024
 
-    fun cached(url: String): ImageBitmap? = cache[url]
+    fun cached(url: String): ImageBitmap? {
+        val image = cache.remove(url) ?: return null
+        cache[url] = image
+        return image
+    }
+
+    private fun keep(url: String, image: ImageBitmap) {
+        cache.remove(url)?.let { bytes -= it.width.toLong() * it.height * 4 }
+        cache[url] = image
+        bytes += image.width.toLong() * image.height * 4
+        val oldest = cache.keys.iterator()
+        while (bytes > MAX_BYTES && cache.size > 1 && oldest.hasNext()) {
+            val key = oldest.next()
+            if (key == url) continue
+            cache[key]?.let { bytes -= it.width.toLong() * it.height * 4 }
+            oldest.remove()
+        }
+    }
 
     suspend fun load(url: String): ImageBitmap? {
-        if (url in cache) return cache[url]
+        cached(url)?.let { return it }
         val f = fetch ?: return null
         val d = decode ?: return null
         val image = withContext(Dispatchers.IO) { runCatching { f(url)?.let(d) }.getOrNull() }
-        if (image != null) cache[url] = image // a failure is tried again next time
+        if (image != null) keep(url, image) // a failure is tried again next time
         return image
     }
 
     /** Shows a picture that was just chosen, before (and without) downloading it again. */
     fun put(url: String, bytes: ByteArray) {
-        decode?.let { d -> runCatching { d(bytes) }.getOrNull()?.let { cache[url] = it } }
+        decode?.let { d -> runCatching { d(bytes) }.getOrNull()?.let { keep(url, it) } }
     }
 }
 

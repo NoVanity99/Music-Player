@@ -663,7 +663,7 @@ internal fun MyArtistsPage(actions: SongActions, contentPadding: PaddingValues) 
             com.novanity.musicplayer.ui.components.CollectionRow(
                 title = artist.name,
                 subtitle = "${if (artist.albumCount == 1) "1 album" else "${artist.albumCount} albums"} \u2022 ${songCount(artist.songs.size)}",
-                art = { m -> com.novanity.musicplayer.ui.components.AlbumArt(artist.songs.first(), m, shape = CircleShape) },
+                art = { m -> com.novanity.musicplayer.ui.components.ArtistPicture(artist, com.novanity.musicplayer.ui.components.SLOT_AVATAR, m) },
                 onClick = { vm.open(Destination.ArtistDetail(artist.name)) },
                 menu = actions.collectionMenu(artist.songs),
                 heart = true,

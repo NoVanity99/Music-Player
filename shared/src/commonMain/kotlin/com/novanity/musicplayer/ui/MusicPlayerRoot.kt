@@ -150,6 +150,7 @@ fun MusicPlayerRoot(
         LocalTopEndInset provides com.novanity.musicplayer.platform.LocalPlatform.current.windowControlsWidth,
         LocalDownloadTap provides actions::onDownloadTap,
         com.novanity.musicplayer.ui.components.LocalHiddenModules provides hiddenModules,
+        com.novanity.musicplayer.ui.components.LocalLibrary provides library,
     ) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val wide = maxWidth >= WideLayoutMinWidth
