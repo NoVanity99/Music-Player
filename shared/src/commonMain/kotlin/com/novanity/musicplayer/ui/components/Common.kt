@@ -154,8 +154,9 @@ fun SongRow(
     val interaction = remember { MutableInteractionSource() }
     val hovered by interaction.collectIsHoveredAsState()
     // The song's length sits right after the artist: "slayr • 3:12 • Gaia".
-    @Suppress("NAME_SHADOWING") val subtitle = remember(subtitle, song.durationMs, song.artist) {
-        val length = if (song.durationMs > 0) formatDuration(song.durationMs) else null
+    val showLength = com.novanity.musicplayer.data.Modules.ROW_DURATION !in LocalHiddenModules.current
+    @Suppress("NAME_SHADOWING") val subtitle = remember(subtitle, song.durationMs, song.artist, showLength) {
+        val length = if (song.durationMs > 0 && showLength) formatDuration(song.durationMs) else null
         when {
             length == null -> subtitle
             subtitle.startsWith(song.artist) -> song.artist + " \u2022 " + length + subtitle.removePrefix(song.artist)
@@ -555,3 +556,7 @@ fun Modifier.mouseDragScroll(state: androidx.compose.foundation.lazy.LazyListSta
         },
     )
 }
+
+
+/** Parts of the player switched off in Settings → Customize (IDs from Modules). */
+val LocalHiddenModules = staticCompositionLocalOf<Set<String>> { emptySet() }

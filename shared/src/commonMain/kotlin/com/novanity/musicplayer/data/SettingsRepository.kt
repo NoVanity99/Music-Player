@@ -123,6 +123,34 @@ class SettingsRepository(private val prefs: KeyValueStore) {
         prefs.putBoolean(KEY_ADVANCED_TRANSITIONS, enabled)
     }
 
+    /**
+     * Parts of the player the user has switched off in Settings → Customize (see [Modules] for
+     * the IDs). Everything is on until it's listed here.
+     */
+    private val _hiddenModules = MutableStateFlow(prefs.getStringSet(KEY_HIDDEN_MODULES).orEmpty().toSet())
+    val hiddenModules: StateFlow<Set<String>> = _hiddenModules.asStateFlow()
+
+    fun setModuleShown(id: String, shown: Boolean) {
+        val next = if (shown) _hiddenModules.value - id else _hiddenModules.value + id
+        _hiddenModules.value = next
+        prefs.putStringSet(KEY_HIDDEN_MODULES, next)
+    }
+
+    fun resetModules() {
+        _hiddenModules.value = emptySet()
+        prefs.putStringSet(KEY_HIDDEN_MODULES, emptySet())
+        setStartTab("home")
+    }
+
+    /** The tab the player opens on: "home", "search" or "library". */
+    private val _startTab = MutableStateFlow(prefs.getString(KEY_START_TAB) ?: "home")
+    val startTab: StateFlow<String> = _startTab.asStateFlow()
+
+    fun setStartTab(tab: String) {
+        _startTab.value = tab
+        prefs.putString(KEY_START_TAB, tab)
+    }
+
     /** Let friends see what you're listening to. */
     private val _shareListening = MutableStateFlow(prefs.getBoolean(KEY_SHARE_LISTENING, true))
     val shareListening: StateFlow<Boolean> = _shareListening.asStateFlow()
@@ -223,10 +251,35 @@ class SettingsRepository(private val prefs: KeyValueStore) {
         const val KEY_DISCORD = "discord_presence"
         const val KEY_ARTIST_BIOS = "artist_bios"
         const val KEY_SHARE_LISTENING = "share_listening"
+        const val KEY_HIDDEN_MODULES = "hidden_modules"
+        const val KEY_START_TAB = "start_tab"
         const val KEY_ADVANCED_TRANSITIONS = "advanced_transitions"
         const val KEY_VISUALIZER = "visualizer"
         const val KEY_DOWNLOAD_LIKED = "download_liked"
         const val KEY_EQ_PRESET = "eq_preset"
         const val KEY_EQ_BANDS = "eq_bands"
     }
+}
+
+
+/** The parts of the player that can be switched off in Settings → Customize. */
+object Modules {
+    const val HOME_QUICK = "home.quick"
+    const val HOME_MIXES = "home.mixes"
+    const val HOME_RECENT = "home.recent"
+    const val HOME_REPEAT = "home.repeat"
+    const val HOME_ADDED = "home.added"
+    const val HOME_ARTISTS = "home.artists"
+    const val HOME_PLAYLISTS = "home.playlists"
+    const val NAV_DOWNLOADS = "nav.downloads"
+    const val NAV_ACCOUNT = "nav.account"
+    const val NAV_FRIENDS = "nav.friends"
+    const val NAV_STATS = "nav.stats"
+    const val NAV_SHORTCUTS = "nav.shortcuts"
+    const val NAV_PLAYLISTS = "nav.playlists"
+    const val ROW_DURATION = "row.duration"
+    const val BAR_ALBUM = "bar.album"
+    const val CARD_CENTER = "card.center"
+    const val TEXT_SCROLL = "text.scroll"
+    const val CARD_HOVER = "card.hover"
 }

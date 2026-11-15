@@ -45,6 +45,19 @@ const SESSION_STALE_MS = 45_000;
 /** A request to listen along is offered for this long. */
 const LISTEN_REQUEST_MS = 60_000;
 
+/**
+ * A profile look as stored and shown to others: short IDs the app knows how to draw (banner,
+ * frame, name style) and one emoji. Anything else is dropped, so a look can't carry text or links.
+ */
+function cleanLook(raw: any): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const key of ["banner", "frame", "name"]) {
+    if (typeof raw?.[key] === "string" && /^[a-z0-9-]{1,24}$/.test(raw[key])) out[key] = raw[key];
+  }
+  if (typeof raw?.flair === "string" && raw.flair.length > 0 && raw.flair.length <= 8 && /^[^\x00-\x7f]+$/.test(raw.flair)) out.flair = raw.flair;
+  return out;
+}
+
 /** What the app appends to /avatar/ to show someone's picture (null when they have none). */
 function avatarToken(id: unknown, version: unknown): string | null {
   return typeof version === "string" && version ? `${id}?v=${version}` : null;
@@ -87,6 +100,7 @@ function ensureSchema(sql: Sql): Promise<void> {
     await sql`ALTER TABLE vp_users ADD COLUMN IF NOT EXISTS private JSONB NOT NULL DEFAULT '{}'::jsonb`;
     // Friends, what each person is playing, and listening together.
     await sql`ALTER TABLE vp_users ADD COLUMN IF NOT EXISTS avatar TEXT`;
+    await sql`ALTER TABLE vp_users ADD COLUMN IF NOT EXISTS look JSONB NOT NULL DEFAULT '{}'::jsonb`;
     await sql`CREATE TABLE IF NOT EXISTS vp_reports (
       id BIGSERIAL PRIMARY KEY,
       user_id UUID REFERENCES vp_users(id) ON DELETE SET NULL,
@@ -249,7 +263,7 @@ export async function accounts(request: Request, env: AccountsEnv, path: string,
     const [likes, plays, user] = await Promise.all([
       sql`SELECT song_id, liked_at FROM vp_likes WHERE user_id = ${userId} ORDER BY liked_at DESC`,
       sql`SELECT song_id, played_at FROM vp_plays WHERE user_id = ${userId} ORDER BY played_at DESC LIMIT ${MAX_PLAYS_RETURNED}`,
-      sql`SELECT playlists, artists, bio, private, avatar FROM vp_users WHERE id = ${userId}`,
+      sql`SELECT playlists, artists, bio, private, avatar, look FROM vp_users WHERE id = ${userId}`,
     ]);
     return json({
       user: { id: userId, username: session[0].display_name },
@@ -258,7 +272,7 @@ export async function accounts(request: Request, env: AccountsEnv, path: string,
       plays: plays.map((r) => ({ songId: r.song_id, at: Number(r.played_at) })),
       playlists: user[0]?.playlists ?? [],
       artists: user[0]?.artists ?? [],
-      profile: { bio: user[0]?.bio ?? "", private: privacy(user[0]?.private), avatar: avatarToken(userId, user[0]?.avatar) },
+      profile: { bio: user[0]?.bio ?? "", private: privacy(user[0]?.private), avatar: avatarToken(userId, user[0]?.avatar), look: cleanLook(user[0]?.look) },
     });
   }
 
@@ -339,7 +353,7 @@ export async function accounts(request: Request, env: AccountsEnv, path: string,
       WHERE id = ${userId} RETURNING listen_host`;
     const hostId: string | null = mine[0]?.listen_host ?? null;
     const [links, asks] = await Promise.all([
-      sql`SELECT u.id, u.avatar, u.display_name, u.now_song, u.now_playing, u.now_pos, u.now_at, u.seen_at, f.status, (f.a = ${userId}) AS sent
+      sql`SELECT u.id, u.avatar, u.look, u.display_name, u.now_song, u.now_playing, u.now_pos, u.now_at, u.seen_at, f.status, (f.a = ${userId}) AS sent
         FROM vp_friends f JOIN vp_users u ON u.id = CASE WHEN f.a = ${userId} THEN f.b ELSE f.a END
         WHERE f.a = ${userId} OR f.b = ${userId} ORDER BY lower(u.display_name)`,
       sql`SELECT r.id, r.kind, u.display_name FROM vp_listen_requests r JOIN vp_users u ON u.id = r.from_id
@@ -371,6 +385,7 @@ export async function accounts(request: Request, env: AccountsEnv, path: string,
         username: l.display_name,
         admin: admins.has(String(l.display_name).toLowerCase()),
         avatar: avatarToken(l.id, l.avatar),
+        look: cleanLook(l.look),
         online: fresh(l.seen_at),
         songId: fresh(l.now_at) ? l.now_song : null,
         playing: fresh(l.now_at) && l.now_playing === true,
@@ -523,14 +538,15 @@ export async function accounts(request: Request, env: AccountsEnv, path: string,
   if (path === "/me/profile" && method === "PUT") {
     const body = await readJson(request, 16 * 1024);
     const bio = typeof body?.bio === "string" ? body.bio.trim().slice(0, 300) : "";
-    await sql`UPDATE vp_users SET bio = ${bio}, private = ${JSON.stringify(privacy(body?.private))}::jsonb WHERE id = ${userId}`;
+    // The app always sends the whole profile, so a look that isn't there means "back to plain".
+    await sql`UPDATE vp_users SET bio = ${bio}, private = ${JSON.stringify(privacy(body?.private))}::jsonb, look = ${JSON.stringify(cleanLook(body?.look))}::jsonb WHERE id = ${userId}`;
     return json({ ok: true });
   }
 
   // Someone else's profile: only the parts they haven't made private.
   const other = path.match(/^\/users\/([^/]{1,40})$/);
   if (other && method === "GET") {
-    const rows = await sql`SELECT id, display_name, bio, private, playlists, artists, avatar FROM vp_users WHERE username = ${decodeURIComponent(other[1]).trim().toLowerCase()}`;
+    const rows = await sql`SELECT id, display_name, bio, private, playlists, artists, avatar, look FROM vp_users WHERE username = ${decodeURIComponent(other[1]).trim().toLowerCase()}`;
     if (rows.length === 0) return json({ error: "no_such_user", message: "No account with that username." }, 404);
     const u = rows[0];
     const hidden = privacy(u.private);
@@ -548,6 +564,7 @@ export async function accounts(request: Request, env: AccountsEnv, path: string,
       username: u.display_name,
       admin: admins.has(String(u.display_name).toLowerCase()),
       avatar: avatarToken(u.id, u.avatar),
+      look: cleanLook(u.look),
       stats,
       bio: hidden.bio ? null : u.bio,
       likes: likes ? likes.map((r) => r.song_id) : null,

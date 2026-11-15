@@ -80,6 +80,7 @@ fun MusicPlayerRoot(
     }
 
     val state by player.state.collectAsStateWithLifecycle()
+    val hiddenModules by library.hiddenModules.collectAsStateWithLifecycle()
     val songs by library.songs.collectAsStateWithLifecycle()
     val songsById = remember(songs) { library.songsById }
     val likedIds by library.likedIds.collectAsStateWithLifecycle()
@@ -148,6 +149,7 @@ fun MusicPlayerRoot(
         LocalDownloadStates provides downloadStates,
         LocalTopEndInset provides com.novanity.musicplayer.platform.LocalPlatform.current.windowControlsWidth,
         LocalDownloadTap provides actions::onDownloadTap,
+        com.novanity.musicplayer.ui.components.LocalHiddenModules provides hiddenModules,
     ) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val wide = maxWidth >= WideLayoutMinWidth

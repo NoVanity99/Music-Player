@@ -115,7 +115,13 @@ fun SettingsScreen(actions: SongActions, contentPadding: PaddingValues) {
         if (vm.accountsAvailable) {
             item { GroupLabel("Account") }
             item { SettingsCard("Account") { AccountSettingsRow(vm, actions::toast) } }
+            item { GroupLabel("Profile") }
+            item { SettingsCard("Profile") { ProfileLookSettings(vm) } }
         }
+
+        // ---- Customize ----
+        item { GroupLabel("Customize") }
+        item { SettingsCard("Customize") { CustomizeSettings(vm, platform.isDesktop) } }
 
         // ---- Cloud library ----
         if (vm.cloudAvailable) {
@@ -389,6 +395,8 @@ private val GroupInfo: Map<String, Pair<ImageVector, String>> = mapOf(
     "Integrations" to (Icons.Rounded.Extension to "Discord"),
     "Library" to (Icons.Rounded.Shield to "Artist bios and privacy"),
     "Help" to (Icons.Rounded.BugReport to "Report a bug"),
+    "Profile" to (Icons.Rounded.Person to "Banner, picture frame, name style and flair that others see"),
+    "Customize" to (Icons.Rounded.Extension to "Choose what the player shows and how it behaves"),
 )
 
 /** A section heading you click to open or close. */
@@ -523,4 +531,143 @@ private fun ReportBugDialog(vm: com.novanity.musicplayer.ui.LibraryViewModel, ap
         },
         dismissButton = { TextButton(onClick = onDismiss, enabled = !sending) { Text("Cancel") } },
     )
+}
+
+
+/** A small heading inside a settings card. */
+@Composable
+private fun CardHeading(text: String) {
+    Text(text.uppercase(), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 8.dp))
+}
+
+/** Your profile's look: a live preview, then banner, picture frame, name style and flair. Others see it. */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun ProfileLookSettings(vm: com.novanity.musicplayer.ui.LibraryViewModel) {
+    val profile by vm.profile.collectAsStateWithLifecycle()
+    val account by vm.accountState.collectAsStateWithLifecycle()
+    val name = (account as? com.novanity.musicplayer.data.AccountState.SignedIn)?.user?.username ?: "You"
+    val look = profile.look
+    fun set(next: com.novanity.musicplayer.data.ProfileLook) = vm.setProfile(profile.copy(look = next))
+    val looks = com.novanity.musicplayer.ui.components.ProfileLooks
+    val selected = MaterialTheme.colorScheme.primary
+    Column {
+        // Preview: what friends and anyone opening your profile will see.
+        Row(
+            Modifier.fillMaxWidth().padding(16.dp).clip(RoundedCornerShape(16.dp))
+                .background(com.novanity.musicplayer.ui.components.bannerBrush(look)).background(Color.Black.copy(alpha = 0.25f)).padding(20.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            com.novanity.musicplayer.ui.components.FramedAvatar(name, vm.avatarUrl(profile.avatar), look, 72.dp)
+            Spacer(Modifier.width(16.dp))
+            Column {
+                com.novanity.musicplayer.ui.components.StyledName(name, look, MaterialTheme.typography.headlineSmall.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, color = Color.White))
+                Text("This is how others see you", style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.8f))
+            }
+        }
+        CardHeading("Banner")
+        androidx.compose.foundation.layout.FlowRow(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            looks.banners.forEach { b ->
+                Column(Modifier.width(84.dp).clip(RoundedCornerShape(12.dp)).clickable { set(look.copy(banner = b.id)) }, horizontalAlignment = Alignment.CenterHorizontally) {
+                    com.novanity.musicplayer.ui.components.BannerSwatch(
+                        b,
+                        Modifier.fillMaxWidth().height(44.dp).clip(RoundedCornerShape(12.dp))
+                            .then(if (look.banner == b.id) Modifier.border(2.dp, Color.White, RoundedCornerShape(12.dp)) else Modifier),
+                    )
+                    Text(b.label, style = MaterialTheme.typography.labelSmall, maxLines = 1, color = if (look.banner == b.id) selected else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
+                }
+            }
+        }
+        CardHeading("Picture frame")
+        androidx.compose.foundation.layout.FlowRow(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            looks.frames.forEach { f ->
+                Column(
+                    Modifier.width(84.dp).clip(RoundedCornerShape(12.dp))
+                        .background(if (look.frame == f.id) selected.copy(alpha = 0.16f) else Color.Transparent)
+                        .clickable { set(look.copy(frame = f.id)) }.padding(vertical = 8.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    com.novanity.musicplayer.ui.components.FramedAvatar(name, vm.avatarUrl(profile.avatar), look.copy(frame = f.id), 44.dp)
+                    Text(f.label, style = MaterialTheme.typography.labelSmall, maxLines = 1, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 6.dp))
+                }
+            }
+        }
+        CardHeading("Name style")
+        androidx.compose.foundation.layout.FlowRow(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            looks.names.forEach { n ->
+                Box(
+                    Modifier.clip(RoundedCornerShape(12.dp))
+                        .background(if (look.name == n.id) selected.copy(alpha = 0.16f) else MaterialTheme.colorScheme.surfaceContainerHighest)
+                        .clickable { set(look.copy(name = n.id)) }.padding(horizontal = 14.dp, vertical = 10.dp),
+                ) {
+                    com.novanity.musicplayer.ui.components.StyledName(n.label, look.copy(name = n.id, flair = ""), MaterialTheme.typography.titleSmall.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold))
+                }
+            }
+        }
+        CardHeading("Flair")
+        androidx.compose.foundation.layout.FlowRow(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            looks.flairs.forEach { e ->
+                Box(
+                    Modifier.size(42.dp).clip(RoundedCornerShape(10.dp))
+                        .background(if (look.flair == e) selected.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceContainerHighest)
+                        .clickable { set(look.copy(flair = e)) },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(e.ifEmpty { "None" }, style = if (e.isEmpty()) MaterialTheme.typography.labelSmall else MaterialTheme.typography.titleMedium)
+                }
+            }
+        }
+        TextButton(onClick = { set(com.novanity.musicplayer.data.ProfileLook()) }, modifier = Modifier.padding(8.dp)) { Text("Reset my profile look") }
+    }
+}
+
+/** Switches for the parts of the player: Home rows, sidebar entries, and small details. */
+@Composable
+private fun CustomizeSettings(vm: com.novanity.musicplayer.ui.LibraryViewModel, desktop: Boolean) {
+    val hidden by vm.hiddenModules.collectAsStateWithLifecycle()
+    val startTab by vm.startTab.collectAsStateWithLifecycle()
+    val m = com.novanity.musicplayer.data.Modules
+    @Composable
+    fun toggle(id: String, title: String, subtitle: String? = null) {
+        val on = id !in hidden
+        Row(Modifier.fillMaxWidth().clickable { vm.setModuleShown(id, !on) }.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.titleSmall)
+                if (subtitle != null) Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Switch(checked = on, onCheckedChange = { vm.setModuleShown(id, it) })
+        }
+    }
+    Column {
+        CardHeading("Opens on")
+        Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf("home" to "Home", "search" to "Search", "library" to "Your Library").forEach { (id, label) ->
+                androidx.compose.material3.FilterChip(selected = startTab == id, onClick = { vm.setStartTab(id) }, label = { Text(label) })
+            }
+        }
+        CardHeading("Home page rows")
+        toggle(m.HOME_QUICK, "Quick picks", "The tiles at the top")
+        toggle(m.HOME_MIXES, "Made for you")
+        toggle(m.HOME_RECENT, "Recently played")
+        toggle(m.HOME_REPEAT, "On repeat")
+        toggle(m.HOME_ADDED, "Recently added")
+        toggle(m.HOME_ARTISTS, "Your artists")
+        toggle(m.HOME_PLAYLISTS, "Your playlists")
+        if (desktop) {
+            CardHeading("Sidebar")
+            toggle(m.NAV_PLAYLISTS, "Your playlists in the sidebar")
+            toggle(m.NAV_DOWNLOADS, "Downloads")
+            toggle(m.NAV_ACCOUNT, "Account")
+            toggle(m.NAV_FRIENDS, "Friends")
+            toggle(m.NAV_STATS, "Your stats")
+            toggle(m.NAV_SHORTCUTS, "Shortcuts")
+        }
+        CardHeading("Details")
+        toggle(m.ROW_DURATION, "Song length next to the artist")
+        toggle(m.BAR_ALBUM, "Album name in the now-playing bar")
+        toggle(m.CARD_CENTER, "Centre text under artwork")
+        toggle(m.TEXT_SCROLL, "Scroll titles that don't fit", "Off cuts them short with \u2026")
+        if (desktop) toggle(m.CARD_HOVER, "Cards react when you point at them")
+        TextButton(onClick = { vm.resetModules() }, modifier = Modifier.padding(8.dp)) { Text("Reset these options") }
+    }
 }

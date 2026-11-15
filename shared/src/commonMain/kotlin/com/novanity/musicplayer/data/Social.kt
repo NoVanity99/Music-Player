@@ -24,7 +24,7 @@ import kotlinx.serialization.json.Json
 import kotlin.math.abs
 
 @Serializable
-data class Friend(val username: String = "", val admin: Boolean = false, val avatar: String? = null, val online: Boolean = false, val songId: String? = null, val playing: Boolean = false)
+data class Friend(val username: String = "", val admin: Boolean = false, val avatar: String? = null, val look: ProfileLook = ProfileLook(), val online: Boolean = false, val songId: String? = null, val playing: Boolean = false)
 
 /** A friend asking to listen along with you. */
 @Serializable

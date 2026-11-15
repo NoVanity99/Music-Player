@@ -1,5 +1,6 @@
 package com.novanity.musicplayer.ui
 
+import com.novanity.musicplayer.data.Modules
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.runtime.CompositionLocalProvider
 import com.novanity.musicplayer.ui.components.LocalTopEndInset
@@ -198,6 +199,7 @@ private fun Sidebar(library: LibraryViewModel, actions: SongActions, uiState: Ro
     val liked by library.likedSongs.collectAsStateWithLifecycle()
     var creating by remember { mutableStateOf(false) }
     val top = library.backStack.lastOrNull()
+    val hidden = com.novanity.musicplayer.ui.components.LocalHiddenModules.current
     val cloudConfig by library.cloudConfig.collectAsStateWithLifecycle()
     val downloadStates by library.downloadStates.collectAsStateWithLifecycle()
     val hasCloud = cloudConfig.isSet || downloadStates.isNotEmpty()
@@ -236,7 +238,7 @@ private fun Sidebar(library: LibraryViewModel, actions: SongActions, uiState: Ro
                     selected = top == Destination.RecentlyPlayed,
                 ) { library.open(Destination.RecentlyPlayed) }
             }
-            items(playlists, key = { it.id }) { p ->
+            items(if (Modules.NAV_PLAYLISTS in hidden) emptyList() else playlists, key = { it.id }) { p ->
                 SidebarItem(
                     art = { PlaylistArt(p.covers, Modifier.size(40.dp)) },
                     title = p.name,
@@ -245,15 +247,15 @@ private fun Sidebar(library: LibraryViewModel, actions: SongActions, uiState: Ro
                 ) { library.open(Destination.PlaylistDetail(p.id)) }
             }
         }
-        if (hasCloud) NavRow(Icons.Rounded.DownloadDone, Icons.Rounded.DownloadDone, "Downloads", top == Destination.Downloads) { library.open(Destination.Downloads) }
-        if (library.accountsAvailable) NavRow(Icons.Rounded.AccountCircle, Icons.Rounded.AccountCircle, "Account", top == Destination.Account) { library.open(Destination.Account) }
-        if (library.socialAvailable) {
+        if (hasCloud && Modules.NAV_DOWNLOADS !in hidden) NavRow(Icons.Rounded.DownloadDone, Icons.Rounded.DownloadDone, "Downloads", top == Destination.Downloads) { library.open(Destination.Downloads) }
+        if (library.accountsAvailable && Modules.NAV_ACCOUNT !in hidden) NavRow(Icons.Rounded.AccountCircle, Icons.Rounded.AccountCircle, "Account", top == Destination.Account) { library.open(Destination.Account) }
+        if (library.socialAvailable && Modules.NAV_FRIENDS !in hidden) {
             val social by library.socialState.collectAsStateWithLifecycle()
             val listening = social.friends.count { it.playing }
             NavRow(Icons.Rounded.Group, Icons.Rounded.Group, if (social.requests.isNotEmpty()) "Friends \u2022 ${social.requests.size} new" else if (listening > 0) "Friends \u2022 $listening listening" else "Friends", top == Destination.Friends) { library.open(Destination.Friends) }
         }
-        NavRow(Icons.Rounded.Insights, Icons.Rounded.Insights, "Your stats", top == Destination.Stats) { library.open(Destination.Stats) }
-        NavRow(Icons.Rounded.Keyboard, Icons.Rounded.Keyboard, "Shortcuts", false) { uiState.showShortcuts = true }
+        if (Modules.NAV_STATS !in hidden) NavRow(Icons.Rounded.Insights, Icons.Rounded.Insights, "Your stats", top == Destination.Stats) { library.open(Destination.Stats) }
+        if (Modules.NAV_SHORTCUTS !in hidden) NavRow(Icons.Rounded.Keyboard, Icons.Rounded.Keyboard, "Shortcuts", false) { uiState.showShortcuts = true }
         NavRow(Icons.Rounded.Settings, Icons.Rounded.Settings, "Settings", top == Destination.Settings) { library.open(Destination.Settings) }
     }
 
@@ -362,7 +364,7 @@ private fun NowPlayingBar(
                         modifier = Modifier.clickable { song?.let { actions.library.open(Destination.AlbumDetail(it.albumId)) } }.basicMarquee(iterations = Int.MAX_VALUE))
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         ArtistLinks(current.artist, actions.library, MaterialTheme.typography.bodySmall, color = muted)
-                        if (song != null && song.album.isNotBlank()) {
+                        if (song != null && song.album.isNotBlank() && Modules.BAR_ALBUM !in com.novanity.musicplayer.ui.components.LocalHiddenModules.current) {
                             Text(
                                 " \u2022 ${song.album}",
                                 style = MaterialTheme.typography.bodySmall,

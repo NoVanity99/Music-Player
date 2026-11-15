@@ -72,20 +72,31 @@ private val ProfileTint = Color(0xFF7C3AED)
 
 /** The round initial and name at the top of a profile. */
 @Composable
-private fun ProfileHeader(name: String, caption: String, admin: Boolean = false, avatarUrl: String? = null, onPicture: (() -> Unit)? = null, below: (@Composable () -> Unit)? = null) {
+private fun ProfileHeader(
+    name: String,
+    caption: String,
+    admin: Boolean = false,
+    avatarUrl: String? = null,
+    onPicture: (() -> Unit)? = null,
+    look: com.novanity.musicplayer.data.ProfileLook? = null,
+    below: (@Composable () -> Unit)? = null,
+) {
+    val background = MaterialTheme.colorScheme.background
     Row(
         Modifier
             .fillMaxWidth()
-            .background(Brush.verticalGradient(listOf(ProfileTint.copy(alpha = 0.55f), Color.Transparent)))
+            // Their banner, fading into the page so the text under it always reads.
+            .background(com.novanity.musicplayer.ui.components.bannerBrush(look), alpha = 0.7f)
+            .background(Brush.verticalGradient(listOf(Color.Transparent, background)))
             .padding(start = 24.dp, end = 24.dp, top = 76.dp, bottom = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        com.novanity.musicplayer.ui.components.Avatar(name, avatarUrl, 96.dp, if (onPicture != null) Modifier.clip(CircleShape).clickable(onClick = onPicture) else Modifier)
+        com.novanity.musicplayer.ui.components.FramedAvatar(name, avatarUrl, look, 96.dp, if (onPicture != null) Modifier.clip(CircleShape).clickable(onClick = onPicture) else Modifier)
         Spacer(Modifier.width(20.dp))
         Column {
             Text(caption.uppercase(), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(name, style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                com.novanity.musicplayer.ui.components.StyledName(name, look, MaterialTheme.typography.displaySmall.copy(fontWeight = FontWeight.Bold), Modifier.weight(1f, fill = false))
                 if (admin) {
                     Spacer(Modifier.width(12.dp))
                     com.novanity.musicplayer.ui.components.AdminBadge()
@@ -175,7 +186,7 @@ internal fun AccountPage(actions: SongActions, contentPadding: PaddingValues) {
     CollectionScaffold("Account", ProfileTint, { vm.back() }, emptyList(), contentPadding) {
         item {
             // Click the picture (or "Change picture") to choose one from this device.
-            ProfileHeader(name, "Your account", isAdmin, vm.avatarUrl(profile.avatar), pickPicture) {
+            ProfileHeader(name, "Your account", isAdmin, vm.avatarUrl(profile.avatar), pickPicture, profile.look) {
                 if (pickPicture != null) {
                     Row {
                         TextButton(onClick = pickPicture, contentPadding = PaddingValues(horizontal = 0.dp)) { Text(if (profile.avatar == null) "Add a profile picture" else "Change picture") }
@@ -242,7 +253,7 @@ internal fun AccountPage(actions: SongActions, contentPadding: PaddingValues) {
                             Modifier.fillMaxWidth().clickable { vm.open(Destination.Profile(friend.username)) }.padding(start = 70.dp, end = 24.dp, top = 6.dp, bottom = 6.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            com.novanity.musicplayer.ui.components.Avatar(friend.username, vm.avatarUrl(friend.avatar), 32.dp)
+                            com.novanity.musicplayer.ui.components.FramedAvatar(friend.username, vm.avatarUrl(friend.avatar), friend.look, 32.dp)
                             Spacer(Modifier.width(12.dp))
                             Column {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -310,7 +321,7 @@ internal fun ProfilePage(username: String, actions: SongActions, contentPadding:
     val profile = result?.first
 
     CollectionScaffold(profile?.username ?: username, ProfileTint, { vm.back() }, emptyList(), contentPadding) {
-        item { ProfileHeader(profile?.username ?: username, "Profile", profile?.admin == true, vm.avatarUrl(profile?.avatar)) }
+        item { ProfileHeader(profile?.username ?: username, "Profile", profile?.admin == true, vm.avatarUrl(profile?.avatar), look = profile?.look) }
         if (result == null) {
             item { Box(Modifier.fillMaxWidth().height(240.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() } }
             return@CollectionScaffold
@@ -475,14 +486,14 @@ internal fun FriendsPage(actions: SongActions, contentPadding: PaddingValues) {
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Box {
-                    com.novanity.musicplayer.ui.components.Avatar(friend.username, vm.avatarUrl(friend.avatar), 44.dp)
+                    com.novanity.musicplayer.ui.components.FramedAvatar(friend.username, vm.avatarUrl(friend.avatar), friend.look, 44.dp)
                     // A green dot while they have the player open.
                     if (friend.online) Box(Modifier.align(Alignment.BottomEnd).size(12.dp).background(MaterialTheme.colorScheme.background, CircleShape).padding(2.dp).background(Color(0xFF30D158), CircleShape))
                 }
                 Spacer(Modifier.width(14.dp))
                 Column(Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(friend.username, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                        com.novanity.musicplayer.ui.components.StyledName(friend.username, friend.look, MaterialTheme.typography.titleSmall, Modifier.weight(1f, fill = false))
                         if (friend.admin) {
                             Spacer(Modifier.width(8.dp))
                             com.novanity.musicplayer.ui.components.AdminBadge()

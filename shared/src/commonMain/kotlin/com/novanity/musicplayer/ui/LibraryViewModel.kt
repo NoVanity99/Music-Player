@@ -184,6 +184,14 @@ class LibraryViewModel(
     }
     fun signOut() { viewModelScope.launch { account?.signOut() } }
 
+    // ---- Customize ----
+
+    val hiddenModules: StateFlow<Set<String>> = settings.hiddenModules
+    fun setModuleShown(id: String, shown: Boolean) = settings.setModuleShown(id, shown)
+    fun resetModules() = settings.resetModules()
+    val startTab: StateFlow<String> = settings.startTab
+    fun setStartTab(tab: String) = settings.setStartTab(tab)
+
     // ---- Profile ----
 
     private val noProfile = MutableStateFlow(com.novanity.musicplayer.data.AccountProfile())
@@ -271,7 +279,8 @@ class LibraryViewModel(
 
     // ---- Navigation: one back stack per bottom-bar tab ----
 
-    var tab by mutableStateOf(Tab.HOME)
+    // Opens on the tab chosen in Settings → Customize.
+    var tab by mutableStateOf(when (settings.startTab.value) { "search" -> Tab.SEARCH; "library" -> Tab.LIBRARY; else -> Tab.HOME })
         private set
     private val stacks: Map<Tab, SnapshotStateList<Destination>> = Tab.entries.associateWith { mutableStateListOf() }
     val backStack: SnapshotStateList<Destination> get() = stacks.getValue(tab)

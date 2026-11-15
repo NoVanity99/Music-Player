@@ -145,7 +145,8 @@ private fun CardText(title: String, subtitle: String?, center: Boolean = false) 
         style = MaterialTheme.typography.titleSmall,
         maxLines = 1,
         textAlign = if (center) TextAlign.Center else TextAlign.Start,
-        modifier = Modifier.fillMaxWidth().basicMarquee(iterations = 3),
+        overflow = TextOverflow.Ellipsis,
+        modifier = Modifier.fillMaxWidth().then(if (com.novanity.musicplayer.data.Modules.TEXT_SCROLL in LocalHiddenModules.current) Modifier else Modifier.basicMarquee(iterations = 3)),
     )
     if (subtitle != null) {
         Text(
@@ -178,7 +179,8 @@ private fun HoverCard(
     subtitle: String?,
 ) {
     // Text sits centred under the artwork everywhere.
-    @Suppress("NAME_SHADOWING", "UNUSED_VARIABLE") val center = true
+    val hidden = LocalHiddenModules.current
+    @Suppress("NAME_SHADOWING", "UNUSED_VARIABLE") val center = center || com.novanity.musicplayer.data.Modules.CARD_CENTER !in hidden
     val interaction = remember { MutableInteractionSource() }
     val hovered by interaction.collectIsHoveredAsState()
     val lift by animateFloatAsState(if (hovered) 1f else 0f, label = "lift")
@@ -192,7 +194,7 @@ private fun HoverCard(
                 .clickable(interactionSource = interaction, indication = LocalIndication.current, onClick = onClick)
                 // Shrinks the content a touch instead of changing its padding: nothing around it moves.
                 .graphicsLayer {
-                    val s = 1f - 0.05f * lift
+                    val s = if (com.novanity.musicplayer.data.Modules.CARD_HOVER in hidden) 1f else 1f - 0.05f * lift
                     scaleX = s
                     scaleY = s
                 },

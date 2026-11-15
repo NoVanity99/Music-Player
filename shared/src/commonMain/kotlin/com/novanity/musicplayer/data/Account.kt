@@ -107,7 +107,16 @@ data class AccountProfile(
     val private: ProfilePrivacy = ProfilePrivacy(),
     /** What to add to the server's /avatar/ address for your picture; null when you have none. */
     val avatar: String? = null,
+    /** How your profile looks to you and to others. */
+    val look: ProfileLook = ProfileLook(),
 )
+
+/**
+ * A profile's look: IDs of a banner, a picture frame and a name style (see ProfileLooks in the
+ * UI), and one emoji. Empty means the plain default.
+ */
+@Serializable
+data class ProfileLook(val banner: String = "", val frame: String = "", val name: String = "", val flair: String = "")
 
 @Serializable
 private data class AvatarBody(val image: String)
@@ -131,6 +140,7 @@ data class PublicProfile(
     val username: String = "",
     val admin: Boolean = false,
     val avatar: String? = null,
+    val look: ProfileLook = ProfileLook(),
     val bio: String? = null,
     val likes: List<String>? = null,
     val playlists: List<PublicPlaylist>? = null,

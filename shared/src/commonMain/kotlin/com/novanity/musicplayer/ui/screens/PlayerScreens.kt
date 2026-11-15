@@ -170,7 +170,7 @@ fun MiniPlayer(
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f).graphicsLayer { translationX = swipe.offset }) {
                     Text(current.title, maxLines = 1, style = MaterialTheme.typography.titleSmall, color = Color.White, modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE))
-                    Text(if (song != null && song.album.isNotBlank()) "${current.artist} \u2022 ${song.album}" else current.artist, maxLines = 1, style = MaterialTheme.typography.bodySmall, color = Muted, modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE))
+                    Text(if (song != null && song.album.isNotBlank() && com.novanity.musicplayer.data.Modules.BAR_ALBUM !in com.novanity.musicplayer.ui.components.LocalHiddenModules.current) "${current.artist} \u2022 ${song.album}" else current.artist, maxLines = 1, style = MaterialTheme.typography.bodySmall, color = Muted, modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE))
                 }
                 if (song != null) {
                     IconButton(onClick = { actions.toggleLike(song, liked) }) {

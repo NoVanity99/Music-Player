@@ -135,6 +135,11 @@ class SocialFlowTest {
             assertTrue(UpdateCore.fetch(pictureUrl, 2_000_000).contentEquals(picture))
             assertTrue("JPEG or PNG" in hostDevice.account!!.setAvatar("not a picture at all, just some text that is long enough to pass the size check ".repeat(3).toByteArray())!!)
 
+            // A profile look: saved to the account, and (below) seen by a friend.
+            val look = com.novanity.musicplayer.data.ProfileLook(banner = "galaxy", frame = "rainbow", name = "gold", flair = "\uD83D\uDC51")
+            hostDevice.account!!.setProfile(hostDevice.account!!.profile.value.copy(look = look))
+            waitFor("the look is saved") { runBlocking { hostDevice.account!!.lookUpProfile(hostName) }.first?.look == look }
+
             // Friends: a request, then an accept.
             guest.addFriend(hostName)
             waitFor("the request arrives") { runBlocking { host.pulse() }; guestName in host.state.value.requests }
@@ -147,7 +152,7 @@ class SocialFlowTest {
             host.pulse()
             waitFor("the guest sees what the host plays") {
                 runBlocking { guest.pulse() }
-                guest.state.value.friends.first { it.username == hostName }.let { it.avatar != null && it.playing && guestDevice.musicRepository.songsById[com.novanity.musicplayer.data.CloudRepository.songIdFor(it.songId!!)]?.id == songs[0].id }
+                guest.state.value.friends.first { it.username == hostName }.let { it.avatar != null && it.look == look && it.playing && guestDevice.musicRepository.songsById[com.novanity.musicplayer.data.CloudRepository.songIdFor(it.songId!!)]?.id == songs[0].id }
             }
 
             // The guest asks to listen along; the host gets the request and accepts.

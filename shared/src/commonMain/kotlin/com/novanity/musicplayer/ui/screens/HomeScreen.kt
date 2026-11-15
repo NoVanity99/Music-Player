@@ -1,5 +1,6 @@
 package com.novanity.musicplayer.ui.screens
 
+import com.novanity.musicplayer.data.Modules
 import com.novanity.musicplayer.ui.components.clearOfWindowControls
 import com.novanity.musicplayer.ui.components.MixCard
 import androidx.compose.material.icons.rounded.AccountCircle
@@ -79,6 +80,7 @@ fun HomeScreen(actions: SongActions, contentPadding: PaddingValues) {
 
 @Composable
 private fun HomeContent(actions: SongActions, contentPadding: PaddingValues) {
+    val hidden = com.novanity.musicplayer.ui.components.LocalHiddenModules.current
     val vm = actions.library
     val home by vm.home.collectAsStateWithLifecycle()
     val liked by vm.likedSongs.collectAsStateWithLifecycle()
@@ -119,7 +121,7 @@ private fun HomeContent(actions: SongActions, contentPadding: PaddingValues) {
                 item { HomeHeader(onSettings = { vm.open(Destination.Settings) }, onStats = { vm.open(Destination.Stats) }, onAccount = if (vm.accountsAvailable) ({ vm.open(Destination.Account) }) else null) }
                 if (syncing) item { SyncingBanner() }
                 item { CloudProblemBanner(vm) }
-                item {
+                if (Modules.HOME_QUICK !in hidden) item {
                     QuickPicksGrid(home.quickPicks) { pick ->
                         when (pick) {
                             is QuickPick.Liked -> vm.open(Destination.LikedSongs)
@@ -129,7 +131,7 @@ private fun HomeContent(actions: SongActions, contentPadding: PaddingValues) {
                         }
                     }
                 }
-                if (mixes.isNotEmpty()) {
+                if (mixes.isNotEmpty() && Modules.HOME_MIXES !in hidden) {
                     item { SectionHeader("Made for you") }
                     item {
                         CardRow(mixes, key = { it.kind }) { mix, m ->
@@ -138,7 +140,7 @@ private fun HomeContent(actions: SongActions, contentPadding: PaddingValues) {
                         }
                     }
                 }
-                if (home.recentlyPlayed.isNotEmpty()) {
+                if (home.recentlyPlayed.isNotEmpty() && Modules.HOME_RECENT !in hidden) {
                     item { SectionHeader("Recently played", action = "See all") { vm.open(Destination.RecentlyPlayed) } }
                     item {
                         CardRow(home.recentlyPlayed, key = { it.id }) { song, m ->
@@ -146,7 +148,7 @@ private fun HomeContent(actions: SongActions, contentPadding: PaddingValues) {
                         }
                     }
                 }
-                if (mostPlayed.size >= 3) {
+                if (mostPlayed.size >= 3 && Modules.HOME_REPEAT !in hidden) {
                     item { SectionHeader("On repeat", action = "See all") { vm.open(Destination.MostPlayed) } }
                     item {
                         CardRow(mostPlayed.take(12), key = { it.id }) { song, m ->
@@ -154,7 +156,7 @@ private fun HomeContent(actions: SongActions, contentPadding: PaddingValues) {
                         }
                     }
                 }
-                if (home.recentlyAdded.isNotEmpty()) {
+                if (home.recentlyAdded.isNotEmpty() && Modules.HOME_ADDED !in hidden) {
                     item { SectionHeader("Recently added", action = "See all") { vm.showLibrary(LibraryFilter.ALBUMS, everything = true) } }
                     item {
                         CardRow(home.recentlyAdded, key = { it.id }) { album, m ->
@@ -163,8 +165,10 @@ private fun HomeContent(actions: SongActions, contentPadding: PaddingValues) {
                         }
                     }
                 }
-                item { SectionHeader("Your artists", action = if (home.topArtists.isEmpty()) "All artists" else "See all") { vm.showFavoriteArtists() } }
-                if (home.topArtists.isEmpty()) {
+                if (Modules.HOME_ARTISTS !in hidden) item { SectionHeader("Your artists", action = if (home.topArtists.isEmpty()) "All artists" else "See all") { vm.showFavoriteArtists() } }
+                if (Modules.HOME_ARTISTS in hidden) {
+                    // switched off in Settings → Customize
+                } else if (home.topArtists.isEmpty()) {
                     item {
                         Text(
                             "Tap the heart on an artist's page to keep them here.",
@@ -181,7 +185,7 @@ private fun HomeContent(actions: SongActions, contentPadding: PaddingValues) {
                         }
                     }
                 }
-                if (home.playlists.isNotEmpty()) {
+                if (home.playlists.isNotEmpty() && Modules.HOME_PLAYLISTS !in hidden) {
                     item { SectionHeader("Your playlists", action = "See all") { vm.showLibrary(LibraryFilter.PLAYLISTS) } }
                     item {
                         CardRow(home.playlists, key = { it.id }) { playlist, m ->
