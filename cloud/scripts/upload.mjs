@@ -12,7 +12,7 @@
  * - --type=released|unreleased|ep|single|custom  files everything in this folder in that
  *                artist-page row, whatever the folders are called.
  *                Without --type (and without a folder named after a row), a newly added album is
- *                filed by its size: 1 song is a single, 2-8 an EP, 9-100 a released album.
+ *                filed by its size: 1 song is a single, 2-8 an EP, 9 or more a released album.
  * - --order="oldest album, next album, ..., newest album"  sets the order of those albums on the
  *                artist page (matched by album name or folder name, ignoring case).
  * - --artist="Name"  the artist for files whose tags don't name one.
@@ -52,8 +52,7 @@ function albumTypeFor(rel) {
 function sizeType(count) {
   if (count === 1) return "single";
   if (count >= 2 && count <= 8) return "ep";
-  if (count >= 9 && count <= 100) return "released";
-  return "custom";
+  return "released"; // 9 or more
 }
 const albumKey = (s) => `${(s.albumArtist || s.artist || "").trim().toLowerCase()}\u0000${(s.album || "").trim().toLowerCase()}`;
 
