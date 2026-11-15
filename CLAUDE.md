@@ -25,8 +25,9 @@ say so instead of acting on them.
 
 ## Filing albums by size
 
-Every album in the cloud is filed in its artist-page row by its size: 1 song goes in Singles, 2-8
-songs in EPs, 9 or more songs in Released albums. This applies to newly added music and to what is
+Every album in the cloud is filed in its artist-page row by its size: 1 song goes in Singles, 2-6
+songs in EPs, 7 or more songs in Albums. This applies to newly added music and to what is
 already there (an album that grows moves rows). `cloud/scripts/upload.mjs` does this on every run;
-do the same when editing `library.json` by hand. Nothing goes in Custom albums unless the owner
-asks for it, and an explicit instruction from the owner (or `--type`) wins.
+do the same when editing `library.json` by hand. An explicit instruction from the owner (or
+`--type`) wins. Artist pages have exactly three rows, titled "Albums", "EPs" and "Singles"; the
+old Custom albums and Unreleased songs rows are gone and must not come back.

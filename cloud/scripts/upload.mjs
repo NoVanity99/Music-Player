@@ -9,10 +9,10 @@
  * - --prune    also removes songs from the cloud whose files are no longer in the folder.
  * - --local    writes to Wrangler's local R2 simulator (for `npm run dev`), not Cloudflare.
  * - --dry-run  shows what would happen without uploading anything.
- * - --type=released|unreleased|ep|single|custom  files everything in this folder in that
+ * - --type=released|ep|single  files everything in this folder in that
  *                artist-page row, whatever the folders are called.
  *                Without --type (and without a folder named after a row), every album is
- *                filed by its size: 1 song is a single, 2-8 an EP, 9 or more a released album.
+ *                filed by its size: 1 song is a single, 2-6 an EP, 7 or more an album.
  * - --order="oldest album, next album, ..., newest album"  sets the order of those albums on the
  *                artist page (matched by album name or folder name, ignoring case).
  * - --artist="Name"  the artist for files whose tags don't name one.
@@ -38,7 +38,6 @@ const AUDIO = { ".mp3": "audio/mpeg", ".flac": "audio/flac", ".m4a": "audio/mp4"
  */
 const ALBUM_TYPES = [
   [/^(released|released albums?|albums?|studio albums?)$/i, "released"],
-  [/^(unreleased|unreleased songs?|leaks?)$/i, "unreleased"],
   [/^(eps?|e\.p\.s?)$/i, "ep"],
   [/^(singles?)$/i, "single"],
 ];
@@ -51,16 +50,15 @@ function albumTypeFor(rel) {
 /** The row for an album that nobody filed by hand: by how many songs it has. */
 function sizeType(count) {
   if (count === 1) return "single";
-  if (count >= 2 && count <= 8) return "ep";
-  return "released"; // 9 or more
+  if (count >= 2 && count <= 6) return "ep";
+  return "released"; // 7 or more
 }
 /** One album, the way the app groups it: by album artist, else by folder, else by artist. */
 const albumKey = (s) =>
   `${((s.albumArtist || "").trim() || (s.path || "").split("/").slice(0, -1).join("/") || s.artist || "").toLowerCase()}|${(s.album || "").toLowerCase()}`;
 /**
  * Files every album in the library by its size (cloud songs included, so an album that grows
- * moves rows). Left alone: songs filed by hand in this run (--type or a row folder), and
- * unreleased songs, which aren't albums.
+ * moves rows). Left alone: songs filed by hand in this run (--type or a row folder).
  */
 function fileBySize(songs, byHand) {
   const groups = new Map();
@@ -69,7 +67,6 @@ function fileBySize(songs, byHand) {
     const chosen = group.find((s) => byHand.has(s.id))?.albumType;
     for (const s of group) {
       if (byHand.has(s.id)) continue;
-      if (!chosen && s.albumType === "unreleased") continue;
       s.albumType = chosen ?? sizeType(group.length);
     }
   }
@@ -84,8 +81,8 @@ const option = (name) => args.find((a) => a.startsWith(`--${name}=`))?.slice(nam
 const TYPE = option("type")?.toLowerCase() ?? null;
 const ORDER = (option("order") ?? "").split(",").map((a) => a.trim().toLowerCase()).filter(Boolean);
 const ARTIST = option("artist");
-if (TYPE && !["released", "unreleased", "ep", "single", "custom"].includes(TYPE)) {
-  console.error(`Unknown --type "${TYPE}". Use released, unreleased, ep, single or custom.`);
+if (TYPE && !["released", "ep", "single"].includes(TYPE)) {
+  console.error(`Unknown --type "${TYPE}". Use released, ep or single.`);
   process.exit(1);
 }
 const folderArg = args.find((a) => !a.startsWith("--"));

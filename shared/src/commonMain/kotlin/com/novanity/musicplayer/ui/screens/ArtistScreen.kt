@@ -100,8 +100,8 @@ import kotlinx.coroutines.withTimeoutOrNull
 private fun Album.sortYear(): Int = if (year > 0) year else 1970 + (dateAdded / 31_556_952L).toInt()
 
 /**
- * An artist: banner, Play/Shuffle with the bio beside them, then five rows (custom albums,
- * unreleased songs, released albums, EPs, singles), each with the newest on the left.
+ * An artist: banner, Play/Shuffle with the bio beside them, then three rows (albums, EPs,
+ * singles), each with the newest on the left.
  */
 @Composable
 internal fun ArtistScreen(name: String, actions: SongActions, contentPadding: PaddingValues) {
@@ -117,11 +117,6 @@ internal fun ArtistScreen(name: String, actions: SongActions, contentPadding: Pa
             .filter { vm.ownsAlbum(artist.name, it) || it.kind == AlbumKind.SINGLE }
             .sortedWith(compareByDescending<Album> { it.sortYear() }.thenByDescending { it.dateAdded }.thenBy { it.title.lowercase() })
             .groupBy { it.kind }
-    }
-    // Unreleased songs are shown one by one, newest first.
-    val unreleased = remember(everything) {
-        everything.filter { it.albumKind == AlbumKind.UNRELEASED }
-            .sortedWith(compareByDescending<Song> { it.year }.thenByDescending { it.dateAdded }.thenBy { it.title.lowercase() })
     }
     val biosOn by vm.artistBiosEnabled.collectAsStateWithLifecycle()
     // A bio that's already on the device is there from the first frame; a new one is looked up.
@@ -146,8 +141,8 @@ internal fun ArtistScreen(name: String, actions: SongActions, contentPadding: Pa
 
     // Load all the artwork on the page first, then show the page in one go (rather than cover by
     // cover). Covers are already on the device, so this takes a moment at most; it never waits long.
-    val art = remember(artist, byKind, unreleased) {
-        (byKind.values.flatten().map { it.songs.first() } + unreleased).distinctBy { it.albumId }.take(60)
+    val art = remember(artist, byKind) {
+        byKind.values.flatten().map { it.songs.first() }.take(60)
     }
     var ready by remember(name) {
         mutableStateOf(
@@ -208,7 +203,7 @@ internal fun ArtistScreen(name: String, actions: SongActions, contentPadding: Pa
                                 )
                             }
                         }
-                        val releases = byKind.filterKeys { it != AlbumKind.UNRELEASED }.values.sumOf { it.size }
+                        val releases = byKind.values.sumOf { it.size }
                         Text(
                             "${if (releases == 1) "1 release" else "$releases releases"} • ${songCount(everything.size)}" +
                                 if (yourPlays > 0) " • played ${if (yourPlays == 1) "once" else "$yourPlays times"} by you" else "",
@@ -221,13 +216,10 @@ internal fun ArtistScreen(name: String, actions: SongActions, contentPadding: Pa
         }
         item { Box(fade) { PlayAndAbout(everything, yourTop, rank, bio, actions, artist.name) } }
         // A row only shows when the artist has something in it.
-        val rows = AlbumKind.entries.filter { kind -> if (kind == AlbumKind.UNRELEASED) unreleased.isNotEmpty() else !byKind[kind].isNullOrEmpty() }
+        val rows = AlbumKind.entries.filter { kind -> !byKind[kind].isNullOrEmpty() }
         rows.forEach { kind ->
             item(key = "row-$kind") {
-                Box(fade) {
-                    if (kind == AlbumKind.UNRELEASED) UnreleasedRow(unreleased, actions, artist.name)
-                    else ReleaseRow(kind, byKind[kind].orEmpty(), actions)
-                }
+                Box(fade) { ReleaseRow(kind, byKind[kind].orEmpty(), actions) }
             }
         }
         if (rows.isEmpty()) {
@@ -369,31 +361,6 @@ private fun About(bio: ArtistBio, modifier: Modifier, collapsedLines: Int) {
             color = muted.copy(alpha = 0.8f),
             modifier = Modifier.padding(top = 4.dp).clickable(enabled = open) { runCatching { uriHandler.openUri(bio.sourceUrl) } },
         )
-    }
-}
-
-/** The unreleased songs as a row of song cards (tap to play); a quiet placeholder when empty. */
-@Composable
-private fun UnreleasedRow(songs: List<Song>, actions: SongActions, source: String) {
-    Column {
-        SectionHeader(if (songs.isEmpty()) AlbumKind.UNRELEASED.title else "${AlbumKind.UNRELEASED.title}  \u2022  ${songs.size}")
-        if (songs.isEmpty()) {
-            EmptyRow(AlbumKind.UNRELEASED.empty)
-        } else {
-            val rowState = rememberLazyListState()
-            LazyRow(Modifier.mouseDragScroll(rowState), state = rowState, contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                items(songs, key = { it.id }) { song ->
-                    SongCard(
-                        song,
-                        onClick = { actions.play(songs, songs.indexOf(song), source) },
-                        modifier = Modifier.width(CardWidth).animateItem(),
-                        // The year from the song's own tags, when it has one.
-                        subtitle = if (song.year > 0) "${song.year} \u2022 ${song.artist}" else song.artist,
-                    )
-                }
-            }
-        }
-        Spacer(Modifier.height(8.dp))
     }
 }
 

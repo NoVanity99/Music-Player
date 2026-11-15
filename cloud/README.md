@@ -43,9 +43,9 @@ npm run upload -- "C:\Users\you\Music"
 
 - Reads tags (title, artist, album, track, duration, embedded cover or `cover.jpg`).
 - Each song's id is the SHA-256 of its file. Re-running uploads only new or changed files.
-- Artist pages have five rows: custom albums, unreleased songs, released albums, EPs and singles.
-  Music goes in a row when it's inside a folder named `Unreleased`, `Released Albums` (or
-  `Albums`), `EPs` or `Singles`, at any level; everything else is a custom album. Re-run the upload after moving folders.
+- Artist pages have three rows: Albums, EPs and Singles. Every album is filed by its size:
+  1 song is a single, 2-6 songs an EP, 7 or more an album. A folder named `Albums`
+  (or `Released Albums`), `EPs` or `Singles`, at any level, files its music in that row instead.
 - Add `--prune` to also remove songs from the cloud that are no longer in the folder.
 - Add `--dry-run` to see what would happen.
 
@@ -64,6 +64,6 @@ npm test                                # endpoint checks; BASE=... KEY=... for 
 node scripts/upload.mjs "<folder>" --type=released --artist="Name" --order="oldest album, ..., newest album"
 ```
 
-`--type` (released, unreleased, ep, single, custom) files everything in the folder in that row
+`--type` (released, ep, single) files everything in the folder in that row
 whatever the folders are called, `--order` sets the albums' order on the artist page (by album or
 folder name, oldest first), and `--artist` names the artist for files whose tags don't.

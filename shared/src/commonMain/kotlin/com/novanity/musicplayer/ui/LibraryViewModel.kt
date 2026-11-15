@@ -707,7 +707,7 @@ class LibraryViewModel(
                 },
                 songs = sorted,
                 dateAdded = sorted.maxOf { it.dateAdded },
-                kind = sorted.first().albumKind,
+                kind = sorted.first().albumKind ?: com.novanity.musicplayer.data.AlbumKind.forSize(sorted.size),
                 year = sorted.maxOf { it.year },
             )
         }
@@ -744,8 +744,9 @@ class LibraryViewModel(
                 guests.getOrPut(key) { part.name to ArrayList() }.second += song
             }
         }
+        val singleIds = albums.filter { it.kind == com.novanity.musicplayer.data.AlbumKind.SINGLE }.mapTo(HashSet()) { it.id }
         val guestArtists = guests.values
-            .filter { (_, credited) -> credited.any { it.albumKind == com.novanity.musicplayer.data.AlbumKind.SINGLE } }
+            .filter { (_, credited) -> credited.any { it.albumId in singleIds } }
             .map { (name, credited) ->
                 Artist(
                     name = name,

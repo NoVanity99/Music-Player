@@ -26,7 +26,8 @@ data class Song(
     val coverId: String? = null,
     val sizeBytes: Long = 0,
     /** Which row of the artist page the song's album belongs in. */
-    val albumKind: AlbumKind = AlbumKind.CUSTOM,
+    /** The artist-page row the server filed this song's album in, or null to file it by size. */
+    val albumKind: AlbumKind? = null,
     /** Release year from the file's tags, or 0 if unknown. */
     val year: Int = 0,
     /** The album's own artist from the file's tags ("album artist"); empty when the file has none. */
@@ -35,21 +36,25 @@ data class Song(
 
 /** The four kinds of release an artist page is organised by. */
 enum class AlbumKind(val title: String, val empty: String) {
-    CUSTOM("Custom albums", "No custom albums yet"),
-    UNRELEASED("Unreleased songs", "No unreleased songs yet"),
-    RELEASED("Released albums", "No released albums yet"),
+    RELEASED("Albums", "No albums yet"),
     EP("EPs", "No EPs yet"),
     SINGLE("Singles", "No singles yet"),
     ;
 
     companion object {
-        /** From the server's "albumType"; anything unknown is a custom album. */
-        fun parse(value: String?): AlbumKind = when (value?.lowercase()) {
+        /** From the server's "albumType"; null for anything else, which is then filed by size. */
+        fun parse(value: String?): AlbumKind? = when (value?.lowercase()) {
             "released", "album" -> RELEASED
-            "unreleased" -> UNRELEASED
             "ep" -> EP
             "single" -> SINGLE
-            else -> CUSTOM
+            else -> null
+        }
+
+        /** The row for an album nobody filed: 1 song is a single, 2-6 an EP, 7 or more an album. */
+        fun forSize(songs: Int): AlbumKind = when {
+            songs <= 1 -> SINGLE
+            songs <= 6 -> EP
+            else -> RELEASED
         }
     }
 }
@@ -63,7 +68,7 @@ data class Album(
     val artist: String,
     val songs: List<Song>,
     val dateAdded: Long,
-    val kind: AlbumKind = AlbumKind.CUSTOM,
+    val kind: AlbumKind = AlbumKind.RELEASED,
     /** Release year, or 0 if unknown. */
     val year: Int = 0,
 )

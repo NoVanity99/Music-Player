@@ -26,8 +26,7 @@ Both download and install the newest release; after that the player updates itse
   duration or play count, plus a "Liked only" filter
 - Collaborations: credits like "Drake & Future" or "A feat. B" link to each artist separately (or
   say the artist isn't in your library); band names like "Mumford & Sons" stay whole. Artist pages
-  show a short Wikipedia bio and their music in four rows: custom albums, released albums, EPs
-  and singles
+  show a short Wikipedia bio and their music in three rows: Albums, EPs and Singles
 - Your stats: time listened, plays, streak, a listening personality with an hour-of-day chart, and
   top artists, songs and albums for 7 days, 30 days or all time
 - Made for you: daily mixes (Forgotten favorites, Deep cuts, Time machine, Never played)
