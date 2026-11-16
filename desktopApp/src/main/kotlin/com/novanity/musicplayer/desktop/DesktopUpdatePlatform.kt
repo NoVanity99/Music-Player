@@ -56,6 +56,13 @@ class DesktopUpdatePlatform(private val exitApp: () -> Unit) : UpdatePlatform {
                 appendLine("tasklist /FI \"PID eq $pid\" 2>nul | find \"$pid\" >nul && (ping -n 2 127.0.0.1 >nul & goto wait)")
                 // Upgrades in place: same folder, so shortcuts, pins and settings stay as they are.
                 appendLine("start \"\" /wait msiexec /i \"${msi.absolutePath}\" /passive /norestart")
+                // The installer puts a desktop shortcut back every time. Only a first install
+                // should make one: remove any Vanity Player shortcut that wasn't there before.
+                desktopFolder()?.let { desktop ->
+                    val kept = vanityShortcuts(desktop)
+                    val keep = kept.joinToString("") { " if /I not \"%%~nxf\"==\"${cmd(it)}\"" }
+                    appendLine("for %%f in (\"${cmd(desktop.absolutePath)}\\*Vanity*Player*.lnk\") do$keep del /q \"%%f\"")
+                }
                 // Relaunch the updated app; never pop up an error if it has moved.
                 val fallback = "%LOCALAPPDATA%\\VanityPlayer\\VanityPlayer.exe"
                 // (No parenthesised blocks: a ")" in the user's folder name would break them.)
@@ -74,5 +81,23 @@ class DesktopUpdatePlatform(private val exitApp: () -> Unit) : UpdatePlatform {
             .start()
         exitApp()
         InstallOutcome.STARTED
+    }
+
+    /** The user's desktop folder (wherever Windows keeps it, e.g. in OneDrive), or null if unknown. */
+    private fun desktopFolder(): File? = runCatching {
+        javax.swing.filechooser.FileSystemView.getFileSystemView().homeDirectory.takeIf { it.isDirectory && it.name.isNotEmpty() }
+    }.getOrNull() ?: System.getenv("USERPROFILE")?.let { File(it, "Desktop") }?.takeIf { it.isDirectory }
+
+    /** The Vanity Player shortcuts on the desktop right now (by file name). */
+    private fun vanityShortcuts(desktop: File): List<String> =
+        desktop.listFiles().orEmpty().map { it.name }.filter { isVanityShortcut(it) }
+
+    /** Text for a line of the update script: "%" would otherwise be read as a variable. */
+    private fun cmd(text: String) = text.replace("%", "%%")
+
+    companion object {
+        /** Matches the shortcut names the installer uses ("VanityPlayer.lnk", "Vanity Player.lnk"). */
+        internal fun isVanityShortcut(name: String): Boolean =
+            Regex("(?i).*vanity.*player.*\\.lnk").matches(name)
     }
 }
