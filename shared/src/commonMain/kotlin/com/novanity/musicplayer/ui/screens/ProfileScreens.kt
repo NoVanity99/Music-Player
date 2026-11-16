@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.Chat
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Edit
@@ -434,7 +435,7 @@ internal fun FriendsPage(actions: SongActions, contentPadding: PaddingValues) {
                     .padding(start = 24.dp, end = 24.dp, top = 76.dp, bottom = 8.dp),
             ) {
                 Text("Friends", style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold)
-                Text("See what your friends are playing and listen along.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("See what your friends are playing, listen along, and send them messages and music.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
         item {
@@ -520,6 +521,13 @@ internal fun FriendsPage(actions: SongActions, contentPadding: PaddingValues) {
                 if (friend.online && social.session?.isGuest != true && friend.username !in social.session?.members.orEmpty()) {
                     androidx.compose.material3.OutlinedButton(onClick = { vm.inviteToListen(friend.username) }) { Text("Invite") }
                     Spacer(Modifier.width(4.dp))
+                }
+                // Messages, with how many are unread.
+                val unread = social.unreadFrom(friend.username)
+                androidx.compose.material3.IconButton(onClick = { vm.open(Destination.Chat(friend.username)) }) {
+                    androidx.compose.material3.BadgedBox(badge = { if (unread > 0) androidx.compose.material3.Badge { Text(if (unread > 9) "9+" else "$unread") } }) {
+                        Icon(androidx.compose.material.icons.Icons.AutoMirrored.Rounded.Chat, contentDescription = if (unread > 0) "Messages, $unread unread" else "Messages")
+                    }
                 }
                 TextButton(onClick = { vm.removeFriend(friend.username) }) { Text("Remove", color = MaterialTheme.colorScheme.onSurfaceVariant) }
             }

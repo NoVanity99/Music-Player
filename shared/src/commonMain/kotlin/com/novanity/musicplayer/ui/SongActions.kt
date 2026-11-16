@@ -7,6 +7,7 @@ import com.novanity.musicplayer.data.DownloadState
 import com.novanity.musicplayer.data.SongSource
 import com.novanity.musicplayer.ui.components.artistMenuLabels
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Album
@@ -57,7 +58,12 @@ class SongActions(
         },
         MenuAction("Add to playlist", Icons.AutoMirrored.Rounded.PlaylistAdd) { library.requestAddToPlaylist(listOf(song)) },
         MenuAction("Go to album", Icons.Rounded.Album) { library.open(Destination.AlbumDetail(song.albumId)) },
-    ) + artistMenu(song.artist) + downloadMenu(song) + extra
+    ) + artistMenu(song.artist) + downloadMenu(song) + shareMenu("song", song.title, song.artist, listOf(song)) + extra
+
+    /** "Share with a friend", for a song, album, EP, single or playlist (only when signed in). */
+    fun shareMenu(kind: String, title: String, subtitle: String, songs: List<Song>): List<MenuAction> =
+        if (!library.canMessage || songs.none { it.cloudId != null }) emptyList()
+        else listOf(MenuAction("Share with a friend", Icons.Rounded.Share) { library.requestShare(kind, title, subtitle, songs) })
 
     /** Download / cancel / remove, depending on where a cloud song is. */
     private fun downloadMenu(song: Song): List<MenuAction> {

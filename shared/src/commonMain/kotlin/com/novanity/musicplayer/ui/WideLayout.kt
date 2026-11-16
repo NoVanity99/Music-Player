@@ -251,7 +251,7 @@ private fun Sidebar(library: LibraryViewModel, actions: SongActions, uiState: Ro
         if (library.socialAvailable && Modules.NAV_FRIENDS !in hidden) {
             val social by library.socialState.collectAsStateWithLifecycle()
             val listening = social.friends.count { it.playing }
-            NavRow(Icons.Rounded.Group, Icons.Rounded.Group, if (social.requests.isNotEmpty()) "Friends \u2022 ${social.requests.size} new" else if (listening > 0) "Friends \u2022 $listening listening" else "Friends", top == Destination.Friends) { library.open(Destination.Friends) }
+            NavRow(Icons.Rounded.Group, Icons.Rounded.Group, if (social.unreadTotal > 0) "Friends \u2022 ${social.unreadTotal} unread" else if (social.requests.isNotEmpty()) "Friends \u2022 ${social.requests.size} new" else if (listening > 0) "Friends \u2022 $listening listening" else "Friends", top == Destination.Friends) { library.open(Destination.Friends) }
         }
         if (Modules.NAV_STATS !in hidden) NavRow(Icons.Rounded.Insights, Icons.Rounded.Insights, "Your stats", top == Destination.Stats) { library.open(Destination.Stats) }
         if (Modules.NAV_SHORTCUTS !in hidden) NavRow(Icons.Rounded.Keyboard, Icons.Rounded.Keyboard, "Shortcuts", false) { uiState.showShortcuts = true }

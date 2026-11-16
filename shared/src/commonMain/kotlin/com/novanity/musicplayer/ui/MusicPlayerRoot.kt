@@ -218,6 +218,10 @@ fun MusicPlayerRoot(
         }
     }
 
+    library.pendingShare?.let { share ->
+        com.novanity.musicplayer.ui.screens.ShareDialog(share, actions) { library.pendingShare = null }
+    }
+
     library.pendingPlaylistAdd?.let { pending ->
         val playlists by library.playlists.collectAsStateWithLifecycle()
         val dismiss = { library.pendingPlaylistAdd = null }

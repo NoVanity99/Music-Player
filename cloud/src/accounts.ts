@@ -44,6 +44,19 @@ const PRESENCE_MS = 45_000;
 const SESSION_STALE_MS = 45_000;
 /** A request to listen along is offered for this long. */
 const LISTEN_REQUEST_MS = 60_000;
+/** Longest message, and the most songs one shared item can hold. */
+const MESSAGE_MAX = 1000;
+const SHARE_MAX_SONGS = 500;
+const SHARE_KINDS = new Set(["song", "album", "ep", "single", "playlist"]);
+
+/** Music attached to a message, checked and trimmed; null when there's none or it's malformed. */
+function cleanShare(value: any): { kind: string; title: string; subtitle: string; songIds: string[] } | null {
+  if (!value || typeof value !== "object" || !SHARE_KINDS.has(value.kind) || !Array.isArray(value.songIds)) return null;
+  const songIds = [...new Set(value.songIds.filter((id: unknown) => typeof id === "string" && SONG_ID.test(id)))].slice(0, SHARE_MAX_SONGS) as string[];
+  if (songIds.length === 0) return null;
+  const text = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : "");
+  return { kind: value.kind, title: text(value.title, 200), subtitle: text(value.subtitle, 200), songIds };
+}
 
 /**
  * A profile look as stored and shown to others: short IDs the app knows how to draw (banner,
@@ -154,6 +167,17 @@ function ensureSchema(sql: Sql): Promise<void> {
       PRIMARY KEY (user_id, song_id, played_at)
     )`;
     await sql`CREATE INDEX IF NOT EXISTS vp_plays_recent ON vp_plays (user_id, played_at DESC)`;
+    // Messages between friends; a message can carry music shared with them.
+    await sql`CREATE TABLE IF NOT EXISTS vp_messages (
+      id BIGSERIAL PRIMARY KEY,
+      from_id UUID NOT NULL REFERENCES vp_users(id) ON DELETE CASCADE,
+      to_id UUID NOT NULL REFERENCES vp_users(id) ON DELETE CASCADE,
+      body TEXT NOT NULL DEFAULT '',
+      share JSONB,
+      created_at BIGINT NOT NULL,
+      read_at BIGINT
+    )`;
+    await sql`CREATE INDEX IF NOT EXISTS vp_messages_pair ON vp_messages (to_id, from_id, id)`;
   })().catch((e) => {
     schemaReady = null;
     throw e;
@@ -359,6 +383,8 @@ export async function accounts(request: Request, env: AccountsEnv, path: string,
       sql`SELECT r.id, r.kind, u.display_name FROM vp_listen_requests r JOIN vp_users u ON u.id = r.from_id
         WHERE r.to_id = ${userId} AND r.created_at > ${now - LISTEN_REQUEST_MS} ORDER BY r.id`,
     ]);
+    const unreadRows = await sql`SELECT u.display_name, count(*)::int AS n, max(m.id) AS last FROM vp_messages m JOIN vp_users u ON u.id = m.from_id
+      WHERE m.to_id = ${userId} AND m.read_at IS NULL GROUP BY u.display_name`;
     let session: unknown = null;
     let adds: unknown[] = [];
     if (hostId) {
@@ -395,6 +421,51 @@ export async function accounts(request: Request, env: AccountsEnv, path: string,
       listenRequests: asks.map((a) => ({ id: Number(a.id), from: a.display_name, kind: a.kind })),
       session,
       adds,
+      // Messages you haven't read yet, per friend, and the newest one's id.
+      unread: unreadRows.map((r) => ({ from: r.display_name, count: r.n, lastId: Number(r.last) })),
+    });
+  }
+
+  // Send a friend a message, optionally with a song, album, EP or playlist to listen to.
+  if (path === "/me/messages" && method === "POST") {
+    const body = await readJson(request, 64 * 1024);
+    const other = await idOf(body?.to);
+    if (!other || !(await areFriends(other))) return json({ error: "not_friends", message: "You can only message friends." }, 403);
+    const text = typeof body?.text === "string" ? body.text.trim().slice(0, MESSAGE_MAX) : "";
+    const share = cleanShare(body?.share);
+    if (!text && !share) return json({ error: "bad_request", message: "Write a message first." }, 400);
+    // A generous limit, so a stuck app can't flood anyone.
+    const recent = await sql`SELECT count(*)::int AS n FROM vp_messages WHERE from_id = ${userId} AND created_at > ${Date.now() - 60_000}`;
+    if (recent[0].n >= 30) return json({ error: "too_many", message: "Slow down a little and try again in a minute." }, 429);
+    const row = await sql`INSERT INTO vp_messages (from_id, to_id, body, share, created_at) VALUES (${userId}, ${other}, ${text}, ${share ? JSON.stringify(share) : null}::jsonb, ${Date.now()})
+      RETURNING id, created_at`;
+    return json({ ok: true, id: Number(row[0].id), at: Number(row[0].created_at) });
+  }
+
+  // The conversation with one friend: the newest messages, or only those after ?after=<id>.
+  // Reading it marks their messages to you as read.
+  if (path === "/me/messages" && method === "GET") {
+    const params = new URL(request.url).searchParams;
+    const other = await idOf(params.get("with"));
+    if (!other || !(await areFriends(other))) return json({ error: "not_friends", message: "You can only message friends." }, 403);
+    const after = Math.max(0, Math.trunc(Number(params.get("after") ?? 0)) || 0);
+    const rows = after > 0
+      ? await sql`SELECT id, from_id, body, share, created_at, read_at FROM vp_messages
+          WHERE id > ${after} AND ((from_id = ${userId} AND to_id = ${other}) OR (from_id = ${other} AND to_id = ${userId})) ORDER BY id LIMIT 200`
+      : (await sql`SELECT id, from_id, body, share, created_at, read_at FROM vp_messages
+          WHERE (from_id = ${userId} AND to_id = ${other}) OR (from_id = ${other} AND to_id = ${userId}) ORDER BY id DESC LIMIT 200`).reverse();
+    await sql`UPDATE vp_messages SET read_at = ${Date.now()} WHERE to_id = ${userId} AND from_id = ${other} AND read_at IS NULL`;
+    // How far the friend has read what you sent, for a "Seen" mark.
+    const seen = await sql`SELECT coalesce(max(id), 0) AS id FROM vp_messages WHERE from_id = ${userId} AND to_id = ${other} AND read_at IS NOT NULL`;
+    return json({
+      messages: rows.map((r) => ({
+        id: Number(r.id),
+        mine: r.from_id === userId,
+        text: r.body,
+        share: r.share ?? null,
+        at: Number(r.created_at),
+      })),
+      seenId: Number(seen[0].id),
     });
   }
 
@@ -425,6 +496,8 @@ export async function accounts(request: Request, env: AccountsEnv, path: string,
     const other = await idOf(body?.username);
     if (other) {
       await sql`DELETE FROM vp_friends WHERE (a = ${userId} AND b = ${other}) OR (a = ${other} AND b = ${userId})`;
+      // No longer friends: the conversation goes too.
+      await sql`DELETE FROM vp_messages WHERE (from_id = ${userId} AND to_id = ${other}) OR (from_id = ${other} AND to_id = ${userId})`;
       await sql`UPDATE vp_users SET listen_host = NULL WHERE (id = ${userId} AND listen_host = ${other}) OR (id = ${other} AND listen_host = ${userId})`;
     }
     return json({ ok: true });

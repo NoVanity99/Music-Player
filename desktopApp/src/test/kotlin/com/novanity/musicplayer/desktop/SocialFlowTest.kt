@@ -146,6 +146,27 @@ class SocialFlowTest {
             host.answerFriend(guestName, true)
             waitFor("they are friends") { runBlocking { guest.pulse() }; guest.state.value.friends.any { it.username == hostName } }
 
+            // Messages: a note, then an album shared with a note; the host sees them as unread.
+            assertNull(guest.send(hostName, "hey, try this"))
+            val album = songs.take(3)
+            val shared = com.novanity.musicplayer.data.SharedMusic("album", "Test album", "Someone", guest.cloudIds(album))
+            assertNull(guest.send(hostName, "the whole thing", shared))
+            assertNotNull(guest.send(hostName, "  ", null), "an empty message is refused")
+            waitFor("the host has 2 unread from the guest") { runBlocking { host.pulse() }; host.state.value.unreadFrom(guestName) == 2 }
+            val page = assertNotNull(host.conversation(guestName))
+            assertEquals(listOf("hey, try this", "the whole thing"), page.messages.map { it.text })
+            assertTrue(page.messages.none { it.mine })
+            val got = assertNotNull(page.messages.last().share)
+            assertEquals("album", got.kind)
+            assertEquals(album.map { it.id }, host.songsOf(got).map { it.id }, "the shared album's songs, in order")
+            assertEquals(0, host.state.value.unreadFrom(guestName), "reading clears the count")
+            // The host answers; the guest sees it, sees theirs were read, and fetching only newer ones works.
+            assertNull(host.send(guestName, "love it"))
+            val mine = assertNotNull(guest.conversation(hostName))
+            assertEquals(listOf(true, true, false), mine.messages.map { it.mine })
+            assertEquals(mine.messages[1].id, mine.seenId, "the host has read both")
+            assertEquals(emptyList(), assertNotNull(guest.conversation(hostName, mine.messages.last().id)).messages)
+
             // The host plays something; the guest sees it under their name.
             hostPlayer.setQueue(listOf(songs[0], songs[1]), 0, false)
             hostPlayer.position = 30_000

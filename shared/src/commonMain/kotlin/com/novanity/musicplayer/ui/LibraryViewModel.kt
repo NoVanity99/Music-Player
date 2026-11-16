@@ -128,6 +128,8 @@ sealed interface Destination {
     /** Your own account page. */
     data object Account : Destination
     data object Friends : Destination
+    /** Your conversation with a friend. */
+    data class Chat(val username: String) : Destination
     /** Your playlists and your hearted artists, as pages of their own (opened from Account). */
     data object MyPlaylists : Destination
     data object MyArtists : Destination
@@ -190,6 +192,37 @@ class LibraryViewModel(
     fun answerListen(request: com.novanity.musicplayer.data.ListenRequest, accept: Boolean) { social?.answerListen(request, accept) }
     fun leaveSession() { social?.leave() }
     fun refreshSocial() { viewModelScope.launch { runCatching { social?.pulse() } } }
+
+    // ---- Messages and sharing ----
+
+    /** Messaging needs an account (and a server that has them). */
+    val canMessage: Boolean get() = social != null && accountState.value is AccountState.SignedIn
+
+    suspend fun conversation(friend: String, afterId: Long = 0) = social?.conversation(friend, afterId)
+
+    /** Sends a message; returns a problem to show, or null when it was sent. */
+    suspend fun sendMessage(friend: String, text: String, share: com.novanity.musicplayer.data.SharedMusic? = null): String? =
+        social?.send(friend, text, share) ?: "Sign in to send messages."
+
+    /** Which conversation is on screen (null when none), so its new messages don't pop up a notice. */
+    fun setOpenChat(friend: String?) { social?.openChat = friend }
+
+    /** The songs of something a friend shared that are in the library here. */
+    fun songsOfShare(share: com.novanity.musicplayer.data.SharedMusic): List<Song> = social?.songsOf(share).orEmpty()
+
+    /** Something waiting to be shared: the "Share with a friend" picker is open while this is set. */
+    var pendingShare by mutableStateOf<com.novanity.musicplayer.data.SharedMusic?>(null)
+
+    fun requestShare(kind: String, title: String, subtitle: String, songs: List<Song>) {
+        if (!canMessage) return notify("Sign in to share music with friends.")
+        val ids = social?.cloudIds(songs).orEmpty()
+        if (ids.isEmpty()) return notify("Only music from the cloud can be shared.")
+        pendingShare = com.novanity.musicplayer.data.SharedMusic(kind, title, subtitle, ids)
+    }
+
+    fun shareTo(friend: String, share: com.novanity.musicplayer.data.SharedMusic, note: String) {
+        viewModelScope.launch { notify(sendMessage(friend, note, share) ?: "Sent to $friend") }
+    }
     val shareListening: StateFlow<Boolean> = settings.shareListening
     fun setShareListening(enabled: Boolean) = settings.setShareListening(enabled)
     /** The library's song for one of the server's song ids. */

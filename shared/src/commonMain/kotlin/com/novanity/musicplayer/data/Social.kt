@@ -54,6 +54,35 @@ data class ListenSession(
 @Serializable
 data class QueuedAdd(val songId: String = "", val from: String = "")
 
+/** Music shared in a message: a song, album, EP, single or playlist, as the cloud songs it holds. */
+@Serializable
+data class SharedMusic(
+    /** "song", "album", "ep", "single" or "playlist". */
+    val kind: String = "song",
+    val title: String = "",
+    val subtitle: String = "",
+    val songIds: List<String> = emptyList(),
+) {
+    val label: String get() = when (kind) {
+        "album" -> "Album"
+        "ep" -> "EP"
+        "single" -> "Single"
+        "playlist" -> "Playlist"
+        else -> "Song"
+    }
+}
+
+@Serializable
+data class ChatMessage(val id: Long = 0, val mine: Boolean = false, val text: String = "", val share: SharedMusic? = null, val at: Long = 0)
+
+/** A conversation as the server returns it; [seenId] is the newest of your messages the friend has read. */
+@Serializable
+data class ChatPage(val messages: List<ChatMessage> = emptyList(), val seenId: Long = 0)
+
+/** Unread messages from one friend. */
+@Serializable
+data class Unread(val from: String = "", val count: Int = 0, val lastId: Long = 0)
+
 @Serializable
 data class SocialState(
     val friends: List<Friend> = emptyList(),
@@ -64,7 +93,11 @@ data class SocialState(
     val listenRequests: List<ListenRequest> = emptyList(),
     val session: ListenSession? = null,
     val adds: List<QueuedAdd> = emptyList(),
-)
+    val unread: List<Unread> = emptyList(),
+) {
+    fun unreadFrom(username: String): Int = unread.firstOrNull { it.from.equals(username, ignoreCase = true) }?.count ?: 0
+    val unreadTotal: Int get() = unread.sumOf { it.count }
+}
 
 @Serializable
 private data class Pulse(val songId: String?, val nextSongId: String?, val positionMs: Long, val playing: Boolean, val share: Boolean)
@@ -80,6 +113,9 @@ private data class AddBody(val songId: String)
 
 @Serializable
 private data class ServerMessage(val message: String = "")
+
+@Serializable
+private data class SendBody(val to: String, val text: String, val share: SharedMusic?)
 
 /**
  * Friends, what they're playing, and listening together. The app reports what it's playing every
@@ -178,6 +214,14 @@ class SocialRepository(
             restore()
         }
         if (session?.isGuest != true) leaving = false
+        // A new message from a friend (unless their conversation is open on screen).
+        for (u in fresh.unread) {
+            val known = lastNotified[u.from.lowercase()] ?: 0
+            if (u.lastId > known) {
+                lastNotified[u.from.lowercase()] = u.lastId
+                if (!u.from.equals(openChat, ignoreCase = true)) _messages.tryEmit("New message from ${u.from}")
+            }
+        }
         _state.value = fresh.copy(adds = emptyList(), session = if (leaving) null else session)
     }
 
@@ -239,6 +283,41 @@ class SocialRepository(
             p.pause()
         }
     }
+
+    // ---- Messages ----
+
+    /** The friend whose conversation is on screen, so their new messages don't also pop up a notice. */
+    @kotlin.concurrent.Volatile var openChat: String? = null
+    private val lastNotified = HashMap<String, Long>()
+
+    /** The conversation with [friend]: the latest messages, or only those after [afterId]. Null if it couldn't load. */
+    suspend fun conversation(friend: String, afterId: Long = 0): ChatPage? {
+        val path = "/me/messages?with=" + ArtistBios.encode(friend.trim()) + if (afterId > 0) "&after=$afterId" else ""
+        val response = try {
+            withContext(Dispatchers.IO) { account.call("GET", path, null) }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            null
+        } ?: return null
+        if (response.status != 200) return null
+        val page = runCatching { json.decodeFromString(ChatPage.serializer(), response.body) }.getOrNull() ?: return null
+        // Reading them clears the unread count straight away, not on the next pulse.
+        _state.value = _state.value.copy(unread = _state.value.unread.filterNot { it.from.equals(friend, ignoreCase = true) })
+        return page
+    }
+
+    /** Sends [friend] a message, with music attached if [share] is given. Returns a problem to show, or null when sent. */
+    suspend fun send(friend: String, text: String, share: SharedMusic? = null): String? {
+        val body = json.encodeToString(SendBody.serializer(), SendBody(friend.trim(), text.trim().take(1000), share?.copy(songIds = share.songIds.take(500))))
+        return post("/me/messages", body).second
+    }
+
+    /** The cloud ids of songs, for sharing (songs that only exist on this device can't be shared). */
+    fun cloudIds(songs: List<Song>): List<String> = songs.mapNotNull { cloud.cloudIdOf(it.id) }.distinct()
+
+    /** The songs in a shared item that are in the library here. */
+    fun songsOf(share: SharedMusic): List<Song> = share.songIds.mapNotNull(::songFor)
 
     // ---- Actions ----
 

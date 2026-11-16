@@ -124,6 +124,7 @@ fun DetailScreen(destination: Destination, actions: SongActions, contentPadding:
         Destination.Downloads -> DownloadsScreen(actions, contentPadding)
         Destination.Account -> AccountPage(actions, contentPadding)
         Destination.Friends -> FriendsPage(actions, contentPadding)
+        is Destination.Chat -> ChatPage(destination.username, actions, contentPadding)
         Destination.MyPlaylists -> MyPlaylistsPage(actions, contentPadding)
         Destination.MyArtists -> MyArtistsPage(actions, contentPadding)
         Destination.BugReports -> BugReportsPage(actions, contentPadding)
@@ -475,7 +476,13 @@ private fun AlbumScreen(albumId: Long, actions: SongActions, contentPadding: Pad
         }
     }
 
-    CollectionScaffold(album.title, tint, { vm.back() }, actions.collectionMenu(album.songs), contentPadding) {
+    val shareKind = when (album.kind) {
+        com.novanity.musicplayer.data.AlbumKind.EP -> "ep"
+        com.novanity.musicplayer.data.AlbumKind.SINGLE -> "single"
+        else -> "album"
+    }
+    val albumMenu = actions.collectionMenu(album.songs, actions.shareMenu(shareKind, album.title, album.artist, album.songs))
+    CollectionScaffold(album.title, tint, { vm.back() }, albumMenu, contentPadding) {
         item {
             Hero(
                 tint = tint,
@@ -725,7 +732,7 @@ private fun PlaylistScreen(playlistId: Long, actions: SongActions, contentPaddin
             }
             Text(name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).alpha(barAlpha))
             OverflowMenu(
-                actions.collectionMenu(songs) + listOf(
+                actions.collectionMenu(songs) + actions.shareMenu("playlist", name, "${songs.size} songs", songs) + listOf(
                     MenuAction("Rename playlist") { renaming = true },
                     MenuAction("Delete playlist", Icons.Rounded.Delete) { deleting = true },
                 ),
