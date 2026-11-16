@@ -17,15 +17,17 @@ class Decoder private constructor(private val grabber: FFmpegFrameGrabber, speed
     /** Track length from the container (0 if unknown). */
     val durationMs: Long = (grabber.lengthInTime / 1000).coerceAtLeast(0)
 
-    /** Source-time position of the end of what has been decoded so far. */
-    private var decodedMs: Long = 0
+    /**
+     * Where counting started (after a seek or a speed change), and how many stereo frames [fill]
+     * has handed out since. The position is counted from the audio itself rather than taken from
+     * the file's timestamps, which some files and streams leave stuck or jumping.
+     */
+    private var baseMs: Long = 0
+    private var handedOut: Long = 0
 
     /** Source-time position of the next sample [fill] will return. */
     val positionMs: Long
-        get() {
-            val waiting = leftover?.let { it.size - leftoverPos } ?: 0
-            return (decodedMs - (waiting / OUT_CHANNELS * 1000L / OUT_RATE * speed).toLong()).coerceAtLeast(0)
-        }
+        get() = baseMs + (handedOut * 1000.0 * speed / OUT_RATE).toLong()
 
     var speed: Float = speed
         private set
@@ -53,6 +55,8 @@ class Decoder private constructor(private val grabber: FFmpegFrameGrabber, speed
 
     fun setSpeed(value: Float) {
         if (value == speed) return
+        baseMs = positionMs
+        handedOut = 0
         speed = value
         leftover = null
         configureFilter()
@@ -60,7 +64,8 @@ class Decoder private constructor(private val grabber: FFmpegFrameGrabber, speed
 
     fun seek(ms: Long) {
         grabber.setTimestamp(ms.coerceAtLeast(0) * 1000L)
-        decodedMs = ms.coerceAtLeast(0)
+        baseMs = ms.coerceAtLeast(0)
+        handedOut = 0
         leftover = null
         eof = false
         configureFilter()
@@ -81,9 +86,6 @@ class Decoder private constructor(private val grabber: FFmpegFrameGrabber, speed
                 break
             }
             val raw = frame.shorts() ?: continue
-            // Source-time position at the end of this frame.
-            val frameStartMs = frame.timestamp / 1000
-            decodedMs = frameStartMs + raw.size / OUT_CHANNELS * 1000L / OUT_RATE
             val f = filter ?: return raw
             f.push(frame)
             val out = generateSequence { f.pullSamples() }.mapNotNull { it.shorts() }.toList()
@@ -119,6 +121,7 @@ class Decoder private constructor(private val grabber: FFmpegFrameGrabber, speed
             leftoverPos += n
             written += n
         }
+        handedOut += written / OUT_CHANNELS
         return written
     }
 
@@ -129,6 +132,7 @@ class Decoder private constructor(private val grabber: FFmpegFrameGrabber, speed
     fun prime(ms: Int) {
         val ahead = ShortArray(OUT_RATE * OUT_CHANNELS / 1000 * ms)
         val n = fill(ahead)
+        handedOut -= n / OUT_CHANNELS // not played yet: it goes back in front of the rest
         // Whatever was still waiting behind those samples goes after them.
         val rest = leftover?.let { it.copyOfRange(leftoverPos.coerceAtMost(it.size), it.size) } ?: ShortArray(0)
         leftover = ahead.copyOf(n) + rest

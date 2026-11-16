@@ -27,6 +27,9 @@ class GaplessReader(size: Int) {
 
     private fun silent(s: Short) = abs(s.toInt()) <= THRESHOLD
 
+    /** Audio read from the decoder but not handed out yet (held to look for padding), in ms. */
+    val pendingMs: Long get() = qn / OUT_CHANNELS * 1000L / OUT_RATE
+
     /** True once the file has ended and everything has been handed out. */
     val finished: Boolean get() = eof && qn == 0
 

@@ -150,6 +150,7 @@ private fun MiniPlayerContent(app: DesktopApp, onExpand: () -> Unit) {
         // Taller than it is wide: the cover on top, everything else underneath.
         val tall = maxHeight >= 300.dp && maxHeight > maxWidth * 0.9f
         val bigCover = maxHeight > 200.dp
+        val showTime = if (tall) maxWidth >= 260.dp else maxWidth >= 380.dp
         val info: @Composable (Modifier) -> Unit = { m ->
             Column(m) {
                 Text(ui.current?.title ?: "Nothing playing", color = Color.White, style = MaterialTheme.typography.titleSmall,
@@ -172,6 +173,16 @@ private fun MiniPlayerContent(app: DesktopApp, onExpand: () -> Unit) {
                 IconButton(onClick = { song?.let { app.library.currentLikeToggle(player) } }, enabled = song != null, modifier = Modifier.size(32.dp)) {
                     Icon(if (liked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder, contentDescription = if (liked) "Unlike" else "Like",
                         tint = if (liked) MaterialTheme.colorScheme.primary else Color.White, modifier = Modifier.size(18.dp))
+                }
+                // Time played and the song's length, when there's room for them.
+                if (showTime && ui.durationMs > 0) {
+                    Text(
+                        "${com.novanity.musicplayer.ui.components.formatDuration(position.coerceAtMost(ui.durationMs))} / ${com.novanity.musicplayer.ui.components.formatDuration(ui.durationMs)}",
+                        color = Color.White.copy(alpha = 0.7f),
+                        style = MaterialTheme.typography.labelSmall,
+                        maxLines = 1,
+                        modifier = Modifier.padding(start = 4.dp),
+                    )
                 }
                 Spacer(Modifier.weight(1f))
                 IconButton(onClick = player::previous, modifier = Modifier.size(36.dp)) {

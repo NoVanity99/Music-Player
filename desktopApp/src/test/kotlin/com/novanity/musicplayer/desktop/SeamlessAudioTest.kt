@@ -74,6 +74,23 @@ class SeamlessAudioTest {
     }
 
     @Test
+    fun thePositionFollowsTheAudioHandedOutAfterSeeksAndPriming() {
+        val file = wav("pos.wav", leadMs = 0, toneMs = 4000, tailMs = 0)
+        Decoder.open(file.path, 1f).use { d ->
+            d.prime(500)
+            assertEquals(0, d.positionMs)
+            val second = ShortArray(OUT_RATE * OUT_CHANNELS)
+            assertEquals(second.size, d.fill(second))
+            assertEquals(1000, d.positionMs)
+            d.seek(2500)
+            assertEquals(2500, d.positionMs)
+            val half = ShortArray(OUT_RATE * OUT_CHANNELS / 2)
+            assertEquals(half.size, d.fill(half))
+            assertEquals(3000, d.positionMs)
+        }
+    }
+
+    @Test
     fun aSongDecodedAheadPlaysTheSameAudioFromTheStart() {
         val file = wav("d.wav", leadMs = 0, toneMs = 900, tailMs = 0)
         fun all(prime: Boolean): ShortArray = Decoder.open(file.path, 1f).use { d ->

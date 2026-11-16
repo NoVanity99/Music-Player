@@ -308,7 +308,8 @@ class FfmpegPlayerController(
         }
         output.write(bytes, n * 2)
         errorStreak = 0
-        reportedPositionMs = (v.positionMs - (output.latencyMs() * v.speed).toLong()).coerceAtLeast(0)
+        // What the speakers are playing now: minus what's still queued in the reader and the sound card.
+        reportedPositionMs = (v.positionMs - ((reader.pendingMs + output.latencyMs()) * v.speed).toLong()).coerceAtLeast(0)
         recordHistoryIfNeeded()
         val now = System.currentTimeMillis()
         if (now - lastSave > 5_000) {
@@ -548,7 +549,9 @@ class FfmpegPlayerController(
             connected = true,
             current = entry?.let { QueueEntry(current, it.key, it.song.id, it.song.title, it.song.artist) },
             isPlaying = playing && voice != null,
-            durationMs = voice?.durationMs?.takeIf { it > 0 } ?: entry?.song?.durationMs ?: 0,
+            // The length measured from the whole file when it was added; the decoder's own figure is
+            // only an estimate for some streamed files (it can be well off), so it's the fallback.
+            durationMs = entry?.song?.durationMs?.takeIf { it > 0 } ?: voice?.durationMs?.takeIf { it > 0 } ?: 0,
             shuffle = shuffle,
             repeatMode = repeat,
             hasNext = p >= 0 && (p + 1 < order.size || (repeat == RepeatMode.ALL && order.size > 1)),
